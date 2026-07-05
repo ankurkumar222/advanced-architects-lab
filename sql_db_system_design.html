@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SQL Database Internals — Correctness Under the Hood</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>SQL Database Internals: <em>correctness</em>, under the hood</h1>
+    <p class="sub">A revision session built around one idea — a SQL database isn't a black box that magically answers queries, it's a stack of deliberate trade-offs: how bytes sit on disk, how a B+ tree stays balanced under write pressure, how concurrency is allowed without corruption, and how a crash mid-write still recovers to a truthful state. Plus a real deployment section and a leadership decision-making section. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>13 segments</b></span>
+      <span>~3 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: reasoning, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Mental Model</a>
+    <a href="#s2" style="color:#2E8B82;">02 Storage: Pages & Layout</a>
+    <a href="#s3" style="color:#C1543A;">03 Indexes & B+ Trees</a>
+    <a href="#s4" style="color:#7A63B8;">04 Query Engine & Optimizer</a>
+    <a href="#s5" style="color:#3480B0;">05 Transactions & ACID</a>
+    <a href="#s6" style="color:#6B9A44;">06 Concurrency: Locks vs MVCC</a>
+    <a href="#s7" style="color:#C1547A;">07 Isolation Levels & Anomalies</a>
+    <a href="#s8" style="color:#B9971F;">08 WAL & Buffer Manager</a>
+    <a href="#s9" style="color:#279090;">09 Crash Recovery</a>
+    <a href="#s10" style="color:#9A62D6;">10 Replication & Scaling</a>
+    <a href="#s11" style="color:#127475;">11 Our Deployment</a>
+    <a href="#s12" style="color:#C9871F;">12 Rapid Fire</a>
+    <a href="#s13" style="color:#4A5FBF;">13 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 : MENTAL MODEL -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The mental model — what a SQL DB is actually promising you</h2></div>
+    <p class="segment-note">The trap: thinking of a SQL DB as "a fast way to store rows and get them back." The real promise is much bigger — you hand it a declarative question, and it silently guarantees correctness under concurrent, crash-prone, disk-bound conditions while deciding how to execute your question efficiently.</p>
+    <pre class="sketch">App --> SELECT / INSERT / UPDATE / DELETE
+
+Underneath:
+Parser -> Optimizer -> Execution Engine -> Storage Engine
+                                             (tables, indexes,
+                                              WAL, buffer pool)
+
+The whole discipline exists to answer one question:
+how do relations, indexes, and transactions stay correct
+and fast at the same time, on disk, under concurrency, after a crash?</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">What is the deepest structural difference between a SQL database and a key-value store — not the SQL syntax, the actual engineering consequence?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A key-value store optimizes around a single access pattern: <b>get/put by key</b>. A SQL DB commits to something harder — <b>arbitrary relational access</b> (joins, ranges, aggregates, ad-hoc predicates) decided at query time, not at schema-design time. That single commitment is why it needs an optimizer, a cost model, and multiple index strategies — a KV store never has to "decide how" to answer a query, because there's only one way to ask.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">If SQL is declarative — you say <i>what</i>, not <i>how</i> — where does the risk in that trade-off actually show up in production?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The risk moves from "did I write the loop correctly" to <b>"did the optimizer choose the plan I assumed it would."</b> A query that's correct and fast for months can silently flip to a disastrous plan the moment table statistics drift, a new index appears, or row counts cross a planner threshold — with the SQL text never changing at all.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Constraints (foreign key, unique, not null, check) — are these a convenience feature, or do they change what the database is fundamentally responsible for?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">They change the contract. Without them, the database is a passive store and <b>correctness is entirely the application's job</b>. With them, the database becomes an active participant that refuses to persist a state that violates a declared invariant — which means constraint design is really a decision about <b>where in the stack correctness is enforced</b>, not just a schema nicety.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Why can two teams run the exact same schema and query patterns and get wildly different production behavior?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because everything below the schema — <b>page layout, index choice, isolation level, buffer pool sizing, WAL configuration</b> — is a separate set of decisions the schema doesn't dictate. Two identical schemas under different storage and concurrency configurations are, for all practical performance and correctness purposes, different systems.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : STORAGE / PAGES -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Storage — pages, not rows, and why layout is a first-class decision</h2></div>
+    <p class="segment-note">A table is never "just a list of rows" internally. It's a set of fixed-size pages, and how rows are packed into those pages quietly decides how fast almost everything else is.</p>
+    <pre class="sketch">Disk
+ |
+ +--> Page 101: [row][row][row]
+ +--> Page 102: [row][row][row]
+ +--> Page 103: [row][row][row]
+
+Heap-style              Clustered / index-organized
+rows wherever free      rows physically ordered
+space exists            by primary/cluster key
+
+Page 1: row A, row F    Page 1: key 1,2,3
+Page 2: row B, row Z    Page 2: key 4,5,6</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Why does the database bother with fixed-size pages at all instead of just reading and writing rows directly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because disk and OS I/O is fundamentally <b>block-oriented</b> — a fixed page size lets the database align its unit of I/O, caching, and locking with the unit the hardware and filesystem actually move efficiently. Row-by-row I/O would mean constant tiny reads/writes with no way to amortize disk-seek cost or reason about cache residency.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">A heap table lets inserts go wherever there's free space. What does that flexibility cost you later?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It costs you <b>locality</b>. Rows that are logically related (e.g. all orders for one customer) can end up scattered across unrelated pages, so a query that "should" be one sequential read becomes several random reads. Heap tables trade write-time simplicity for read-time scatter.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">If a table is clustered on its primary key, what happens to insert performance when the primary key isn't monotonically increasing (e.g. a random UUID)?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Inserts start landing at <b>random points</b> in the physical ordering instead of always appending at the end — this causes page splits, fragmentation, and write amplification. This is exactly why many high-throughput clustered systems prefer monotonic or time-ordered keys (or a separate surrogate key) over raw random UUIDs as the clustering key.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Is choosing heap vs. clustered organization a one-time schema decision, or does it need to be revisited as access patterns evolve?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It needs <b>revisiting</b>. A table designed for point lookups by a surrogate key may later be dominated by range scans on a different column — at that point the clustering choice that was correct at design time actively works against the dominant query pattern, and re-clustering (or adding a covering index) becomes a real migration decision, not a tweak.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : INDEXES -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Indexes — the real heart of a SQL database</h2></div>
+    <p class="segment-note">Without indexes, most interesting queries degrade to full table scans. The B+ tree is the workhorse — and composite/covering index design is where senior-level query performance actually lives.</p>
+    <pre class="sketch">               [50]
+              /      \
+          [20]        [80]
+         /   \       /    \
+      ...   ...    ...    ...
+Leaf nodes point to row locations or actual row data
+
+Composite index (customer_id, created_at):
+customer=1001, time=2026-04-01
+customer=1001, time=2026-04-02
+customer=1002, time=2026-04-01
+
+Covering index (department, name, salary):
+query can be answered from the index alone —
+no trip back to the table needed</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why is a B+ tree preferred over a plain binary search tree for database indexes specifically?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the cost that matters is <b>disk page reads</b>, not comparisons. A B+ tree's high fan-out keeps the tree shallow (few page reads per lookup) and its leaf-level linked structure makes <b>range scans</b> — the dominant real-world query shape — sequential and cheap, neither of which a binary tree gives you on block-oriented storage.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">A query filters on <code>customer_id</code> and sorts by <code>created_at</code>. Why does column order inside the composite index matter so much — wouldn't any index containing both columns work?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No — order defines what the index can do for free.</b> An index on <code>(customer_id, created_at)</code> lets the engine seek directly to a customer and walk already-sorted rows. The reverse order, <code>(created_at, customer_id)</code>, forces a scan across all customers at each timestamp — same two columns, opposite usefulness, because a B+ tree is only ordered by its leading columns.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">If a covering index avoids a trip back to the table, why doesn't every team just make every index cover every commonly-needed column?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because every extra column in an index is <b>write amplification</b> — every insert/update/delete on the table now also has to maintain that wider index. Covering indexes trade faster reads for slower writes and more storage, so they're a targeted decision for genuinely hot query shapes, not a default to apply everywhere.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Can adding an index ever make a specific query slower, not faster?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes.</b> If the optimizer's cost estimate is wrong (stale statistics, skewed data), it can choose an index scan with expensive random-row lookups over a cheap sequential table scan, especially when the query would return a large fraction of the table anyway. More indexes also means more choices for the optimizer to get wrong — index count isn't a purely additive benefit.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : QUERY ENGINE & OPTIMIZER -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Query engine & optimizer — the part that decides what "your query" actually costs</h2></div>
+    <p class="segment-note">You wrote declarative SQL. The optimizer silently turns it into one specific physical plan out of many possible ones — and that choice, not your SQL, determines performance.</p>
+    <pre class="sketch">SQL text -> Parser -> Logical plan -> Optimizer -> Physical plan -> Execution
+
+Customers JOIN Orders — possible plans:
+A) scan customers -> probe orders index      (nested loop)
+B) scan orders -> hash join customers        (hash join)
+C) sort both -> merge join                   (merge join)
+
+Optimizer picks based on estimated cost, not on which
+plan a human would find most "obviously correct."</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Nested loop, hash join, and merge join all produce the same result set. Why does the optimizer need to choose carefully rather than just always picking one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because their cost curves differ wildly with data shape. <b>Nested loop</b> wins when one side is tiny and indexed. <b>Hash join</b> wins for large, unsorted, roughly equal-sized sets. <b>Merge join</b> wins when both sides are already sorted. Hard-coding one choice would make some common query shapes catastrophically slow.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">The optimizer's plan choice depends on cost estimates. Where do those estimates actually come from, and what happens when they're wrong?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">They come from <b>table statistics</b> — row counts, value distributions, histograms — collected periodically, not computed live. When data changes faster than statistics refresh (a bulk load, a sudden skew), the optimizer reasons about a world that no longer exists and can pick a plan that's disastrously wrong for current reality, even though the SQL never changed.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Is a query plan that was optimal yesterday guaranteed to still be optimal today with the same SQL and the same schema?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> Row counts grow, value distributions shift, and a plan chosen when a table had 10,000 rows can be actively wrong at 10 million rows — a classic case being an index scan that was cheap becoming more expensive than a sequential scan once selectivity assumptions no longer hold. Plans are a function of data state, not just SQL text.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">If declarative SQL hides the execution plan by design, how does a team stay confident that performance won't silently regress?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">By treating <b>plan visibility as a first-class operational concern</b> — regularly inspecting <code>EXPLAIN</code> output for hot queries, alerting on plan changes for critical paths, and keeping statistics fresh — rather than trusting that "the SQL hasn't changed" means "the performance hasn't changed."</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : TRANSACTIONS & ACID -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Transactions & ACID — the defining promise, and where each letter actually costs something</h2></div>
+    <p class="segment-note">ACID sounds like a checklist. In practice, each guarantee is bought with a specific engineering mechanism, and each mechanism has a specific price.</p>
+    <pre class="sketch">BEGIN
+  debit A
+  credit B
+COMMIT   -- or ROLLBACK on failure
+
+A = Atomicity    -> WAL + rollback segments
+C = Consistency  -> constraints + application invariants
+I = Isolation    -> locking / MVCC
+D = Durability   -> WAL fsync before acknowledging commit</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Of the four ACID letters, which one is actually the database's sole responsibility, and which one quietly depends on the application getting something right?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Atomicity, Isolation, and Durability are <b>entirely the database's job</b> — the app doesn't have to do anything special to get them. <b>Consistency</b> is different: the database only enforces the invariants you explicitly declared (constraints); any business invariant you didn't declare is still the application's responsibility, and ACID gives no guarantee about it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Why does Durability specifically require an fsync before acknowledging commit, and what happens if that step is skipped for performance?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Without a forced flush to durable storage, the "committed" write may still be sitting in an <b>OS page cache</b> that a power loss or crash wipes out — the application believes the transaction is safely committed while the durable record of it never actually existed. Skipping fsync trades a real durability guarantee for throughput, and that trade must be a deliberate, disclosed decision, not an accident.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Can a transaction be atomic and durable, yet still produce a result the business considers "wrong"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes.</b> ACID guarantees the transaction executed exactly once, fully, and survives a crash — it says nothing about whether the transaction's <i>logic</i> was correct. A transaction that debits the wrong account atomically and durably is still atomic and durable; ACID protects the mechanics, not the business rule.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Why do long-running transactions tend to be dangerous even when each individual statement inside them is fast?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a transaction holds its <b>locks (or MVCC version pressure) for its entire lifetime</b>, not just per-statement. A transaction that's fast per-statement but left open (waiting on an external API call, for instance) blocks other transactions and prevents old row versions from being cleaned up — the danger is duration, not per-statement cost.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : CONCURRENCY CONTROL -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Concurrency control — locking vs. MVCC, and why most modern engines use both</h2></div>
+    <p class="segment-note">Many transactions run at once. Preventing corruption without serializing everything is one of the deepest problems in database engineering.</p>
+    <pre class="sketch">Locking                          MVCC
+-------                           ----
+Tx1 locks row R                  row has versions
+Tx2 waits                        Tx1 sees old version
+                                  Tx2 sees new version after commit
+
+Readers block writers            Readers don't block writers
+Writers block writers            Writers still need to coordinate
+                                  with each other</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">What specific problem does MVCC solve that pure locking cannot solve well?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It solves <b>readers blocking writers and writers blocking readers</b>. Under pure locking, a long read can stall writes and vice versa. MVCC gives every reader a consistent snapshot of old versions while writers create new versions — reads and writes stop contending for the same lock, which is why almost every high-throughput OLTP engine leans on MVCC.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">If MVCC means readers never block, does that mean MVCC eliminates the need for locks entirely?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> Two concurrent writers to the <i>same row</i> still need to coordinate — MVCC solves reader/writer conflict, not writer/writer conflict. That's why "modern SQL systems use MVCC + locks where needed" isn't a hedge, it's the actual architecture: MVCC for reads, some form of locking or version-check for concurrent writes to the same row.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">MVCC keeps old row versions around so readers can see a consistent snapshot. What operational problem does that create if left unmanaged?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Bloat.</b> Old versions that no transaction can see anymore still occupy space until a cleanup process (vacuum, garbage collection) reclaims them — and a single long-running transaction can hold a snapshot open indefinitely, preventing cleanup and causing table and index bloat that degrades every subsequent query, silently, until someone investigates.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">A deadlock occurs when Tx1 waits on a lock Tx2 holds, and Tx2 waits on a lock Tx1 holds. Is this a bug, or an expected outcome of correct locking behavior?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It's an <b>expected outcome</b>, not a bug — any system with fine-grained locking and no fixed lock-acquisition order can produce this cycle. The database's only correct response is detection and forced rollback of one participant; the real fix belongs in application design (consistent lock-acquisition ordering), not in expecting the database to "prevent" deadlocks entirely.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : ISOLATION LEVELS -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Isolation levels — the sliding scale between correctness and throughput</h2></div>
+    <p class="segment-note">Not every transaction needs the strongest guarantee available — and picking the wrong isolation level is one of the most common silent-correctness bugs in production SQL systems.</p>
+    <table class="diff-table">
+      <tr><th>Isolation level</th><th>What it stops you from seeing</th></tr>
+      <tr><td>Read Uncommitted</td><td>Nothing extra — dirty reads of uncommitted data allowed</td></tr>
+      <tr><td>Read Committed</td><td>Dirty reads only — non-repeatable reads still possible mid-transaction</td></tr>
+      <tr><td>Repeatable Read</td><td>Dirty + non-repeatable reads — phantom rows still possible in some engines</td></tr>
+      <tr><td>Serializable</td><td>All of the above — behaves as if transactions ran one at a time</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">If Serializable gives the strongest, simplest-to-reason-about guarantee, why doesn't every system just default to it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because Serializable is bought with <b>real throughput cost</b> — more aggressive locking, more conflict detection, more transaction aborts under contention. Defaulting every workload to Serializable means paying that cost even for the majority of queries that never actually needed it, which is why Read Committed is the pragmatic default in most production systems.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Under Read Committed, a transaction reads the same row twice and gets two different values. Is this a bug in the database?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No — it's the defined behavior of that isolation level.</b> Read Committed only promises you won't see uncommitted data; it explicitly allows another transaction's committed change to become visible between two reads in the same transaction. Calling this a "bug" usually means the isolation level was chosen without understanding what it actually guarantees.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">A financial ledger balance check reads a row, does some logic, then writes based on what it read — all under Read Committed. What specific class of bug does this invite?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A classic <b>lost update / race condition</b>: two concurrent transactions can both read the same "before" balance, both compute an update based on it, and the second write silently overwrites the first's effect — with no error raised, because Read Committed never promised the value would still be true by the time you write. This is exactly the pattern that needs Repeatable Read, Serializable, or explicit row locking (<code>SELECT ... FOR UPDATE</code>).</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Should isolation level be a single global setting for the whole database, or a per-transaction decision?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A <b>per-transaction decision.</b> A dashboard query reading aggregate stats has very different correctness needs than a fund-transfer transaction touching a ledger — forcing both onto the same global isolation level either over-pays for throughput on the safe query or under-pays for correctness on the risky one. Mature systems set isolation deliberately per transaction boundary, not as a database-wide default nobody revisits.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : WAL & BUFFER MANAGER -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>WAL & buffer manager — the unglamorous backbone of durability and speed</h2></div>
+    <p class="segment-note">Neither of these looks exciting on an architecture diagram, and both are the actual reason a SQL database can be both fast and crash-safe at the same time.</p>
+    <pre class="sketch">update row
+   |
+   v
+append change to WAL
+   |
+   v
+ack maybe after WAL durable
+   |
+   v
+data page flushed later (lazily, by buffer manager)
+
+Disk pages <--> Buffer Pool <--> Query Execution
+   miss -> load from disk
+   hit  -> use directly, no disk trip</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">Why does the database write to a log before touching the actual data page, instead of just updating the data page directly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a <b>sequential log append</b> is dramatically cheaper than a <b>random data-page write</b>, and because logging the intent first means a crash mid-update leaves enough information to redo or undo the change deterministically. Writing to the data page first, with no log, would leave no reliable way to know what state the page was in in the middle of a crash.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">If the WAL is durable the moment a transaction commits, does that mean the actual data pages on disk are already up to date at that point?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No — and this is the whole point.</b> The data page is flushed <i>lazily</i> by the buffer manager, often well after commit. Durability comes from the guarantee that the WAL alone is sufficient to reconstruct the committed change if the data page write is lost in a crash — not from the data page being current at commit time.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">The buffer pool caches pages in memory. What decides which page gets evicted when the pool is full and a new page needs to be loaded?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">An eviction policy, usually a variant of <b>LRU (least recently used)</b> — and getting this wrong under real workloads is a known trap: a single large sequential scan can flush out the frequently-accessed "hot" pages of an unrelated workload, since a naive LRU treats "just touched once" the same as "touched repeatedly." Production engines use smarter policies specifically to avoid this.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Is a larger buffer pool always a straightforward win for performance?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not unconditionally. A larger pool reduces disk I/O only up to the point where the <b>working set</b> actually fits in memory — beyond that, more memory just caches pages that won't be revisited soon. It also competes with OS-level file caching and other processes for physical memory, so sizing it is a workload-specific tuning decision, not "bigger is always better."</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : CRASH RECOVERY -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Crash recovery — coming back from an unclean shutdown, provably correct</h2></div>
+    <p class="segment-note">A database that can't recover cleanly after a crash isn't a database — it's a liability. Recovery has to be mechanical and provable, not "probably fine."</p>
+    <pre class="sketch">Crash -> restart -> read checkpoint -> redo committed WAL entries
+       -> undo incomplete work if needed
+
+Strong mental model:
+Recovery = bring data pages back to a transactionally
+consistent state, using log + checkpoints — nothing else.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">Why does recovery start from a checkpoint instead of replaying the entire WAL from the very beginning of time?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a <b>checkpoint</b> is a known-good snapshot marker — "everything before this point is already safely on disk." Replaying from the true beginning of the log on every restart would make recovery time grow unboundedly with database age; checkpoints bound recovery time to "work since the last checkpoint," which is what keeps restart times predictable.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">During recovery, why does the engine need both a redo phase and an undo phase — wouldn't redoing everything that's in the log be enough?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the log contains changes from transactions that <b>never committed</b> before the crash — redo alone would resurrect their effects too. Redo brings all logged changes forward first (including uncommitted ones, for simplicity), then undo specifically reverses the effects of transactions that were never confirmed committed, leaving only truly committed work standing.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">A transaction's client received no response before a crash — the connection just dropped mid-commit. After recovery, how does the client find out whether that transaction actually committed?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The client generally <b>cannot know from the dropped connection alone</b> — it has to query the actual current state after reconnecting (was the row updated? does an idempotency-key record exist?) rather than assuming success or failure. This is the same "timeout means unknown, not failed" principle from distributed transaction design, just triggered by a local crash instead of a network partition.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">Is a longer interval between checkpoints purely a performance win, since checkpointing has overhead?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No — it's a direct trade against recovery time.</b> Checkpointing does cost I/O while running, but stretching the interval means more WAL to replay on the next crash, so restart time grows. Checkpoint frequency is a deliberate dial between steady-state overhead and worst-case downtime after a crash, not a free performance lever.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : REPLICATION & SCALING -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Replication & scaling — where single-node simplicity runs out</h2></div>
+    <p class="segment-note">A single-node SQL DB gives you the strongest, simplest guarantees. Every scaling strategy from here trades away some piece of that simplicity for capacity or availability.</p>
+    <pre class="sketch">Primary
+  |
+  +--> Replica 1  (async or sync)
+  +--> Replica 2
+
+Primary handles writes. Replicas may serve reads.
+Replication ships the WAL / binlog — replicas replay it.
+
+Sharding
+========
+customer 1-10000    -> shard A
+customer 10001-20000 -> shard B
+(a join across shards is no longer a single-node operation)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q37</span><span class="q-text">If a replica is asynchronous, what specific guarantee does a read from that replica lose compared to reading from the primary?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Read-your-own-write consistency.</b> A write acknowledged on the primary may not have replayed on the replica yet, so a client that writes then immediately reads from a replica can see stale data — the classic "I just updated my profile and it still shows the old value" bug, which is a direct, predictable consequence of async replication lag, not a rare edge case.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q38</span><span class="q-text">Synchronous replication removes that staleness risk. Why isn't it the default choice for every system that can afford it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the primary now can't acknowledge a commit until the replica confirms receipt — <b>write latency becomes bounded by the slowest synchronous replica</b>, and a replica outage can block writes on the primary entirely. Sync replication trades throughput and availability for consistency; it's the right trade for some data, not for all of it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q39</span><span class="q-text">Sharding by customer ID solves the single-node capacity ceiling. What class of query does it make fundamentally harder, not just slower?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Any query that needs to <b>join or aggregate across shards</b> — the database no longer has a single engine that can execute a join plan across the whole dataset. What was a single query becomes a fan-out-and-merge operation the application (or a distributed query layer) has to orchestrate, with its own partial-failure and consistency questions.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q40</span><span class="q-text">Is choosing a shard key a reversible decision once the system is in production with real data?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Practically no — it's one of the most expensive decisions to change later.</b> Re-sharding means migrating live data across shard boundaries while the system stays online, and a poorly chosen key (one that creates hot shards, e.g. sharding by signup date when most activity is recent) can force exactly that migration under production pressure rather than as a planned exercise.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 11 : OUR DEPLOYMENT -->
+  <section class="segment" id="s11" style="--seg:#127475">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Our deployment — Wealth / Demat Platform database footprint</h2></div>
+    <p class="segment-note">The shape of SQL usage behind mutual fund order books, IPO allotment records, NSDL demat sync state, and the LAMF ledger — the numbers to have ready when asked "have you actually run this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Primary/replica topology</div><div class="value">1 <span>primary + 2 read replicas</span></div></div>
+      <div class="stat-card"><div class="label">Default isolation</div><div class="value">Read Committed</div></div>
+      <div class="stat-card"><div class="label">Ledger isolation</div><div class="value">Serializable <span>+ row locks</span></div></div>
+      <div class="stat-card"><div class="label">Sharded services</div><div class="value">~14 <span>of 80+</span></div></div>
+      <div class="stat-card"><div class="label">Checkpoint interval</div><div class="value">5 min <span>ledger DB</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Flow</th><th>Access pattern</th><th>Index / storage decision</th><th>Known hard edge</th></tr>
+      <tr><td>MF order book</td><td>write-heavy, point lookup by order_id</td><td>Clustered on order_id (monotonic sequence)</td><td>Random-key inserts once tested with UUID caused page-split spikes</td></tr>
+      <tr><td>IPO allotment</td><td>read-heavy, range scan by customer + date</td><td>Composite index (customer_id, allotment_date)</td><td>Reversed column order once caused full scans post-migration</td></tr>
+      <tr><td>NSDL demat sync</td><td>upsert-heavy, high write concurrency</td><td>MVCC + short transactions</td><td>Long-held sync transaction once blocked vacuum, causing table bloat</td></tr>
+      <tr><td>LAMF ledger</td><td>strict correctness, low volume, high stakes</td><td>Serializable isolation, explicit row locking</td><td>Read Committed once allowed a lost-update race on lien balance</td></tr>
+      <tr><td>Reporting / analytics</td><td>heavy aggregate scans</td><td>Read replica, relaxed isolation</td><td>Replica lag occasionally shows stale allotment counts to ops dashboards</td></tr>
+    </table>
+
+    <p class="segment-note" style="margin-top:-8px;">The deliberate design choice worth naming out loud on the LAMF ledger: <b style="color:#127475;">Serializable isolation with explicit row locking</b> — not because of convention, but because a lost-update race on a lien balance is a regulatory and financial incident, not a bug ticket. Every other flow deliberately runs at a weaker, faster isolation level because it can afford to.</p>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real-shaped issues this design has to account for</h3>
+
+    <div class="error-card"><div class="err-name">Lost update on LAMF lien balance under Read Committed</div>
+      <div class="err-fix">Two concurrent lien-marking requests both read the same "available balance," both computed a valid-looking deduction, and the second write silently overwrote the first's effect — no error raised, no lock conflict, just a wrong final balance. <b>Fix:</b> the ledger service was moved to Serializable isolation with <code>SELECT ... FOR UPDATE</code> on the balance row for any lien-affecting transaction.</div></div>
+    <div class="error-card"><div class="err-name">Composite index column order reversed during a routine migration</div>
+      <div class="err-fix">An index rebuild script recreated <code>(allotment_date, customer_id)</code> instead of <code>(customer_id, allotment_date)</code> — functionally "the same columns," but every customer-scoped allotment query silently fell back to scanning across all customers at each date. <b>Fix:</b> index definitions are now version-controlled with an automated check comparing column order against the query patterns they're meant to serve.</div></div>
+    <div class="error-card"><div class="err-name">Long-held NSDL sync transaction blocking vacuum</div>
+      <div class="err-fix">A sync job kept a transaction open for the duration of an external NSDL API call inside it, holding an MVCC snapshot open for minutes at a time — this silently prevented cleanup of old row versions platform-wide, and table bloat degraded unrelated queries days later with no obvious connection to the sync job. <b>Fix:</b> external calls were moved entirely outside the transaction boundary; the DB transaction now only wraps the local write.</div></div>
+    <div class="error-card"><div class="err-name">UUID primary key on the MF order book causing page-split spikes</div>
+      <div class="err-fix">An early version clustered the order table on a random UUID for "uniqueness convenience" — write throughput degraded under load from constant page splits as inserts landed at random points in the physical ordering. <b>Fix:</b> switched to a monotonic sequence as the clustering key, kept the UUID as a separate unique secondary index for external references.</div></div>
+    <div class="error-card"><div class="err-name">Optimizer plan flip after a bulk historical data load</div>
+      <div class="err-fix">A one-time backfill of two years of allotment history changed table statistics enough that the optimizer switched a previously fast indexed query to a full table scan overnight, with zero code or schema changes. <b>Fix:</b> statistics refresh was made an explicit, monitored step of any bulk-load runbook, not an assumption that autovacuum/auto-stats would catch it in time.</div></div>
+
+    <p class="segment-note">The line worth saying in an interview: <em>"We treat isolation level and index column order as explicit, reviewed design decisions per data flow — most of our correctness incidents came from defaulting to convenient choices, not from the storage engine misbehaving."</em></p>
+  </section>
+
+  <!-- SEGMENT 12 : RAPID FIRE -->
+  <section class="segment" id="s12" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why does a SQL database need an optimizer at all, when a KV store never does?</li>
+      <li>Why does column order matter in a composite index, when both orders "contain" the same columns?</li>
+      <li>Why isn't Serializable isolation the safe default everywhere?</li>
+      <li>Why does the WAL get written before the data page, not after?</li>
+      <li>Why does MVCC not eliminate the need for locks entirely?</li>
+      <li>Why can a random-UUID primary key hurt insert performance on a clustered table?</li>
+      <li>Why does recovery need both redo and undo, not just redo?</li>
+      <li>Why can a query that was fast for months suddenly become slow with no code change?</li>
+      <li>Why does async replication risk a client seeing its own write disappear?</li>
+      <li>Why does sharding make cross-entity joins fundamentally harder, not just slower?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 13 : LEADERSHIP PERSPECTIVES -->
+  <section class="segment" id="s13" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 12</span><h2>Leadership perspectives — same incident, five minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, a <b style="color:#7A63B8;">solutions architect</b>, a <b style="color:#C1543A;">CTO</b>, a <b style="color:#A9861E;">director</b>, and a <b style="color:#B0468C;">product owner</b>. Click to reveal how the same incident produces five different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- L1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">A lien-marking race condition under Read Committed silently double-counts available balance for a few minutes before anyone notices.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">No alert fired because nothing "failed" — both transactions committed successfully. The wrong final balance was only caught two days later during a reconciliation report, by which point a customer had already been allowed to borrow against balance that wasn't really available.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a row lock (<code>SELECT ... FOR UPDATE</code>) on the specific balance row for this transaction — fixes this exact code path.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Reviews every money-movement transaction platform-wide and formally classifies each one's required isolation level — treats this as a missing design step, not a one-off bug.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Asks why isolation level was never a reviewed field in the platform's transaction design checklist in the first place, across all 80+ services.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Weighs the cost of a platform-wide isolation-level audit against the recurring risk of the next silent financial miscalculation surfacing only in a reconciliation report.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks how many customers were affected by the two-day detection gap, and whether balance-affecting actions need a real-time reconciliation check before the product surfaces "approved," not after.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> How many of our money-touching transactions run at whatever isolation level the DB defaults to, because nobody ever explicitly decided otherwise?</div>
+        <div class="learning"><b>Learning:</b> A race condition under Read Committed doesn't throw an error — it just quietly produces a wrong answer that looks completely normal. That's what makes isolation-level choice a design decision, not a performance tuning knob to revisit later.</div>
+      </div></div></div>
+
+    <!-- L2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">A composite index gets rebuilt with reversed column order during a routine migration. Customer-scoped allotment queries silently start scanning the whole table.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">No query changed, no error appeared — response times for one screen simply crept upward over two weeks as the table grew, until it finally crossed a timeout threshold during a high-traffic allotment day.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Recreates the index with the correct column order — the immediate query is fast again.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Adds automated plan-regression checks that fail a migration if a critical query's <code>EXPLAIN</code> output changes shape, not just its index definition.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out that index definitions were never treated as tested, version-controlled artifacts with the same rigor as application code — asks why.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how many other migrations in the last year touched index definitions without a matching performance regression test in the pipeline.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks how gradual the degradation was from a customer's perspective, and whether "slowly getting slower" should have its own alerting threshold distinct from hard failures.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we test that our migrations preserve query performance, or only that they preserve schema correctness?</div>
+        <div class="learning"><b>Learning:</b> A "functionally equivalent" index change can be a severe performance regression in disguise — column order is invisible in a diff that only checks "which columns are indexed," which is exactly why it slips through review.</div>
+      </div></div></div>
+
+    <!-- L3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">A sync job holds a database transaction open across an external NSDL API call. Table bloat from blocked vacuum starts degrading unrelated queries platform-wide days later.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team investigating the slow, unrelated queries had no obvious reason to suspect a sync job in a completely different service — the connection between "open transaction elsewhere" and "my query is slow here" took real digging to find.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Moves the external API call outside the transaction boundary — closes this specific gap.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Establishes a platform rule: no external network call is ever allowed inside an open DB transaction, and adds tooling to detect long-held transactions automatically.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Flags this as a shared-infrastructure risk — one poorly written service can degrade every other service on the same database instance, and asks whether that blast radius is acceptable.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Weighs isolating high-risk services onto separate database instances against the cost of that added operational complexity.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks which customer-facing features were degraded by the bloat, and how long it took to even connect the symptom to the cause.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we monitor for long-held transactions as a platform-wide health signal, or only discover them after their damage shows up somewhere else entirely?</div>
+        <div class="learning"><b>Learning:</b> A transaction's blast radius isn't limited to the rows it touches — a long-held transaction anywhere on a shared database can quietly degrade cleanup for everyone else sharing that instance.</div>
+      </div></div></div>
+
+    <!-- L4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">A bulk two-year historical data load causes the optimizer to flip a previously fast indexed query to a full table scan overnight — with zero code changes.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The on-call engineer initially assumed a deployment had gone wrong, since nothing in the application had changed — the actual cause, stale statistics after a bulk load, took longer to find than the fix itself once identified.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Manually triggers a statistics refresh — fixes the immediate slowness.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Adds an explicit statistics-refresh step to every bulk-load runbook, and adds plan-monitoring so a plan flip on a critical query triggers an alert automatically.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes that "the SQL didn't change" was treated internally as equivalent to "performance won't change" — asks where else that false assumption might be hiding.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how much on-call time was spent chasing a "deployment must have broken something" theory before the real cause was found, and whether that diagnostic cost justifies the monitoring investment.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks whether bulk historical loads should be scheduled with a mandatory performance-validation window before being considered "done," rather than closed the moment the load finishes.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we treat "the query text is unchanged" as proof that performance is safe — and how would we even notice if that assumption were false?</div>
+        <div class="learning"><b>Learning:</b> Query performance is a function of data state, not just SQL text. Any operation that materially changes data shape — a bulk load, a mass delete, a skewed campaign — is a performance-risk event, even with zero code deployed.</div>
+      </div></div></div>
+
+    <!-- L5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">A read replica falls behind during a traffic spike. A customer updates their KYC status, immediately checks it on a different screen, and sees the old value.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The customer assumed their update failed and resubmitted it, creating a duplicate KYC update request — support later had to explain that nothing was actually wrong, the read had simply hit a lagging replica.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Routes the immediate post-write read to the primary instead of a replica for this specific screen.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Defines a platform-wide rule for which read paths require read-your-write consistency (route to primary or track replication offset) versus which can tolerate replica lag.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Asks whether replica routing decisions were ever made deliberately per use case, or whether "reads go to replicas" was applied as a blanket rule without exceptions.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Weighs the primary's added read load from consistency-sensitive routes against the support cost of repeated "my update disappeared" tickets.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks whether the UI itself should show an optimistic "saved" confirmation immediately after write, rather than relying on a subsequent read to prove it.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Which of our screens quietly assume "read after write" consistency without anyone ever checking whether the read actually goes to the primary?</div>
+        <div class="learning"><b>Learning:</b> Replica lag isn't a rare edge case under load — it's a designed-in property of async replication that shows up exactly when traffic is highest, which is also when the customer experience matters most.</div>
+      </div></div></div>
+
+    <!-- L6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">A service sharded by signup date develops a severely hot shard as recent signups dominate activity, while older shards sit nearly idle.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The hot shard's latency degraded for every customer who signed up recently — a large, disproportionate slice of daily active users — while capacity sat unused elsewhere, and rebalancing meant migrating live data under production load.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds more compute to the hot shard as a stopgap — buys time, doesn't fix the underlying key choice.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Designs a re-sharding plan around a hash-based key instead of signup date, specifically to distribute load independent of recency, and plans a live migration path.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Asks whether shard-key hot-spotting risk was ever modeled before the original key was chosen, or only discovered once it happened in production.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Weighs the cost and risk of a live re-sharding migration against the ongoing cost of over-provisioning the hot shard indefinitely.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks which customer segment is silently getting worse latency today, and whether that's acceptable to leave running while the migration is planned.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Did we choose our shard key by modeling future access patterns, or by whatever column was convenient to partition on at the time?</div>
+        <div class="learning"><b>Learning:</b> A shard key isn't just a storage decision — it's a bet on how load will distribute over time. A key that looks reasonable at launch can become the single hardest thing to change once real usage patterns emerge.</div>
+      </div></div></div>
+
+    <!-- L7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">An auditor asks for proof of the exact sequence of balance changes on a specific LAMF account over the last quarter. The ledger table only stores current balances — no history was ever retained.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team can prove the current balance is correct today, but cannot reconstruct the exact sequence and timing of every debit and credit that led there — the precise audit trail the regulator is asking for, because the schema was designed for "what is true now," not "what happened, in order."</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Starts writing an append-only transaction log going forward — helps the next audit, not this one.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Redesigns the ledger as an append-only event table with balance as a derived, computed value — separating "history of truth" from "current snapshot" as two distinct, deliberately-designed structures.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Frames this as a governance gap, not a schema oversight: nobody defined audit-retention requirements for regulated ledgers before the schema was designed.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks the sharper question: for every regulated data flow on the platform, was audit-trail retention ever a deliberate compliance decision, or did it default to whatever the simplest schema happened to store?</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Weighs the ledger redesign against other roadmap priorities — but flags that failing this exact audit request has a cost (regulatory relationship, potential penalty) that likely outranks most features currently ahead of it.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> If a regulator asks for proof of exact sequencing on any of our regulated balances tomorrow, do we know how far back we can actually answer — and was that a deliberate schema decision, or an accident of storing only "current state"?</div>
+        <div class="learning"><b>Learning:</b> Storing only current state is fine for running the system and completely inadequate for proving what happened on a regulated balance weeks later. Append-only history versus mutable current-state is a compliance decision wearing a schema-design costume — and it has to be made before the regulator asks, not after.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I fix this query or transaction," solutions architects ask "what indexing, isolation, or sharding design caused this and what's the durable fix," CTOs ask "what governance or platform-standard gap let this happen across 80+ services," directors ask "what's the business or compliance cost, and who owns this decision," and product owners ask "how does this affect what the customer sees and trusts, and is it worth prioritizing over the next feature." A leadership role means holding all five at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: a SQL database's whole value is that it lets you ask expressive questions
+    declaratively — but every layer beneath that promise is a deliberate trade: pages over rows for
+    disk-aligned I/O, B+ trees over binary trees for shallow disk-bound lookups, MVCC over pure locking
+    so readers and writers stop blocking each other, WAL-before-data-page so a crash mid-write still has
+    a truthful story to recover from, and isolation level chosen per transaction rather than left at
+    whatever the engine defaults to. The platform's real maturity shows up in whether anyone decided
+    these trade-offs on purpose, not whether the queries happen to return correctly today.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
