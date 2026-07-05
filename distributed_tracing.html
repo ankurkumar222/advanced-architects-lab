@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distributed Tracing — The Journey, Not The Event</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Distributed Tracing: the <em>journey</em>, not the event</h1>
+    <p class="sub">A revision session built only on what makes distributed tracing fundamentally different from distributed logging — plus a real deployment section and a leadership decision-making section. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>12 segments</b></span>
+      <span>~3 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: reasoning, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Mental Model</a>
+    <a href="#s2" style="color:#2E8B82;">02 Trace & Span</a>
+    <a href="#s3" style="color:#C1543A;">03 Parent-Child Causality</a>
+    <a href="#s4" style="color:#7A63B8;">04 Timing & Critical Path</a>
+    <a href="#s5" style="color:#3480B0;">05 Context Propagation</a>
+    <a href="#s6" style="color:#6B9A44;">06 Concurrency & Fan-Out</a>
+    <a href="#s7" style="color:#C1547A;">07 Error Semantics</a>
+    <a href="#s8" style="color:#B9971F;">08 Sampling Strategy</a>
+    <a href="#s9" style="color:#279090;">09 Tracing vs Logs vs Metrics</a>
+    <a href="#s10" style="color:#9A62D6;">10 Our Deployment</a>
+    <a href="#s11" style="color:#C9871F;">11 Rapid Fire</a>
+    <a href="#s12" style="color:#4A5FBF;">12 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 : AMBER -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The mental model shift</h2></div>
+    <p class="segment-note">Logging asks: <code>"what happened in each service?"</code> Tracing asks: <code>"how did one request travel across many services, in what order, for how long, and where exactly was time spent?"</code> Everything below falls out of that one difference.</p>
+    <pre class="sketch">Logging model:  many log events, searched by service / level / time / trace_id
+Tracing model:  one request -> broken into spans -> spans form a tree/DAG -> full path visible
+
+Logs are event records.
+Traces are causality and timing graphs.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">You already have correlated logs (same trace_id stamped everywhere). Why isn't that "distributed tracing"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Correlated logs tell you <b>which events belong to the same request</b>, but not the <b>parent-child structure</b> between them — who called whom, what ran inside what, and how long each nested step took. That structure is the actual product of tracing.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">What is the real primary object in tracing — is it a log line?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No. The primary object is a <b>Trace</b>, composed of <b>Spans</b>. A log line is a point-in-time fact; a span is a timed unit of work with a start, an end, and a place in a causal tree.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">What new question does tracing answer that logging structurally cannot answer well?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>"Where exactly did the latency happen?"</b> Logs can tell you a step took 500ms if someone logged it, but only a span tree can show you that step's 500ms against the total request time and against its siblings.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">If someone says "we already have distributed traceability" but really means "we have a shared correlation ID," what's missing?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Everything that makes tracing tracing: <b>span hierarchy, durations, parallelism visibility, and a reconstructable execution path</b>. A shared ID is necessary but nowhere near sufficient.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : TEAL -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Trace & span fundamentals</h2></div>
+    <p class="segment-note">The primary object isn't "a correlated log line" — it's <code>Trace → Spans → parent-child tree/DAG</code>. A trace is the whole request journey; a span is one timed unit of work inside that journey.</p>
+    <pre class="sketch">Trace T100
+ +--> Span S1 : Gateway request
+       +--> Span S2 : Auth call
+       +--> Span S3 : Order call
+               +--> Span S4 : Inventory call
+               +--> Span S5 : Payment call</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">What should a span represent — one HTTP request, one DB call, one internal method?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Generally a <b>meaningful unit of work at a boundary</b> — a network hop, a DB/cache call, a queue publish/consume, or a significant business step. Not every internal method call deserves its own span.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">If span granularity is too coarse, what is lost?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">You lose the ability to <b>localize latency</b> — you'll know "Order Service took 700ms" but not whether that was a slow DB call, a slow downstream dependency, or CPU-bound business logic.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">If span granularity is too fine, what happens?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Too much <b>overhead, too much data, too much noise</b> — traces become unreadable trees with hundreds of spans, storage/ingestion cost balloons, and the signal (where's the real latency) drowns in detail.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">What's the actual difference between a span and a well-formatted log line with a duration field?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A log line is <b>self-contained</b> — nothing forces it to know its place in a larger structure. A span carries <b>trace_id, span_id, and parent_id</b> by construction, so it composes into a tree automatically. The log line only composes into a tree if a human reconstructs it later.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : CORAL -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Parent-child causality — the real heart</h2></div>
+    <p class="segment-note">Logging correlation stops at "these events share a trace_id." Tracing goes deeper — it needs <code>parent span id, child span id, causal structure</code>, not just a common label scattered across services.</p>
+    <pre class="sketch">Gateway Span S1
+   +--> Auth Span S2
+   +--> Order Span S3
+          +--> Payment Span S4
+          +--> Inventory Span S5
+
+This is much stronger than: "all logs share trace_id=T100"
+Because now we know who called whom, in what nesting, for how long.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why is trace_id alone insufficient without span hierarchy?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because trace_id only <b>groups</b> events into a bucket. It doesn't tell you the nesting — which call triggered which, and in what order. Traceability is about the <b>causal path</b>, not just common correlation.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">If a service emits spans without correct parent linkage, what happens?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The trace becomes <b>broken or misleading</b> — spans either float as orphans, attach to the wrong parent, or the tool silently guesses a structure that isn't real. Debugging on a wrong tree is worse than no tree.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Two spans share the same trace_id but have no parent_id set at all. What can you still conclude — and what can't you?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">You can conclude they <b>belong to the same request</b>. You cannot conclude <b>who called whom, whether they ran sequentially or in parallel, or which one's failure caused the other's</b>. That's the exact gap between logging correlation and tracing.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Should every downstream service just forward the trace_id it received, or create a new span correctly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Create a new child span</b>, with its own span_id and the incoming span_id set as its parent_id. Forwarding trace_id alone without creating a proper child span destroys the causal tree even though the trace still "looks" connected.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : VIOLET -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Timing as first-class — critical path</h2></div>
+    <p class="segment-note">Logging usually stores timestamps as metadata. Tracing makes <b>duration</b> the central organizing fact — a span tree with timings is a latency-decomposition tool, not just a record of when things happened.</p>
+    <pre class="sketch">Trace T100 — total 900ms
+Gateway Span        [-------------------- 900 ms --------------------]
+Auth Span           [--- 40 ms ---]
+Order Span          [---------------- 700 ms ----------------]
+Inventory Span      [-- 80 ms --]
+Payment Span        [----------- 500 ms -----------]</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">What is the "critical path" of a trace?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The <b>chain of spans that actually determined total request duration</b> — the sequence where, if any one span got faster, the overall request would get faster too. Spans that ran in parallel with slack time are not on the critical path even if they took a while.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Why can the sum of all span durations exceed the total trace duration?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because of <b>overlap / parallelism</b> — if three spans run concurrently for 200ms each, they sum to 600ms of "work" but only cost 200ms of wall-clock time. Summing span durations without accounting for concurrency overstates the real cost.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Why does tracing answer "where did the time go" better than logs with timestamps?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Logs can tell you <b>"Payment took 500ms"</b> in isolation. Tracing tells you <b>"that 500ms dominated the total 900ms request and sat on the critical path"</b> — the same fact, but placed inside the structure that makes it actionable.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">A trace shows Payment span = 500ms inside a 1200ms total, but Payment ran in parallel with two other 400ms spans. Is Payment automatically your bottleneck?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not automatically — you need to check if Payment is on the <b>critical path</b>. If the other branches finish well before Payment and the parent waits on all of them, Payment is the bottleneck. If some sequential step outside the parallel block dominates instead, optimizing Payment won't move the needle.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : SKY -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Context propagation across service & async boundaries</h2></div>
+    <p class="segment-note">Correlation IDs were "useful" in logging. In tracing, propagation must carry <b>trace_id, span_id, parent context, and sampling flags</b> precisely — and it gets genuinely hard the moment a queue or topic sits between two services.</p>
+    <pre class="sketch">Client
+  -> Gateway creates Trace T100, Span S1
+       | propagate context
+       v
+     Order Service creates child Span S2
+       | propagate context
+       v
+     Payment Service creates child Span S3
+
+Async case:
+API Span -> publish message -> Queue/Topic -> Worker Span
+(is the worker span a child of the API span, or linked more loosely?)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">What exactly needs to be propagated between services — is trace_id enough?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No. You need <b>trace_id, the current span_id (to become the parent), the sampling decision/flag, and optionally trace state</b>. Propagating trace_id alone loses the parent-child chain the moment it crosses a boundary.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">If processing happens minutes later via a queue, is a single end-to-end trace still the right model?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Often <b>no</b> — a single unbroken trace implies a live, bounded request. For long-delayed async work, many systems deliberately model it as a <b>linked trace</b> (a reference, not a parent-child span) so dashboards don't show a "hanging" 10-minute span that misrepresents what actually happened.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">A message is published to a topic and consumed by a worker later. What breaks if you don't explicitly design for this boundary?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The trace <b>silently ends at publish</b> — the worker either starts a brand-new, disconnected trace, or (worse) inherits stale context that misattributes its work to the wrong request. Either way, you lose the ability to answer "what happened to this event after it was published."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Should business metadata (tenant_id, experiment_id, region) travel as tracing "baggage," or stay in logs and span tags?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Sparingly, as baggage, only if <b>every downstream service genuinely needs it for its own decisions</b> (e.g. routing by tenant). Baggage propagates on every hop and adds overhead — most metadata belongs on the <b>span itself as a tag</b>, visible for that span only, not forced onto the whole trace.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : LIME -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Concurrency & fan-out</h2></div>
+    <p class="segment-note">Logs are read largely linearly. Traces show <b>parallel branches natively</b> — this is one of tracing's sharpest advantages over logging for fan-out call patterns.</p>
+    <pre class="sketch">Gateway Span
+   +--> Auth Span
+   +--> in parallel:
+         +--> Inventory Span
+         +--> Pricing Span
+         +--> Recommendation Span
+
+Timeline view:
+Gateway        [--------------------------------------]
+Inventory         [------]
+Pricing           [----------]
+Recommendation    [-------------------]</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">Three downstream calls fire concurrently from one service. Can scattered logs alone easily show that they ran in parallel, not sequence?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>not clearly</b> — logs interleave by wall-clock write time across threads/services, and a reader has to mentally reconstruct overlap. A span tree with start/end timestamps shows the overlap directly in a waterfall view.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">Of three parallel branches, one is slow and two are fine. How does tracing surface that versus logging?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">In a waterfall view, the slow branch's span is <b>visually longer</b> and clearly extends past its siblings — instantly identifiable. In logs, you'd need to manually diff timestamps across three separate log streams to notice the same thing.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">Why is fan-out concurrency a natural fit for the span-tree model specifically (not just "more spans")?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because sibling spans under the same parent, with their own start/end times, <b>encode "ran independently, same trigger" for free</b> — no extra field needed. The tree structure itself expresses concurrency; you don't have to infer it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">If a parent span waits on 3 children, and one takes far longer than the other two combined, is optimizing the fast two worth doing?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Almost never — the parent's total time is bounded by the <b>slowest child</b> when they run in parallel. Optimizing the fast two buys nothing unless the slow one is also fixed; this is exactly the kind of wasted-effort trap a span tree prevents.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : ROSE -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Error semantics inside request structure</h2></div>
+    <p class="segment-note">Logging stores many scattered error events. Tracing marks failure <b>in the context of the request path</b> — which is a structurally stronger story than isolated error logs.</p>
+    <pre class="sketch">Trace T100
+Gateway Span      OK
+Order Span        OK
+Payment Span      ERROR timeout
+Inventory Span    not called / cancelled</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Why is one error span often more powerful than many scattered error logs describing the same failure?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the error span sits <b>inside the request structure and latency path</b> — you immediately see what led up to it, what ran alongside it, and what happened downstream, instead of piecing that together from timestamps across five separate log files.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Should a span carry a structured status (OK / ERROR / TIMEOUT / CANCELLED), or is a free-text error log attached to it enough?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Structured status is essential — it's what lets tracing backends <b>filter and alert on "show me all traces with an ERROR span"</b> at query time. A free-text log requires full-text search and doesn't compose into dashboards or SLOs the same way.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">Can tracing show whether sibling calls continued or were aborted after one branch failed?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — this is a tracing-specific strength. If Inventory's span never starts, or starts and is marked <b>CANCELLED</b>, the tree itself documents the fan-out's failure-handling behavior, something isolated error logs rarely capture explicitly.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">A parent span is marked OK even though a child span errored. What does that usually mean, and is it a bug?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It usually means the parent <b>caught and handled</b> the child's failure (a retry succeeded, a fallback was used, the error was non-critical). It's not automatically a bug — but it's a signal worth checking, since a parent silently swallowing every child error can hide real degradation.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : GOLD -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Sampling — why it's far more central than in logging</h2></div>
+    <p class="segment-note">Logging can often afford to retain most events. A full span tree for every request, at scale, becomes very expensive very fast — so tracing leans on sampling far more heavily.</p>
+    <pre class="sketch">100,000 requests/sec
+If every request creates 20 spans -> 2,000,000 spans/sec
+
+Strategies:
+sample 1% of everything
+sample all errors
+sample slow traces
+sample priority traffic (tail sampling)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">Why is sampling much more central in tracing than in log sampling?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a <b>single request can generate dozens of spans</b> across many services almost instantly — the volume multiplier is far steeper than one log line per event, so unsampled tracing at scale is often prohibitively expensive to ingest and store.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">Should sampling decide at the head (start of request) or the tail (after seeing the outcome)?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Both have a place. <b>Head sampling</b> is cheap and simple but blind — it might drop the one trace that turns out to matter. <b>Tail sampling</b> waits to see the outcome before deciding, so it can deliberately keep error traces and slow traces — at the cost of buffering and more complex infrastructure.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Why is tail sampling attractive despite being harder to build?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it can <b>preserve exactly the traces you'd otherwise regret losing</b> — error traces, slow traces, and traces on interesting/priority paths — instead of randomly keeping 1% and hoping the important ones survive.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">If you sample one span but lose its parent or children in the process, is the trace still useful?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Rarely — tracing's value depends on <b>whole-trace coherence</b>. A sampling decision must be made per-trace (usually at the root), not per-span, or you end up with orphaned fragments that can't be reassembled into a meaningful path.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : CYAN -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Tracing vs logs vs metrics — the real boundary</h2></div>
+    <p class="segment-note">The most senior answer isn't "tracing replaces logging" — it's knowing exactly which question each tool is built to answer, and wiring them together rather than duplicating effort.</p>
+    <table class="diff-table">
+      <tr><th>Reach for logs when</th><th>Reach for tracing when</th></tr>
+      <tr><td>You need the detailed local story of one service at one moment</td><td>You need the cross-service journey of one request</td></tr>
+      <tr><td>Full-text search over arbitrary event detail is the workflow</td><td>Latency decomposition / critical-path analysis is the workflow</td></tr>
+      <tr><td>Debugging inside a single component's internal state</td><td>Debugging "why is checkout slow" across many components</td></tr>
+      <tr><td>You want every event, cheaply, with flexible querying</td><td>You want a small number of complete, coherent request paths</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">Should tracing replace logging?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> Logs answer detailed local events; traces answer the cross-service journey and latency. Together, from a span you jump to related logs, and from logs you jump to the trace_id — neither one alone tells the full story.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">Should every log line carry trace_id and span_id context?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — this is a very strong practice. It's what lets you pivot from <b>"I found a slow span in the trace waterfall" to "now show me the exact logs for that span"</b> in one click, instead of manually correlating timestamps across systems.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">If someone asks "why is checkout slow," is the better first stop logs or the trace waterfall?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually the <b>trace waterfall</b> — it immediately shows which service/span dominates total time. Logs are the right next step once you know <em>where</em> to look, to understand <em>why</em> that specific step was slow.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : PURPLE -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Our deployment — Wealth / Demat Platform tracing footprint</h2></div>
+    <p class="segment-note">This is the shape of the tracing footprint behind mutual fund order flow, IPO allotment, NSDL demat sync, PolicyBazaar insurance journeys, and loans — the numbers to have ready when asked "have you actually run this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Instrumented services</div><div class="value">~35 <span>of 80+</span></div></div>
+      <div class="stat-card"><div class="label">Backend</div><div class="value">OTel <span>+ collector</span></div></div>
+      <div class="stat-card"><div class="label">Base sampling</div><div class="value">5% <span>head sample</span></div></div>
+      <div class="stat-card"><div class="label">Tail-sampled</div><div class="value">100% <span>errors + p95+</span></div></div>
+      <div class="stat-card"><div class="label">Avg span depth</div><div class="value">6–9 <span>per request</span></div></div>
+      <div class="stat-card"><div class="label">Trace retention</div><div class="value">24h <span>hot storage</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Flow</th><th>Services in path</th><th>Typical spans</th><th>Known hotspot</th></tr>
+      <tr><td>MF redemption request</td><td>gateway → order-svc → NAV-svc → payment → ledger → notification</td><td>~12</td><td>NAV cutoff window latency</td></tr>
+      <tr><td>IPO allotment sync</td><td>mofsl-webhook-adapter → allotment-svc → notification-dispatcher</td><td>~6</td><td>MOFSL callback jitter</td></tr>
+      <tr><td>Demat instant account open</td><td>onboarding-svc → nsdl-adapter → kyc-svc → demat-svc</td><td>~10</td><td>NSDL external call variance</td></tr>
+      <tr><td>Insurance journey</td><td>policy-gateway → policybazaar-adapter → policy-sync-svc</td><td>~7</td><td>Third-party API span missing internal retries</td></tr>
+      <tr><td>Loan against MF (LAMF)</td><td>loan-svc → valuation-svc → lien-marking-svc → disbursal-svc</td><td>~9</td><td>Lien-marking async boundary</td></tr>
+    </table>
+
+    <p class="segment-note" style="margin-top:-8px;">Roughly <b style="color:#9A62D6;">35 of 80+ microservices</b> currently emit spans. The biggest coverage gap sits at the <b style="color:#9A62D6;">NSDL/MOFSL/PolicyBazaar external boundaries</b>, where outbound calls are traced but internal retry/backoff logic inside those adapters often isn't.</p>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real issues we've actually hit</h3>
+
+    <div class="error-card"><div class="err-name">Broken trace at the async boundary</div>
+      <div class="err-fix">A redemption event published to a queue and picked up by a worker service 40s later showed up as two disconnected traces. <b>Fix:</b> explicit trace-link (not parent-child) injected into message headers at publish time, resolved at consume time.</div></div>
+    <div class="error-card"><div class="err-name">Over-instrumentation in the NSDL adapter</div>
+      <div class="err-fix">A team added a span to every internal method call, producing 80+ spans per request and overwhelming the trace UI. <b>Fix:</b> pruned to boundary-only spans (network, DB, external call).</div></div>
+    <div class="error-card"><div class="err-name">The complaint trace got sampled out</div>
+      <div class="err-fix">A specific customer's failed redemption fell outside the 5% head sample — no trace existed to investigate. <b>Fix:</b> moved error paths to guaranteed tail-sampling regardless of head-sample decision.</div></div>
+    <div class="error-card"><div class="err-name">Retry logic invisible inside a single span</div>
+      <div class="err-fix">The PolicyBazaar adapter retried a timing-out call 3 times internally, but it appeared as one long span with no visibility into the retries. <b>Fix:</b> each retry attempt now gets its own child span with an attempt-number tag.</div></div>
+    <div class="error-card"><div class="err-name">Clock skew across containers</div>
+      <div class="err-fix">Two services on nodes with ~150ms clock drift produced spans that appeared to start before their parent. <b>Fix:</b> NTP sync enforced cluster-wide; tracing backend also clamps visually implausible offsets.</div></div>
+
+    <p class="segment-note">The line worth saying in an interview: <em>"We treat span boundaries and sampling policy as design-time decisions, not runtime accidents — most of our trace-quality incidents came from someone instrumenting too much or too little, not from the tracing backend misbehaving."</em></p>
+  </section>
+
+  <!-- SEGMENT 11 : RAPID FIRE -->
+  <section class="segment" id="s11" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why is trace_id alone not enough without span hierarchy?</li>
+      <li>Why is tracing about causality and timing, not just event collection?</li>
+      <li>Why does tracing answer latency decomposition better than logs?</li>
+      <li>Why is parent-child span structure the real heart of traceability?</li>
+      <li>Why is sampling much more central in tracing than in logging?</li>
+      <li>How should async boundaries be represented in traces — parent-child, or linked traces?</li>
+      <li>What should count as a span, and what is too fine-grained?</li>
+      <li>Why does tracing naturally reveal service dependency graphs that nobody documented?</li>
+      <li>Why is full-trace retrieval a different storage/query problem than log search?</li>
+      <li>Why should logs and traces be linked, not merged into one thing?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 12 : LEADERSHIP PERSPECTIVES -->
+  <section class="segment" id="s12" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Leadership perspectives — same incident, four minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, an <b style="color:#7A63B8;">architect</b>, a <b style="color:#C1543A;">CTO</b>, and a <b style="color:#A9861E;">director</b>. Click to reveal how the same incident produces four different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- L1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">A mutual fund redemption trace shows a 3.2s end-to-end request. The Payment span alone is 2.6s, but nobody had noticed until a customer complained.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Digging in, Payment's 2.6s wasn't one slow call — it was three sequential retries against a flaky downstream bank API, each waiting the full timeout before failing over. The trace existed the whole time; nobody had a dashboard watching for "any span over X ms" in production.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Tunes the retry timeout down — helpful locally, doesn't address why nobody saw this before a customer did.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Weighs alerting on span-duration thresholds (proactive, needs tuning to avoid noise) against relying on customer complaints (reactive, cheap, always too late).</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes tracing was deployed as a debugging tool, not an observability product — nobody owns turning trace data into alerts, dashboards, or SLOs.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks the harder question: how many other slow spans exist right now, silently, because tracing data is collected but never watched?</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we have a single dashboard that would have caught this without a customer telling us? If not, we're generating trace data, not observability.</div>
+        <div class="learning"><b>Learning:</b> Collecting traces isn't the same as watching them. A trace sitting in storage that nobody's threshold ever fires on is functionally the same as no trace at all — until, as here, it's needed retroactively.</div>
+      </div></div></div>
+
+    <!-- L2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">A redemption order publishes an event to Kafka; a settlement worker consumes it 40 seconds later. The trace ends at publish — nobody can see what happened after.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">A settlement bug caused silent duplicate processing for a handful of orders. Without a connected trace across the queue boundary, tracking down which service actually caused the duplication took two days of manually correlating logs by order_id across five services.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds order_id to every log line in the worker — helps this time, doesn't fix the structural gap for the next async flow.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Decides between linking the worker's trace to the publisher's trace (context-aware, more setup) versus accepting that async work will always need log correlation instead of tracing.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out this is now the third incident where an async boundary caused a multi-day investigation — the fix (context propagation via message headers) is a platform investment, not a per-team task.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Frames it as a build-vs-tolerate decision: invest in a shared messaging-context library once, or keep paying two engineer-days per incident indefinitely.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> How many of our async flows have this same blind spot right now, waiting for their own two-day investigation?</div>
+        <div class="learning"><b>Learning:</b> Tracing that stops at a queue isn't broken tracing — it's untraced. Async boundaries need deliberate design (trace-link injection into message headers), not an assumption that "the trace_id will just carry over."</div>
+      </div></div></div>
+
+    <!-- L3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">A team instruments every method call inside the NSDL adapter. Traces balloon to 80+ spans per request, and the trace UI becomes unusable.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team's intent was good — "more visibility can't hurt." Six weeks later, ingestion costs for that one service exceeded the rest of the platform combined, and engineers started ignoring the NSDL traces entirely because they took too long to read.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Manually collapses spans in the UI when reading a trace — a workaround, not a fix, and it doesn't reduce ingestion cost.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Defines instrumentation boundaries explicitly — network calls, DB/cache calls, external dependencies, key business steps — and removes spans for pure in-process logic.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes there was no instrumentation guideline at all — every team decided span granularity independently, with wildly different philosophies.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Sees the actual cost: engineers now distrust tracing data because reading it takes longer than reading logs — the tool built to save time started costing more of it.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we have a written instrumentation standard that every team can be pointed to, or is span granularity purely a matter of individual taste?</div>
+        <div class="learning"><b>Learning:</b> More spans is not more observability past a certain point — it's noise with a bill attached. The instinct to "trace everything" needs an explicit boundary discipline, or tracing degrades into a more expensive, harder-to-read version of logging.</div>
+      </div></div></div>
+
+    <!-- L4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">A high-value customer's redemption fails. Support escalates. Engineering goes to find the trace — it was never sampled; the 5% head-sample rate simply skipped it.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Reconstructing what happened takes hours of manual log correlation across six services, because the one artifact designed specifically to make this fast — the trace — doesn't exist for this request.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Raises the head-sample rate from 5% to 20% — reduces the odds of this happening again, but doesn't guarantee it and multiplies cost fourfold.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Redesigns sampling as tail-based: sample everything provisionally, then decide retention after seeing the outcome — guaranteeing errors and slow requests are always kept regardless of a random head-sample coin flip.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Weighs the infrastructure cost of tail sampling (buffering, delayed decision) against the recurring cost of untraceable high-value incidents.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks a sharper question: should sampling policy differ by customer tier or transaction value at all, or is uniform random sampling itself the wrong default for a financial platform?</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Is our sampling strategy actually aligned with which requests matter most to the business, or is it just "whatever's cheapest to run"?</div>
+        <div class="learning"><b>Learning:</b> Random head sampling treats every request as equally disposable. In a financial system, errors, slow requests, and high-value transactions are exactly the ones you can't afford to lose — which is precisely what naive uniform sampling is most likely to drop.</div>
+      </div></div></div>
+
+    <!-- L5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">The PolicyBazaar integration times out intermittently. The trace shows one long external-call span — but internally, the adapter was silently retrying three times before failing.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Without visibility into the retries, the team initially assumed PolicyBazaar's API itself was consistently slow. In reality, the first two attempts failed fast and only the third succeeded slowly — a completely different problem (retry/backoff tuning) than what the single span suggested (a genuinely slow upstream).</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a child span per retry attempt with attempt-number and outcome tags — makes the real behavior visible immediately.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Generalizes the fix: any retry logic anywhere in the platform should default to child-span-per-attempt as a standard instrumentation pattern, not a one-off fix for this adapter.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the team spent two weeks chasing "PolicyBazaar is slow" as a vendor problem when it was actually an internal retry configuration issue — a costly misdiagnosis caused entirely by under-instrumentation.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the pattern: every external-vendor integration in the platform should be assumed to have hidden retry logic until proven otherwise, and audited accordingly.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> How many other "the vendor is slow" tickets in our backlog are actually "our retry logic is invisible" problems in disguise?</div>
+        <div class="learning"><b>Learning:</b> A single span that wraps hidden internal complexity (retries, fallbacks, circuit breakers) doesn't just lose detail — it can point blame at the wrong system entirely. If work happens inside a call, that work deserves its own spans.</div>
+      </div></div></div>
+
+    <!-- L6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">A trace waterfall shows a child span apparently starting before its parent span. The on-call engineer assumes the tracing tool is broken and moves on.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">It wasn't a tool bug — two containers had ~150ms of clock drift between them. The "impossible" ordering was real data, correctly reported, describing an environment problem nobody had checked in months.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Ignores the anomaly as a rendering glitch — loses a real signal about infrastructure health.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Treats implausible span ordering as a first-class alert condition — it usually means clock skew, not a broken tool, and clock skew corrupts every latency number on that host, not just this one trace.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes NTP sync monitoring was never set up cluster-wide — a basic infra hygiene gap that had been silently corrupting trace accuracy for an unknown period.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how much of the platform's "the tracing tool is unreliable" reputation was actually caused by unmonitored clock drift, and whether that reputation is now discouraging engineers from trusting good data.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> When trace data looks wrong, do we default to "the tool is broken" or "the tool is telling us something true that we don't want to hear"?</div>
+        <div class="learning"><b>Learning:</b> Distributed tracing is only as trustworthy as the clocks underneath it. An engineer's instinct to dismiss "impossible" timing data is usually wrong — it's far more often a real infrastructure fact (clock skew, NTP failure) than a rendering bug.</div>
+      </div></div></div>
+
+    <!-- L7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">A regulator asks for the exact call sequence and timing of a specific IPO allotment failure from 5 days ago. Trace retention is 24 hours — the data is already gone.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team scrambles to reconstruct the incident from logs, but logs alone can't establish the precise cross-service causal sequence the regulator wants proven — the exact thing tracing was built to provide, and the exact thing that had already expired.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Extends retention going forward — fixes the next incident, not this one, and doesn't help the current regulatory request.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Distinguishes hot trace storage (fast, expensive, short retention, for active debugging) from cold trace archival (cheaper, longer retention, for compliance-grade reconstruction) — the platform only ever built the first.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out this is a governance gap, not a technical one: nobody defined what retention regulated financial flows actually require before building the tracing pipeline.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the real question: for flows with regulatory exposure — IPO allotment, redemptions, demat transfers — was retention ever a deliberate compliance decision, or just whatever the default hot-storage window happened to be?</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> If a regulator asks for proof of exact request sequencing on any of our regulated flows tomorrow, do we know precisely how far back we can actually answer — and did we choose that number deliberately, or did it just default to whatever the tracing vendor's free tier gave us?</div>
+        <div class="learning"><b>Learning:</b> Tracing retention is a business decision wearing an infrastructure costume. 24 hours is fine for "why is checkout slow right now" and completely inadequate for "prove what happened on a regulated transaction five days ago." The gap between those two needs is exactly where compliance-grade cold storage belongs — and it has to be designed in before the regulator asks, not after.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I make this trace/span correct," architects ask "what instrumentation or propagation design caused this and what's the durable fix," CTOs ask "what governance or platform-standard gap let this happen," and directors ask "what's the business or compliance cost, and who owns this decision." A leadership role means holding all four at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: one request becomes a root span → every hop creates a child span with correct parent linkage →
+    context (trace_id, span_id, sampling flag) propagates across every boundary, sync and async → durations compose into a
+    critical path → sampling decides what survives, ideally at the tail → and the platform's real maturity shows up in
+    whether anyone is watching the traces, not just whether they're being generated.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

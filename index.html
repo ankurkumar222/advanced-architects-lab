@@ -399,7 +399,7 @@
   <aside class="rail">
     <div class="site-eyebrow">System Design</div>
     <h1 class="site-name"><em>Architects</em><br>Lab</h1>
-    <p class="site-desc">A personal collection of system design explorations — each one a single HTML file.</p>
+    <p class="site-desc">A leadership thought-provoking space — explore system design the way a CTO or director would, one architecture at a time.</p>
 
     <div class="rail-divider"></div>
 
@@ -431,28 +431,48 @@
 
     <div class="designs-list" id="designs-list">
 
-      <!-- Add your design cards here following this pattern: -->
-
-      <!-- LIVE ENTRY EXAMPLE — duplicate and edit for each new design
-      <a class="design-card" href="designs/url-shortener.html">
-        <span class="card-title">URL Shortener — High-Scale Design</span>
+      <a class="design-card" href="kafka_system_design.html">
+        <span class="card-title">Kafka — The Log, Not The Queue</span>
         <span class="card-date">2026-07-05</span>
-        <p class="card-desc">Designing a URL shortening service for 100M daily redirects — covering hashing strategy, caching layers, and database sharding.</p>
+        <p class="card-desc">How Kafka reimagines the message queue as a distributed, append-only log — covering topics, partitions, consumer groups, and delivery guarantees at scale.</p>
         <div class="card-footer">
-          <span class="tag">Caching</span>
-          <span class="tag">Sharding</span>
-          <span class="tag">Hashing</span>
+          <span class="tag">Event Streaming</span>
+          <span class="tag">Partitions</span>
+          <span class="tag">Messaging</span>
           <span class="card-link-arrow">→</span>
         </div>
       </a>
-      -->
+
+      <a class="design-card" href="distributed_tracing.html">
+        <span class="card-title">Distributed Tracing — The Journey, Not The Event</span>
+        <span class="card-date">2026-07-05</span>
+        <p class="card-desc">Understanding how traces span service boundaries — exploring span propagation, context passing, sampling strategies, and the observability tools that make distributed debugging tractable.</p>
+        <div class="card-footer">
+          <span class="tag">Observability</span>
+          <span class="tag">Microservices</span>
+          <span class="tag">Tracing</span>
+          <span class="card-link-arrow">→</span>
+        </div>
+      </a>
+
+      <a class="design-card" href="distributed_transactions.html">
+        <span class="card-title">Distributed Transactions — Correctness, Not Commitment</span>
+        <span class="card-date">2026-07-05</span>
+        <p class="card-desc">When ACID breaks across service boundaries — comparing two-phase commit, sagas, and eventual consistency patterns for building correct systems without coordination overhead.</p>
+        <div class="card-footer">
+          <span class="tag">SAGA</span>
+          <span class="tag">2PC</span>
+          <span class="tag">Consistency</span>
+          <span class="card-link-arrow">→</span>
+        </div>
+      </a>
 
     </div>
 
     <div class="empty-note" id="empty-note">
-      <span class="prompt">$</span> No designs yet.<br>
-      <span class="prompt">$</span> Drop an HTML file in <code>designs/</code> and add a card above.<br>
-      <span class="prompt">$</span> Each file is self-contained — open it directly in a browser.
+      <span class="prompt">$</span> No explorations yet.<br>
+      <span class="prompt">$</span> Every design here is a chance to think like a leader.<br>
+      <span class="prompt">$</span> Use your mind. Question the trade-offs. Sharpen the thought.
     </div>
 
   </main>
