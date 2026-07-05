@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kafka — The Log, Not The Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Kafka: the <em>log</em>, not the queue</h1>
+    <p class="sub">A revision session built only on what makes Kafka different from a disappearing-message queue like SQS — plus a real deployment section and a leadership decision-making section. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>12 segments</b></span>
+      <span>~2.5 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: reasoning, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Mental Model</a>
+    <a href="#s2" style="color:#2E8B82;">02 Log & Partitions</a>
+    <a href="#s3" style="color:#C1543A;">03 Offsets & Failure</a>
+    <a href="#s4" style="color:#7A63B8;">04 Replay & Retention</a>
+    <a href="#s5" style="color:#3480B0;">05 Consumer Groups</a>
+    <a href="#s6" style="color:#6B9A44;">06 Producer & Replication</a>
+    <a href="#s7" style="color:#C1547A;">07 Ordering & Streaming</a>
+    <a href="#s8" style="color:#B9971F;">08 Correctness & Compaction</a>
+    <a href="#s9" style="color:#279090;">09 When NOT to use Kafka</a>
+    <a href="#s10" style="color:#9A62D6;">10 Our Deployment</a>
+    <a href="#s11" style="color:#C9871F;">11 Rapid Fire</a>
+    <a href="#s12" style="color:#4A5FBF;">12 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 : AMBER -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The mental model shift</h2></div>
+    <p class="segment-note">SQS: <code>Producer → Queue → Consumer → Delete</code>. Kafka: <code>Producer → Append to Log → Consumers read by offset</code>. Everything below falls out of this one sentence.</p>
+    <pre class="sketch">Partition 0 log:  [0][1][2][3][4][5]
+Consumer A -> currently at offset 3
+Consumer B -> currently at offset 1
+(the message at offset 1 is NOT gone just because B read it)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">If messages aren't deleted on consume, what does "consumption" actually mean in Kafka?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">"Consuming" just means <b>advancing your own offset pointer</b> — it's a read, not a removal. Consumption is a per-consumer-group bookkeeping act, not a broker-side state change on the message itself.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">Who owns "progress" — the broker or the consumer?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The <b>consumer (group)</b> owns progress, logically. The broker just stores committed offsets on request. This is a power shift: Kafka trusts the consumer with correctness responsibility that SQS used to absorb itself.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Since the same data can be reread by anyone, is Kafka closer to a queue or a database log?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Closer to a <b>database commit log</b> that happens to support pub/sub semantics on top. A queue implies single consumption; a log implies durable, independently-replayable history.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Why does this "log" model make event replay possible at all?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because reading never mutates or removes the underlying record. Replay is just <b>rewinding an offset pointer</b>. In a delete-after-ack queue, once it's gone, there's nothing to rewind to.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : TEAL -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Log & partition fundamentals</h2></div>
+    <p class="segment-note">The primary object isn't "a queue with messages" — it's <code>Topic → Partitions → ordered append-only logs</code>. Ordering is a per-partition guarantee, not a per-topic one.</p>
+    <pre class="sketch">Topic: orders
+Partition 0: [0][1][2][3][4]
+Partition 1: [0][1][2][3]
+Partition 2: [0][1][2][3][4][5]
+-> each partition is independently ordered; no global order across partitions</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">When someone says "Kafka scales," what is actually being scaled?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Mostly <b>partition count</b> — it determines both write parallelism across brokers and read parallelism across a consumer group.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">If strict ordering matters for a given key, do you want more partitions or fewer?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Partition <em>count</em> isn't the lever — <b>consistent key-to-partition mapping</b> is. More partitions is fine for throughput as long as the partitioner keeps a key's events together.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Why does partitioning create a tradeoff between throughput and ordering?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Throughput comes from spreading writes/reads across <b>many independent partitions in parallel</b>. Ordering only holds <b>within</b> a partition — the more you split for throughput, the more you fragment any "global" order.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">If you increase partition count on a live topic, what happens to existing key-ordering assumptions?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">They can <b>break</b>. Partition assignment is typically <code>hash(key) % partition_count</code> — change the denominator and a key can map to a different partition going forward, splitting its history across two logs.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : CORAL -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>No visibility timeout — offsets replace receipt handles</h2></div>
+    <p class="segment-note">SQS hides an in-flight message and reveals it again on timeout. Kafka has no such concept — a consumer just reads and, separately, commits a position.</p>
+    <pre class="sketch">Consumer fetches offsets 100..104
+processes 100..102
+commits offset = 103   // means "next time, start at 103"
+                        // NOT "broker deleted 100..102"</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">With no visibility timeout, how does Kafka recover after a consumer crash mid-processing?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The consumer group simply resumes from the <b>last committed offset</b> for that partition, possibly on a different instance via rebalance.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">Consumer crashes after processing a batch but before committing the offset. What's the outcome?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Duplicate processing</b> on restart — the same records get reprocessed since the commit never landed. This is why Kafka pushes idempotency onto the consumer.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">What conceptually "replaces" visibility timeout thinking in Kafka?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Three things together: <b>offset commit timing</b>, <b>consumer group rebalancing</b>, and <b>replay from last committed position</b>.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Is offset commit timing more dangerous early or late — and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Commit <b>too early</b> risks logical <b>data loss</b>. Commit <b>too late</b> risks <b>duplicates</b>. Most systems bias toward "too late" and handle duplicates with idempotency, since loss is usually worse.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : VIOLET -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Replay as a first-class feature, retention as the lifecycle owner</h2></div>
+    <p class="segment-note">SQS lifecycle: <code>enqueue → receive → ack/delete → gone</code>. Kafka lifecycle: <code>append → retained by policy → eventually removed</code>. Consumer ack never removes anything.</p>
+    <pre class="sketch">Topic log: [0][1][2][3][4][5][6][7][8]
+Consumer A starts at 0
+Consumer B starts at 5
+Consumer C replays all of it next week -- all valid, all independent</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">A new service is built six months from now. Should it be able to read historical events?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes, <b>if retention still covers that window</b> — this turns the topic into a source of historical truth, not just a transient work handoff.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Who decides how long a message lives in Kafka — the consumer's ack, or something else?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The <b>retention policy</b> — completely independent of whether any consumer has read it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">What's the real tradeoff of setting very long retention?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">More replay power and safety for slow/late consumers, at the cost of <b>storage</b> and <b>operational burden</b>.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">If replay is a normal, expected operation, what does that force onto every consumer's design?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Consumers must be <b>idempotent by design</b> — processing the same event twice must not corrupt state.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : SKY -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Consumer groups & rebalancing</h2></div>
+    <p class="segment-note">Parallelism inside a consumer group is <b>bounded by partition count</b> — this single constraint drives most of Kafka's capacity planning.</p>
+    <pre class="sketch">Topic: 3 partitions -- Group G1: C1->P0, C2->P1, C3->P2
+C2 dies -> rebalance -> C1->P0,P1   C3->P2</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">A topic has 3 partitions, the consumer group has 10 consumers. How many are actually doing work?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Only <b>3</b> — one consumer per partition, max. The other 7 sit idle for that topic.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">One partition is a hot spot. Does adding more consumers fix it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No — a single partition is consumed by exactly one consumer at a time. You'd need to <b>re-partition</b> or fix key distribution.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Why does rebalancing become a genuine operational concern in high-throughput systems?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Partition ownership reassignment can <b>pause</b> consumption across the whole group while it settles — at high throughput, even a short pause means a real backlog spike.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Is aggressively autoscaling consumers up and down always a good idea in Kafka?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Not necessarily</b> — every scale event can trigger a rebalance, which has a real cost.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : LIME -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Producer semantics & the replicated log</h2></div>
+    <p class="segment-note">A producer doesn't send "to a queue" — it sends to a <b>topic-partition leader</b>, which replicates to followers. Leader election is what makes the ordering guarantee trustworthy.</p>
+    <pre class="sketch">Producer -> choose partition by key -> batch -> send to Leader(P0) -> Follower A, Follower B replicate</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">If a producer retries a failed send, can ordering break?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — unless you enable idempotent producer settings, which use sequence numbers to keep in-flight retries ordered.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">Why is producer batching far more central to Kafka's performance than in a naive queue model?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The underlying storage is an <b>append-only sequential write</b> — batching plays directly to that strength.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">Why is leader election so critical to Kafka's correctness story?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The leader is the <b>single authority for write order</b> on that partition. A wrong or slow election risks unavailability or split-brain writes.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : ROSE -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Ordering guarantees & stream-native fit</h2></div>
+    <p class="segment-note">Strong order exists <b>within</b> a partition. Kafka's real superpower is that one event stream can independently feed many downstream systems.</p>
+    <pre class="sketch">Topic -> Consumer A builds a search index
+      -> Consumer B updates analytics
+      -> Consumer C builds a cache
+      -> Consumer D archives to a data lake   (all read the same log, independently)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">You need strict ordering per customer account. What's the actual mechanism that guarantees it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Route every event for that account to the <b>same partition</b>, typically keyed on account ID.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Should "global order across all events in a topic" ever be assumed?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Almost never. Different partitions are consumed independently and can drift arbitrarily.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">In SQS, one message is "work for one consumer." In Kafka, one event can feed many independent systems. What changes in your design thinking?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The topic becomes <b>shared infrastructure</b> — you design event schemas for many unknown future consumers, raising the investment needed in schema evolution.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : GOLD -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Compaction & the hardest correctness questions</h2></div>
+    <p class="segment-note">Compaction retains only the <b>latest value per key</b> while staying log-shaped. Since the broker doesn't manage delete/visibility for you, correctness lives in how you sequence business logic against offset commits.</p>
+    <pre class="sketch">Key A->v1, Key B->v1, Key A->v2, Key A->v3, Key B->v2
+compacted view tends toward:  A->v3   B->v2</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">Why would a log ever want compaction instead of keeping every event forever?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because for some use cases, only the <b>latest state per key</b> matters. Compaction gives you that without abandoning replay or broker-managed storage.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">How is a compacted Kafka topic different from a plain database table with the same shape?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It's still <b>log-oriented and replayable</b> — a table gives you the current row; a compacted topic gives you the current row <em>and</em> a way to stream how it got there.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">Where should offset commit happen relative to the business-logic side effect?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Generally <b>after</b> the side effect is durable — commit-after-process gives at-least-once. The strongest answer is a <b>transactional</b> tie between commit and write, but that's heavier infra.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">DB write succeeds, offset commit fails right after. What's the failure mode — and the fix?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">On restart, the consumer replays the same record — a duplicate. Fix: make the write <b>idempotent</b> so replaying it is harmless.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : CYAN -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>When Kafka is the wrong tool</h2></div>
+    <p class="segment-note">The most senior answer isn't "Kafka is better" — it's knowing exactly where it costs more than it gives.</p>
+    <table class="diff-table">
+      <tr><th>Reach for SQS-style queue when</th><th>Reach for Kafka when</th></tr>
+      <tr><td>Simple work dispatch, one consumer per job</td><td>Durable event log many systems will read</td></tr>
+      <tr><td>Delete-after-processing is the natural model</td><td>Replay / rebuild-state is a real requirement</td></tr>
+      <tr><td>Invisibility timeout maps cleanly to the workload</td><td>Ordering per key/partition matters</td></tr>
+      <tr><td>You want the broker to own lifecycle for you</td><td>You need stream processing / CDC / audit trail</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Your workload is "do this job once, then forget it." Does Kafka add unnecessary complexity?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>yes</b> — you'd pay for partition planning, offset management, and retention tuning for guarantees you never needed.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Your workload: the same event must feed 5 downstream systems, and new ones will appear later. Is SQS too weak?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes</b> — SQS's delete-after-ack model fights fan-out to independent readers. This is Kafka's home turf.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : PURPLE -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Our deployment — Wealth / Mutual Fund Platform</h2></div>
+    <p class="segment-note">This is the shape of the Kafka footprint behind mutual fund order flow, NSDL/MOFSL reconciliation, and demat holdings sync — the numbers to have ready when asked "have you actually run this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Cluster</div><div class="value">6 <span>brokers</span></div></div>
+      <div class="stat-card"><div class="label">Kafka version</div><div class="value">3.6 <span>KRaft mode</span></div></div>
+      <div class="stat-card"><div class="label">Replication factor</div><div class="value">3 <span>min.insync=2</span></div></div>
+      <div class="stat-card"><div class="label">Active topics</div><div class="value">~40 <span>across domain</span></div></div>
+      <div class="stat-card"><div class="label">Peak throughput</div><div class="value">3.5k <span>msgs/sec</span></div></div>
+      <div class="stat-card"><div class="label">Consumer groups</div><div class="value">~18 <span>org-wide</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Topic</th><th>Partitions</th><th>Producers</th><th>Consumer groups</th><th>Retention</th></tr>
+      <tr><td>mf.order.events</td><td>24</td><td>order-service (3 pods)</td><td>settlement-svc, notification-dispatcher, audit-archiver</td><td>7 days</td></tr>
+      <tr><td>mf.nav.updates</td><td>12</td><td>nav-ingest-job</td><td>redemption-calc-svc, reporting-pipeline</td><td>3 days</td></tr>
+      <tr><td>demat.holdings.sync</td><td>18</td><td>nsdl-adapter (2 pods)</td><td>holdings-projector, reconciliation-svc</td><td>compacted</td></tr>
+      <tr><td>ipo.allotment.status</td><td>8</td><td>mofsl-webhook-adapter</td><td>notification-dispatcher</td><td>7 days</td></tr>
+      <tr><td>insurance.policy.events</td><td>6</td><td>policybazaar-adapter</td><td>policy-sync-svc</td><td>10 days</td></tr>
+    </table>
+
+    <p class="segment-note" style="margin-top:-8px;">Roughly <b style="color:#9A62D6;">6–7 producer services</b> feed the wealth pipeline. Peak load hits during the <b style="color:#9A62D6;">2:45–3:00 PM NAV cutoff window</b>, where order + NAV traffic spikes to roughly 3–3.5k events/sec against a steady-state of 400–600/sec.</p>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real errors we've actually hit</h3>
+
+    <div class="error-card"><div class="err-name">Consumer lag spike at NAV cutoff</div>
+      <div class="err-fix">redemption-calc-svc fell 30–60s behind during the 2:45 PM burst. <b>Fix:</b> increased partitions on mf.nav.updates from 6→12 and tuned max.poll.records down.</div></div>
+    <div class="error-card"><div class="err-name">Rebalance storm on rolling deploy</div>
+      <div class="err-fix">Deploying a new consumer version restarted all pods near-simultaneously, causing a ~20s processing pause. <b>Fix:</b> static group membership + staggered rollout.</div></div>
+    <div class="error-card"><div class="err-name">Under-replicated partitions during broker patching</div>
+      <div class="err-fix">ISR briefly dropped below min.insync.replicas on a couple of partitions. <b>Fix:</b> enforced rolling patch windows confirming ISR = RF before the next broker.</div></div>
+    <div class="error-card"><div class="err-name">Hot partition from PAN-based keying</div>
+      <div class="err-fix">Early keying by folio prefix clustered heavily on a few large distributor accounts. <b>Fix:</b> re-keyed by folio ID + partition count bump, with a brief dual-write migration.</div></div>
+    <div class="error-card"><div class="err-name">Schema registry incompatible change</div>
+      <div class="err-fix">A backward-incompatible field removal broke an old consumer version still deployed elsewhere. <b>Fix:</b> enforced BACKWARD compatibility mode as a CI gate.</div></div>
+
+    <p class="segment-note">The line worth saying in an interview: <em>"We treat partition count and retention as capacity-planning decisions taken at design time, not runtime knobs — most incidents came from changing one of those two under load rather than Kafka misbehaving."</em></p>
+  </section>
+
+  <!-- SEGMENT 11 : RAPID FIRE -->
+  <section class="segment" id="s11" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why does Kafka not need a visibility timeout?</li>
+      <li>Why offsets instead of receipt handles and delete?</li>
+      <li>Why is a topic-partition log stronger than a disappearing queue for replay?</li>
+      <li>Why is retention policy more central than consumer ack?</li>
+      <li>Why is partition count both a scaling <em>and</em> an ordering decision?</li>
+      <li>Why does consumer group rebalance become a real operational issue?</li>
+      <li>Why is commit timing one of the deepest correctness questions in Kafka?</li>
+      <li>Why is Kafka naturally good at many independent consumers on one stream?</li>
+      <li>Why is Kafka's throughput model aligned with append-only, sequential-disk design?</li>
+      <li>Why is Kafka not just "a faster queue"?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 12 : LEADERSHIP PERSPECTIVES -->
+  <section class="segment" id="s12" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Leadership perspectives — same incident, four minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, an <b style="color:#7A63B8;">architect</b>, a <b style="color:#C1543A;">CTO</b>, and a <b style="color:#A9861E;">director</b>. Click to reveal how the same incident produces four different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- Q1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">A backfill job replays 6 hours of mutual fund orders into production at 11 PM. By 2 AM, 4,000 customers get duplicate confirmations.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The replay was intentional — data engineering wanted to recalculate NAV figures and assumed "replaying order events will just resync everything." They didn't realize downstream notification and ledger systems would treat replayed events as brand new orders.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds deduplication logic to their consumer — but doesn't ask why the platform allowed an uncontrolled replay in the first place.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Weighs idempotency in every consumer (expensive, must be right everywhere) against a platform-level replay guard — e.g. an immutable commit log with a replay-audit header, built once.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Asks whether this is a governance failure (restrict who can trigger replays, require approval) or a capability gap (train teams on eventual consistency) — the answer decides whether you build tools or processes.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Sees the deeper shift: the moment you allow replays of financial transactions, Kafka has quietly become a system of record — with all the audit and compliance burden that implies, not just a stream.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> If we replay events, can we prove which downstream systems actually re-processed them and which deduplicated correctly? If we can't prove it, should replays be allowed at all outside a sandbox?</div>
+        <div class="learning"><b>Learning:</b> A message queue lets you forget the past. A log lets you replay it — but replay is only safe if every downstream consumer is idempotent by design, not by accident. The day someone replays events "just to fix the numbers" is the day you find out which consumers were never really idempotent.</div>
+      </div></div></div>
+
+    <!-- Q2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">A new large distributor onboards. Their fund IDs hash to one partition, which now carries 40% of all traffic. Quotes go stale by market open.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">You scale the redemption calculator from 2 to 8 instances to catch up. Now 8 instances process orders from different partitions in different orders — nightly reconciliation shows micro-inconsistencies in trade sequencing (amounts are correct, order isn't).</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Tries to add global ordering logic in code — chasing a guarantee Kafka was never designed to give.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Realizes the key should be customer ID, not fund ID, if per-customer redemption order matters — which means re-partitioning, a genuinely risky migration.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes that nightly batch reconciliation caught this 18 hours too late — real-time consistency checks were missing, not just the fix.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether this is a scaling problem or a fundamental bet that Kafka's eventual consistency model doesn't actually fit this workload — redemptions that depend on order may need a different consistency model entirely.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> If we re-key by customer_id for ordering, we lose parallelism per customer. What's the actual cost of that tradeoff at our current and projected scale?</div>
+        <div class="learning"><b>Learning:</b> Scaling consumer count doesn't scale correctness — it only scales throughput within whatever ordering unit your key already defines. Before adding instances, ask what "order" is supposed to mean here, and whether your partition key actually protects it.</div>
+      </div></div></div>
+
+    <!-- Q3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">Every Friday deploy, 3 of 5 settlement-service pods restart, triggering a rebalance and a 15-second processing pause during market hours.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Static membership fixes the pause. Three months later, compliance asks "how many times did settlement pause in the last 90 days, and for how long?" You never tracked it — there's no historical data to answer with.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds logging for rebalance events going forward — solves it operationally, not strategically.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Asks whether rebalance pause is a symptom to minimize or a permanent feature of the system that deserves first-class metrics either way.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Recognizes observability was bolted on (JMX scraping) instead of built in — the difference between ~40 hours of platform investment now versus crisis debugging later.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Sees that the moment compliance asks a question about Kafka's internal behavior, the system has crossed from "message queue" to "system of record" — which demands audit trails and SLA reporting from day one.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> If a regulator asks tomorrow for every rebalance event in the last 6 months, can we produce it in 30 minutes — or does it take 30 days of engineering?</div>
+        <div class="learning"><b>Learning:</b> You can't retroactively measure what you never instrumented. The gap between "it happens" and "here's exactly how often, for how long, with what impact" is the gap between running Kafka and being accountable for it.</div>
+      </div></div></div>
+
+    <!-- Q4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">A new field is added to an IPO allotment schema. An old producer version still writes the old shape. The notification dispatcher crashes on the mismatch.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">After the fix, you realize 18 consumer groups read 40 topics with no central record of who depends on which field. One team ignores unknown fields, another crashes on missing ones, a third never documented their dependency at all.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Makes their own consumer resilient to unknown/missing fields — good practice, doesn't fix the ecosystem.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Distinguishes schema registry as validation (checks syntax) versus governance (tracks dependencies, prevents breaking changes) — the second is harder and far more valuable.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Decides between centralizing schema approval (slow, safe) and self-service with mandatory compatibility mode + audit trail (faster, still safe enough).</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Questions whether the org has built a platform that scales to 18 teams, or just scaled the number of failure points — and whether some topics should be split by ownership instead of shared.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> If I want to deprecate a field used by 5 consumers across 3 teams, what's my actual process? If the answer is "ask around and hope," there's no platform yet.</div>
+        <div class="learning"><b>Learning:</b> Schema registry enforces syntax; it doesn't enforce ownership. At scale, the real risk isn't a malformed message — it's an undocumented dependency nobody remembers exists until it breaks.</div>
+      </div></div></div>
+
+    <!-- Q5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">A compliance audit asks for full historical holdings per customer. Your compacted topic only keeps latest state — building an audit log would nearly double storage cost.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Designing the fix, you realize you actually need three separate stores — compacted operational state, a time-series audit log, and a fast compliance-query read model. The "cost saving" of compaction has tripled the total footprint.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a second topic and writes to both — but now their service is coupled to a three-topic architecture.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Realizes Kafka alone can't serve three different jobs well — operational state, audit history, and indexed compliance queries may need three different tools, not three Kafka topics.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the real gap: no data classification system existed to flag "this data needs compliance queries" before the compaction decision was made.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the conflation directly: "Kafka is good at streams" got quietly generalized to "Kafka is good at everything." The real question is what job the data needs to do — <b>(a)</b> feed real-time portfolio updates → Kafka fits; <b>(b)</b> serve compliance queries → needs an indexed database, not a log; <b>(c)</b> keep an audit trail → Kafka or S3 both work. Once you separate the jobs, you pick the right tool per job, even if that means three tools instead of one.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> When I design a new data entity, what's my framework for which store gets which piece — and am I choosing Kafka because it fits, or because it's the default?</div>
+        <div class="learning"><b>Learning:</b> "Everything goes to Kafka" is a habit, not an architecture. The moment a requirement (compliance, ad-hoc query, transactional consistency) doesn't match what a log is good at, the honest fix is a second tool — not a cleverer use of the first one.</div>
+      </div></div></div>
+
+    <!-- Q6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">A promotional offer drives 8x normal order volume in 4 hours. GC pauses spike, consumers lag 200k+ messages, and scaling the cluster takes 2 manual hours.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The reporting-pipeline consumer also lagged for 6 hours, feeding stale data into a pricing decision — nobody flagged the staleness. The resulting mis-priced orders cost far more ($15k) than the extra broker capacity would have ($2k).</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Optimizes consumer throughput — but the real failure was surge <em>visibility</em>, not consumer speed.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Weighs consistent scaling (always over-provisioned, stable, costs more) against elastic scaling (cheaper on average, chaotic under surprise load).</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes there was no surge strategy — no threshold-based alerting, no traffic-shedding plan, no coordination with the teams (like pricing) that consume downstream data.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Reframes it as a cost comparison that was never actually measured: a few thousand a year in spare broker capacity versus tens of thousands in bad decisions made on stale data during an incident.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we know the full cost of failure for every component in this pipeline? Without that number, "keep it as cheap as possible" is a guess, not a decision.</div>
+        <div class="learning"><b>Learning:</b> Under-provisioning looks like savings until the surge comes. The real cost of spare capacity is only assessable against the cost of what happens without it — and most orgs never actually calculate the second number, so the first one always looks "too expensive."</div>
+      </div></div></div>
+
+    <!-- Q7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">A regulator asks for the exact order of all redemption requests for one customer on one date. Three consumer groups process independently — you can't prove a single global order.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Digging deeper, you find corrections are stored as new events, not updates — so "order history" is really a tree of corrections. Reconstructing "the order as it stood at 3 PM" requires applying corrections in the right sequence, which you can't fully guarantee across services.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a version number to each order — helpful, but doesn't solve the underlying mismatch between Kafka's model and what's being asked of it.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Has to choose: corrections update the original (needs mutable state — not Kafka's strength) or create new events (needs full event-sourcing reconstruction logic — complex but Kafka-native).</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the org has an event stream, not a financial transaction model — the two look similar but only one guarantees immutable timestamps, sequence numbers, and traceability back to a user action.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the real question: did we ask compliance/legal what they actually needed, or did we assume Kafka could handle it? Regulators don't care what tool you used — they care whether you can prove timing, order, authorship, and tamper-resistance.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> If my business domain requires proving audit-grade transaction history — timing, authorship, order, and tamper-resistance — am I running a log with financial features bolted on, or a ledger with Kafka underneath it? And did I choose that architecture deliberately, up front, or am I discovering it for the first time under regulatory pressure?</div>
+        <div class="learning"><b>Learning:</b> An event stream tells you "something happened." A financial system has to tell you "this exact thing happened, at this exact moment, in this exact order, by this exact actor, and it cannot be altered." Kafka can be the storage layer for that — but only if someone deliberately designed the transaction model on top of it, rather than assuming the log alone was enough.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I make my code work," architects ask "what design choice caused this and what's the durable fix," CTOs ask "what governance or observability gap let this happen," and directors ask "what's the business cost, and who owns this decision." A leadership role means holding all four at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: append events to partitioned, replicated logs → order holds within a partition →
+    many consumers read independently → progress is tracked by offset, not deletion → retention (not ack) governs lifetime →
+    scale via partitions and consumer groups → and the platform's real maturity shows up in who can answer for it, not just who can run it.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
