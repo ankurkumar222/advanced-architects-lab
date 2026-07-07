@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distributed Transactions — Correctness, Not Commitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Distributed Transactions: <em>correctness</em>, not commitment</h1>
+    <p class="sub">A revision session built around one idea — distributed transactions are not "many databases acting like one," they're workflow coordination plus failure handling plus retry safety plus compensation. Plus a real deployment section and a leadership decision-making section. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>12 segments</b></span>
+      <span>~3 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: reasoning, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Mental Model</a>
+    <a href="#s2" style="color:#2E8B82;">02 Data vs Business Atomicity</a>
+    <a href="#s3" style="color:#C1543A;">03 Four Core Patterns</a>
+    <a href="#s4" style="color:#7A63B8;">04 Two-Phase Commit</a>
+    <a href="#s5" style="color:#3480B0;">05 Saga & Compensation</a>
+    <a href="#s6" style="color:#6B9A44;">06 Orchestration vs Choreography</a>
+    <a href="#s7" style="color:#C1547A;">07 Outbox & Idempotency</a>
+    <a href="#s8" style="color:#B9971F;">08 State Machine & Timeout Truth</a>
+    <a href="#s9" style="color:#279090;">09 2PC vs Saga / Reconciliation</a>
+    <a href="#s10" style="color:#9A62D6;">10 Our Deployment</a>
+    <a href="#s11" style="color:#C9871F;">11 Rapid Fire</a>
+    <a href="#s12" style="color:#4A5FBF;">12 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 : MENTAL MODEL -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The mental model — 8 core problems, one root cause</h2></div>
+    <p class="segment-note">The trap: thinking a distributed transaction is "how do I make many DBs commit as one DB." The real question is how business correctness survives when a workflow spans many services and something fails halfway through.</p>
+    <pre class="sketch">Place Order
+   |
+   +--> Order Service      (create order)
+   +--> Payment Service    (charge payment)
+   +--> Inventory Service  (reserve stock)
+   +--> Shipping Service   (create shipment)
+
+User expects: "all-or-nothing"
+System reality: each step is a separate commit, in a separate
+                failure domain, at a separate point in time
+
+The whole discipline exists to answer one question:
+what happens when step 2 succeeds and step 3 fails?</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">Why can't one database transaction naturally span many independently-owned services?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because each service owns its own database and its own commit boundary — there's <b>no single lock manager or transaction log spanning all of them</b>. A local ACID transaction assumes one engine controls commit/rollback for everything inside it; microservices deliberately give up that single point of control in exchange for independent scaling and ownership.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">If each service owns its own database, who has global commit authority?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Nobody, by default</b> — and that's the design problem, not a bug to patch. You either introduce a coordinator that fakes global authority (2PC) or you give up global commit entirely and coordinate through local commits plus compensation (saga). Pretending a natural global commit authority exists is where most naive designs go wrong.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">If the network fails midway through a multi-service workflow, can all participants still agree on the same truth?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not automatically. A response can be lost <b>after</b> the remote side effect already happened — so the caller and the callee can genuinely disagree about whether a step succeeded. Reconciliation and idempotent retries exist specifically because "ask again and get the same answer" isn't guaranteed for free.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Is the real problem a data transaction, or a business workflow?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Almost always a <b>business workflow</b>. Framing it as "how do I make the data transactional" pulls you toward 2PC and locking. Framing it as "how does the business outcome stay correct" pulls you toward saga, compensation, and accepting that some steps will temporarily disagree before converging.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : DATA VS BUSINESS ATOMICITY -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Data atomicity vs. business atomicity</h2></div>
+    <p class="segment-note">These are not the same thing, and conflating them is the single most common design mistake in this space.</p>
+    <pre class="sketch">Data atomicity      : all low-level updates commit together
+Business atomicity  : the user perceives one consistent outcome
+
+Order created + Payment charged + Shipment delayed 2 min  -> often fine
+Payment charged + Order missing + Inventory not reserved  -> never fine</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Does every business workflow really need strict all-or-nothing across every service it touches?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No</b> — and assuming so is what pushes teams toward expensive, over-coordinated designs. The right question is which specific invariant must never be violated (e.g. "payment charged implies order exists") versus which steps can lag briefly (e.g. a shipping label printing two minutes late).</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Which parts of a workflow should be strongly consistent, and which can be eventually consistent?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Anything touching <b>money movement or an irreversible external commitment</b> (payment capture, allotment, lien marking) usually needs the strongest guarantees you can afford. Anything downstream and reversible or cosmetic (notifications, recommendation refresh, analytics) is a natural fit for eventual consistency.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Is "send confirmation email" really part of the core transaction boundary?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>no</b>. If it fails, the business outcome is unaffected and it can simply be retried later — including it inside the strict transaction boundary only adds fragility (now a flaky email provider can block or roll back a financial workflow) without adding real correctness value.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Should a distributed transaction boundary usually be smaller than the full end-user-visible workflow?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Often yes.</b> The strict, must-never-be-wrong core (order + payment + inventory) is usually much smaller than everything the user experiences as "placing an order." Drawing the boundary too wide is how notification retries end up able to block a financial commit.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : FOUR CORE PATTERNS -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Four patterns that cover almost everything</h2></div>
+    <p class="segment-note">Nearly every real design is some combination of these four — the skill is picking the right one per boundary, not picking one for the whole system.</p>
+    <pre class="sketch">Need strong all-or-nothing?              -> maybe 2PC
+Need a scalable microservice workflow?   -> saga
+Need reliable event publication          -> transactional outbox
+  from a local DB transaction?
+Need crash-safe recovery at scale?       -> idempotency + reconciliation</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why does 2PC sound attractive on a whiteboard, and why does it usually get rejected in real microservice systems?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Attractive because it gives <b>real atomicity semantics</b> — a genuine all-commit-or-all-rollback guarantee. Rejected in practice because it's <b>blocking</b> (participants hold locks while waiting on the coordinator), <b>tightly coupled</b> (every participant must be online and responsive), and reduces overall system availability to the availability of the least-reliable participant.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">What is the deepest philosophical difference between 2PC and saga?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">2PC tries to <b>prevent</b> partial commit from ever being visible. Saga <b>accepts</b> that partial progress will be visible and temporarily inconsistent, and instead invests in compensating actions to converge back to a correct state afterward. One avoids the mess; the other cleans it up.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Is outbox a replacement for saga, or does it usually sit underneath one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It sits <b>underneath</b>. Outbox solves a narrower problem — "how do I reliably tell the rest of the system that my local commit happened" — while saga solves the broader problem of coordinating the whole multi-step workflow. Most production sagas are built on top of outbox-published events.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Can one company legitimately use more than one of these four patterns across different parts of its platform?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes, and it usually should.</b> A tightly-coupled internal ledger transfer might justify stronger coordination, while the broader order → payment → shipping → notification flow is a textbook saga. Treating "our architecture" as one pattern applied everywhere is itself a design smell.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : TWO-PHASE COMMIT -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Two-Phase Commit — the classic idea, and why it hurts at scale</h2></div>
+    <p class="segment-note">The coordinator asks "can everyone commit?" before telling anyone to actually commit. Simple in theory; expensive in practice.</p>
+    <pre class="sketch">          Coordinator
+             |     |
+       prepare   prepare
+             v     v
+        Service A  Service B
+             \\      /
+              yes / no
+
+All YES -> Coordinator sends COMMIT to all
+Any NO  -> Coordinator sends ROLLBACK to all
+
+Failure mode: coordinator crashes after some participants
+already said YES and are now blocked, holding locks,
+waiting for a COMMIT that may never arrive.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">If the coordinator crashes after some participants have already voted YES and prepared, what state are they in?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">They're <b>blocked</b> — holding their prepared-transaction locks, unable to unilaterally commit or roll back, waiting for a coordinator decision that may not arrive for a long time (or ever, if the coordinator's log is lost). This blocking window is 2PC's most cited real-world failure mode.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Why does 2PC reduce availability even when nothing has actually failed yet?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because every participant must hold resources (locks, prepared state) for the <b>duration of the round-trip to the slowest participant</b> — a single slow or unreachable service throttles the whole transaction's throughput and latency, even if it would have eventually succeeded.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Should internet-scale microservice systems rely heavily on 2PC as their default coordination model?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Usually not.</b> The tight coupling and blocking behavior work against exactly what microservices are meant to buy you — independent deployability and availability. 2PC tends to survive only in narrower, tightly-scoped contexts (e.g. a single database engine's own distributed commit, or a small number of co-located, highly-available participants).</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Is there a middle ground between full 2PC and full saga?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — patterns like the <b>Try-Confirm/Cancel (TCC)</b> model borrow 2PC's "reserve first, confirm later" shape but with shorter hold times and application-level compensation instead of database-level locking, trading some of 2PC's strength for saga's flexibility.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : SAGA & COMPENSATION -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Saga & compensation — the part people design too casually</h2></div>
+    <p class="segment-note">Saying "we'll use saga" is easy. A saga is only as strong as its compensations — and compensation is not the same thing as rollback.</p>
+    <pre class="sketch">Forward:      Create Order -> Reserve Inventory -> Charge Payment -> Ship
+                                                          |
+                                                       FAILS
+                                                          |
+Compensate:   Cancel Order <- Release Inventory <- Refund Payment
+
+Compensation != undo. A refund is not "as if the charge never
+happened" — it's a new, separate, reversing action.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Is compensation the same thing as rollback? If not, why does the difference matter?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No, and the difference is the whole point.</b> A database rollback erases a change as if it never happened, atomically and invisibly. A compensation is a <b>new forward action</b> (a refund, a cancellation notice, a re-stocking) that happened to run after a failure — it has its own side effects, its own failure modes, and it can itself fail or be delayed.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Can every business step realistically be compensated? What about an email already sent, or a bank charge already processed?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No. Some effects are only <b>approximately</b> reversible (a refund is close to but not identical to "never charged") and some are <b>not reversible at all</b> (an SMS already delivered, a regulator already notified). Good saga design identifies these upfront rather than discovering them during an incident.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Should reversible steps or irreversible steps happen earlier in a saga?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Reversible steps first, irreversible steps as late as possible.</b> If you reserve inventory (reversible) before charging payment (harder to cleanly reverse), a late failure only needs the cheap, safe compensation. Ordering by reversibility is one of the highest-leverage saga design decisions available.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Are compensating actions themselves required to be idempotent?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Absolutely.</b> A compensation triggered twice by a retried failure event can otherwise <b>over-compensate</b> — refunding a customer twice, releasing inventory twice. Compensations need the same idempotency-key discipline as forward actions, not less.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : ORCHESTRATION VS CHOREOGRAPHY -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Orchestration vs. choreography</h2></div>
+    <p class="segment-note">Both implement the same saga concept — the difference is where the workflow logic lives, and that choice has real operational consequences.</p>
+    <pre class="sketch">Orchestration                         Choreography
+--------------                        ------------
+   Saga Orchestrator                  OrderCreated event
+     |     |     |                       -> Inventory reserves
+     v     v     v                    InventoryReserved event
+   Order Inv. Payment                    -> Payment charges
+                                       PaymentSucceeded event
++ centralized visibility                 -> Shipping starts
+- orchestrator becomes a               + loose coupling
+  complexity hub                       - workflow is invisible
+                                          until you trace events</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">At small-to-medium scale, which model is usually easier to reason about, and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>orchestration</b> — the workflow logic lives in one place, so "what happens next" and "what state is this order in" have a single, readable answer instead of being scattered across every service's event handlers.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">Can event-driven choreography become "invisible spaghetti" as the ecosystem grows?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes — this is its most common failure mode at scale.</b> Each service only knows its own reaction to an event, not the whole flow. Understanding end-to-end behavior means mentally reconstructing a chain across many independently-deployed services, which becomes genuinely hard once a dozen+ services participate.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">If an on-call engineer asks "where is this order stuck?", which model tends to give a clearer answer faster?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>orchestration</b> — the orchestrator's state store can directly answer "this order is at step 3, waiting on payment confirmation." In choreography you'd need to reconstruct the same answer by tracing which events were published and consumed, across logs from several services.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">Does choosing orchestration eliminate the coupling problem, or just relocate it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It <b>relocates it.</b> Instead of services being implicitly coupled through shared event contracts, they become explicitly coupled to the orchestrator's workflow definition. That's often a good trade for visibility — but the orchestrator itself now becomes a single, critical piece of shared infrastructure that needs its own reliability investment.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : OUTBOX & IDEMPOTENCY -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Transactional outbox & idempotency — the unglamorous foundation</h2></div>
+    <p class="segment-note">Neither of these looks exciting on an architecture diagram, and both are the difference between a saga that actually converges and one that silently corrupts state.</p>
+    <pre class="sketch">Bad flow: update local DB -> publish message
+          (crash between the two steps loses the event forever)
+
+Outbox:   in ONE local DB transaction ->
+            1. update business row
+            2. insert row into outbox table
+            3. commit
+          -> a separate relay reads the outbox and publishes reliably
+
+Idempotency: same idempotency key -> same business effect,
+             no matter how many times the request is retried</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Why is the outbox pattern considered foundational rather than optional?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it closes the single most common silent-data-loss gap in event-driven systems: a service's <b>local DB commit succeeding while the corresponding event never gets published</b> due to a crash in between the two separate actions. Downstream services then never learn the state actually changed.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Does the outbox pattern give you exactly-once event delivery automatically?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> It guarantees the event will eventually be published <b>at least once</b> — reliable publication, not deduplicated delivery. Consumers still need their own idempotency handling for the (rare but real) case of the same event arriving twice.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">What makes a good idempotency key, and why does the choice matter so much?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It needs to uniquely identify <b>this specific business intent</b>, not just this specific HTTP call — often something like <code>order_id + saga_step</code> or a caller-supplied <code>payment_intent_id</code>. A key that's too broad (e.g. just <code>order_id</code> for every step) collapses distinct actions together; too narrow (e.g. a fresh UUID per retry) defeats the purpose entirely.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Should every step in a saga have its own idempotency model, or can one key cover the whole workflow?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Each step needs its own.</b> "Charge payment" and "reserve inventory" are separate side effects with separate retry risk — a single workflow-level key can't distinguish "step 2 was retried" from "step 3 was retried," so each step's own idempotency key is what actually prevents duplicate effects at the point where they'd occur.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : STATE MACHINE & TIMEOUT TRUTH -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>State machine, source of truth, and the timeout trap</h2></div>
+    <p class="segment-note">The deepest lesson in this entire topic, and the one most engineers learn the hard way: a timeout means <em>unknown</em>, not <em>failed</em>.</p>
+    <pre class="sketch">PENDING -> ORDER_CREATED -> INVENTORY_RESERVED -> PAYMENT_CHARGED
+        -> SHIPPING_CREATED -> COMPLETED
+
+On failure:
+PAYMENT_FAILED -> INVENTORY_RELEASED -> ORDER_CANCELLED
+
+Payment request times out. Did the charge happen?
+-> UNKNOWN. Not "failed." Do not blindly retry.
+   Do not blindly cancel. Reconcile first.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">Where should the authoritative workflow state actually live — the orchestrator, the event log, or each service's own state?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">In an orchestrated saga, the <b>orchestrator's state store</b> is the natural single source of truth for workflow progress — each participant service remains authoritative only for its own local business state (e.g. "is this payment captured"), not for the workflow's overall position.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">If the order service says COMPLETED but the payment service says CHARGED_PENDING_CONFIRMATION, who is right?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This disagreement is itself the signal — <b>neither local view is automatically "right."</b> It means the workflow state machine and a participant's local state have drifted, which is exactly the class of problem an explicit state machine plus reconciliation is designed to detect and resolve, rather than something that should ever require a human to just "pick one."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Can a timeout be safely treated as a failure?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Not safely, no.</b> A timeout only tells you the response didn't arrive in time — the remote side effect may have already completed. Treating timeout as failure and immediately compensating can cause a double-charge-then-refund, or worse, a refund for a charge that then still lands. This is arguably the single deepest lesson in distributed transaction design.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Can event history alone reconstruct the truth after a partial failure, without an explicit state machine?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Often yes, if the events were designed well</b> — but only if every state transition was actually published as an event with enough detail to replay. Many systems discover too late that their event log has gaps (steps that changed local state without emitting anything), making full reconstruction impossible exactly when it's needed most.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : 2PC VS SAGA / RECONCILIATION -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>2PC vs. saga, external side effects, and the exactly-once illusion</h2></div>
+    <p class="segment-note">The senior answer isn't "saga is always better" — it's knowing exactly which guarantee each model buys you, and being honest about what "exactly-once" actually means across a network.</p>
+    <table class="diff-table">
+      <tr><th>Reach for 2PC-style coordination when</th><th>Reach for saga when</th></tr>
+      <tr><td>Small number of tightly-coupled, highly-available participants</td><td>Many independently-owned, independently-deployed services</td></tr>
+      <tr><td>Blocking briefly is acceptable for a stronger guarantee</td><td>Availability and scalability matter more than instant consistency</td></tr>
+      <tr><td>All participants can realistically join a prepare/commit protocol</td><td>Some participants are external systems that can't join any protocol</td></tr>
+      <tr><td>Temporary inconsistency is genuinely unacceptable</td><td>Temporary inconsistency is acceptable if it converges reliably</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">Can an external payment gateway or a partner API cleanly join your saga's rollback/compensation model?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>no</b> — it's a black box outside your control, with its own retry semantics and its own idea of idempotency (or lack of it). External calls need to be wrapped defensively with your own idempotency keys and treated as a source of "unknown" outcomes requiring reconciliation, not as a trusted saga participant.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">Is reconciliation a sign that the architecture failed, or a mature and necessary part of the design?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A <b>mature and necessary part of the design</b>, particularly for money movement and external integrations. Not every inconsistency can be resolved instantly and safely — marking a workflow <code>PENDING_RECONCILIATION</code> and checking external truth asynchronously is often the only correct response to a genuinely unknown outcome.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">Should a distributed transaction design ever promise true exactly-once semantics across service and network boundaries?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No</b> — true exactly-once across networked services, brokers, and external systems is extremely difficult to guarantee and dangerous to promise casually. The realistic, honest target is <b>at-least-once delivery plus idempotent handling</b>, which together produce an <em>effectively-once</em> business outcome without overclaiming a guarantee the infrastructure can't actually deliver.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">Which failures should trigger automatic compensation, and which should route to reconciliation or manual review instead?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A <b>known, confirmed failure</b> (e.g. inventory service explicitly returned "out of stock") is safe to compensate automatically. An <b>unknown outcome</b> (e.g. a timeout, an ambiguous external response) should route to reconciliation rather than automatic compensation, precisely because automatic compensation on an unknown outcome risks double-acting on something that may have already succeeded.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : OUR DEPLOYMENT -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Our deployment — Wealth / Demat Platform transaction footprint</h2></div>
+    <p class="segment-note">The shape of saga coordination behind mutual fund order flow, IPO allotment, NSDL demat sync, PolicyBazaar insurance journeys, and loans — the numbers to have ready when asked "have you actually run this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Coordination model</div><div class="value">Saga <span>orchestrated</span></div></div>
+      <div class="stat-card"><div class="label">Outbox adoption</div><div class="value">~28 <span>of 80+ services</span></div></div>
+      <div class="stat-card"><div class="label">Idempotency key</div><div class="value">order_id <span>+ step</span></div></div>
+      <div class="stat-card"><div class="label">Reconciliation poll</div><div class="value">15 min <span>for unknowns</span></div></div>
+      <div class="stat-card"><div class="label">External black boxes</div><div class="value">3 <span>NSDL / MOFSL / PB</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Flow</th><th>Services in path</th><th>Coordination</th><th>Known hard edge</th></tr>
+      <tr><td>MF redemption</td><td>order-svc → NAV-svc → payment-svc → ledger-svc → notify</td><td>Saga, orchestrated</td><td>Payment timeout leaves "charged or not" ambiguous</td></tr>
+      <tr><td>IPO allotment sync</td><td>mofsl-webhook-adapter → allotment-svc → ledger-svc</td><td>Choreography</td><td>Duplicate webhook replay risks double allotment update</td></tr>
+      <tr><td>Instant demat (NSDL)</td><td>onboarding-svc → nsdl-adapter → kyc-svc → demat-svc</td><td>Saga, ordered by reversibility</td><td>Account creation at NSDL is effectively irreversible</td></tr>
+      <tr><td>Insurance journey (PB)</td><td>policy-gateway → policybazaar-adapter → policy-sync-svc</td><td>Outbox + choreography</td><td>Policy issuance can't be "rolled back," only reconciled</td></tr>
+      <tr><td>Loan against MF (LAMF)</td><td>loan-svc → valuation-svc → lien-marking-svc → disbursal-svc</td><td>Saga, orchestrated</td><td>Lien-marking done before disbursal specifically because it's the reversible step</td></tr>
+    </table>
+
+    <p class="segment-note" style="margin-top:-8px;">The deliberate design choice worth naming out loud in the LAMF flow: <b style="color:#9A62D6;">lien-marking happens before disbursal</b> — not because of team convention, but because lien-marking is reversible and disbursal effectively is not. That's the "reversible steps first" principle applied directly to a real regulated workflow.</p>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real-shaped issues this design has to account for</h3>
+
+    <div class="error-card"><div class="err-name">Payment timeout treated as failure, triggering a premature compensation</div>
+      <div class="err-fix">An early version cancelled the order and released inventory the moment a payment call timed out — sometimes while the charge had actually gone through downstream. <b>Fix:</b> timeout now routes to a <code>PENDING_RECONCILIATION</code> state that polls the payment provider's status API before any compensation runs.</div></div>
+    <div class="error-card"><div class="err-name">MOFSL webhook redelivery causing a duplicate allotment update</div>
+      <div class="err-fix">A retried webhook (the same allotment event delivered twice) briefly double-applied an allotment status change. <b>Fix:</b> idempotency key derived from MOFSL's own event id, with the allotment-svc rejecting any event id it has already processed.</div></div>
+    <div class="error-card"><div class="err-name">NSDL account-creation step treated as if it were compensable</div>
+      <div class="err-fix">An early saga design assumed a "cancel account" compensation could cleanly undo a completed NSDL account-open step. In practice this required a manual closure process at NSDL's end. <b>Fix:</b> account creation was deliberately moved to be the last, most-irreversible step in the saga, after every reversible pre-check had already passed.</div></div>
+    <div class="error-card"><div class="err-name">Outbox relay lag silently delaying downstream saga steps</div>
+      <div class="err-fix">A backlog in the outbox relay meant "payment charged" events sometimes reached the shipping step 40+ seconds late, with no visible error anywhere. <b>Fix:</b> outbox relay lag became a first-class monitored metric with alerting, not just a log line nobody watched.</div></div>
+    <div class="error-card"><div class="err-name">Compensation retried on an already-compensated order</div>
+      <div class="err-fix">A retried failure event triggered a second inventory-release compensation for an order that had already been released, briefly inflating available stock. <b>Fix:</b> compensations now check current saga state before acting, and carry their own idempotency key.</div></div>
+
+    <p class="segment-note">The line worth saying in an interview: <em>"We treat reversibility ordering and reconciliation as design-time decisions for every saga step — most of our transaction-correctness incidents came from treating a timeout as a failure, not from the coordination pattern itself misbehaving."</em></p>
+  </section>
+
+  <!-- SEGMENT 11 : RAPID FIRE -->
+  <section class="segment" id="s11" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why is "make many services act like one DB" the wrong framing from the start?</li>
+      <li>Why is compensation not the same as rollback?</li>
+      <li>Why should irreversible steps happen as late as possible in a saga?</li>
+      <li>Why is a timeout "unknown," not "failed"?</li>
+      <li>Why does outbox not give you exactly-once delivery by itself?</li>
+      <li>Why must compensating actions be idempotent, not just forward actions?</li>
+      <li>Why does 2PC reduce availability even before anything actually fails?</li>
+      <li>Why can choreography become invisible spaghetti at scale, when orchestration doesn't as easily?</li>
+      <li>Why can an external payment gateway rarely join your saga/rollback model directly?</li>
+      <li>Why is "effectively-once business outcome" a more honest target than "exactly-once"?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 12 : LEADERSHIP PERSPECTIVES -->
+  <section class="segment" id="s12" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Leadership perspectives — same incident, five minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, a <b style="color:#7A63B8;">solutions architect</b>, a <b style="color:#C1543A;">CTO</b>, a <b style="color:#A9861E;">director</b>, and a <b style="color:#B0468C;">product owner</b>. Click to reveal how the same incident produces five different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- L1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">A mutual fund redemption payment call times out. The saga automatically compensates — cancels the order and releases inventory. Two minutes later, the bank confirms the charge actually succeeded.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The customer is now charged for an order that shows as cancelled in their app. Support has to manually reconcile a refund, and the incident report reveals the saga treated "timeout" as equivalent to "failed" — the exact ambiguity the design was supposed to account for.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a longer timeout before triggering compensation — reduces the odds but doesn't remove the fundamental ambiguity of "did it succeed or not."</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Redesigns the payment step so a timeout routes to a <code>PENDING_RECONCILIATION</code> state that queries the bank's status API before any compensation is allowed to run.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Flags this as a platform-wide pattern risk — asks how many other sagas across the 80+ services treat timeout as failure by default, not just this one flow.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Weighs the cost of building reconciliation infrastructure once, platform-wide, against the recurring cost of manual refund investigations every time this pattern repeats.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Pushes back on scope: asks whether customers should ever see a "cancelled" status before the system is actually certain, or whether the UI itself should show "processing" during any ambiguous window.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Does our system ever show a customer a confident status ("cancelled," "confirmed") while the backend genuinely doesn't know the truth yet?</div>
+        <div class="learning"><b>Learning:</b> Treating a timeout as a failure isn't a coding mistake — it's a design decision made under the false assumption that "no response" means "no." The fix has to happen at the state-machine level, not just by tuning a timeout value.</div>
+      </div></div></div>
+
+    <!-- L2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">A retried MOFSL webhook applies the same IPO allotment update twice. A customer's allotment status briefly flips from "allotted" to "not allotted" and back.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">No money moved, but the customer saw the flicker in the app and raised a support ticket questioning whether their allotment was real. Investigation shows the webhook consumer had no idempotency check — any redelivery just reapplied the full update.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a check against MOFSL's event id before reapplying any update — closes this specific gap directly.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Generalizes the fix into a standard: every external webhook consumer across the platform must dedupe on the provider's own event id, not assume single delivery.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes this is the second external-webhook idempotency gap found this quarter — asks whether webhook handling needs a shared library instead of being reimplemented per integration.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Frames it as a build-once decision: a shared idempotent-webhook-ingestion component pays for itself the moment a third integration avoids the same bug.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks what it cost in customer trust for even a no-financial-impact flicker to be visible — and whether the allotment status screen should debounce visible updates rather than reflecting every backend write immediately.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> How many of our external integrations assume "the provider only sends this once" without ever verifying that assumption?</div>
+        <div class="learning"><b>Learning:</b> A duplicate event with zero financial impact can still cost real trust if it's visible to the customer. Idempotency isn't only a correctness concern — it's also a perceived-reliability concern.</div>
+      </div></div></div>
+
+    <!-- L3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">A team designs an early NSDL onboarding saga assuming account creation can be "rolled back" like any other step, and puts it in the middle of the workflow.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The first production failure after account creation revealed there was no clean compensation available — NSDL required a manual closure process that took days, during which the customer's onboarding state was stuck in limbo.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Writes a "best-effort" compensation handler that calls NSDL's closure API — helps somewhat, but doesn't remove the multi-day gap.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Redesigns the saga so account creation moves to the very last step, after every reversible pre-check (KYC, eligibility, document validation) has already passed — minimizing the odds of ever needing that compensation at all.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the deeper gap: nobody had classified which steps across the platform's sagas are truly irreversible before this incident forced the question.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks for a one-time audit: for every saga in the wealth platform, which step is the "point of no return," and is it positioned last?</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks how the customer experiences the multi-day limbo state today, and whether the onboarding UI should explicitly communicate "this step can't be undone once started" before triggering it.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Have we ever explicitly listed which steps in each of our sagas are irreversible, or are we discovering that ordering only after an incident?</div>
+        <div class="learning"><b>Learning:</b> "Reversible steps first" isn't just a nice principle — it's a concrete design step that requires someone to explicitly classify every action in the saga before deciding the order. Skipping that classification is how irreversible steps end up in the middle of a workflow by accident.</div>
+      </div></div></div>
+
+    <!-- L4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">The outbox relay for the payment service falls 40 seconds behind during a traffic spike. Downstream shipping steps silently lag with no alert firing.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Customers didn't lose money or data, but several orders sat in "processing" for far longer than normal, and the team only noticed because a customer complained — the relay lag itself had no monitoring attached to it.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Scales up the relay's throughput — fixes this specific spike, not the blind spot that let it go unnoticed.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Adds outbox lag (oldest unpublished event age) as a first-class metric with an explicit alert threshold, treating publication delay as an operational signal, not just an internal implementation detail.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes that outbox adoption solved the "lost event" problem but the team never built the matching observability for "delayed event" — a half-finished investment.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether outbox relay health should be part of the platform's core SLOs, given how many customer-facing flows now depend on it silently.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks whether "processing" is an honest status to show customers during this lag, or whether the product should surface a more specific "payment confirmed, preparing shipment" state so a delay doesn't read as something being wrong.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we monitor the plumbing that makes our sagas work, or only the sagas themselves?</div>
+        <div class="learning"><b>Learning:</b> Outbox fixes a correctness problem (lost events) but introduces a new operational surface (relay lag) that needs its own monitoring. Solving reliability at one layer can quietly create a new, unwatched layer underneath it.</div>
+      </div></div></div>
+
+    <!-- L5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">A compensation event gets retried after a transient failure and fires twice — releasing the same reserved inventory a second time, briefly inflating available stock.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The inflated stock count let a handful of new orders through that shouldn't have been accepted, since the real inventory was already committed elsewhere — a second, downstream problem caused entirely by an un-idempotent compensation.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a check-before-release guard in the inventory-release handler — closes this specific hole.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Establishes a platform rule: every compensation handler must be idempotent by design, with the same rigor applied to forward saga steps — no exceptions for "it's just a rollback."</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the team's idempotency review process only ever covered forward actions — compensations were treated as automatically safe, which this incident disproves.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks for the idempotency checklist used in design reviews to be updated to explicitly require compensation coverage, not just forward-path coverage.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks how many of the orders let through by the inflated stock count now need to be manually resolved, and whether customers affected by that downstream mess should be proactively notified rather than waiting for them to notice.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> When we say "this action needs to be idempotent," do we mean every action in the saga, or only the ones that move money?</div>
+        <div class="learning"><b>Learning:</b> Compensation is not automatically safe just because it's "undoing" something. It's a forward action like any other, with its own retry risk — and needs to be reviewed with exactly the same idempotency discipline as the step it's compensating for.</div>
+      </div></div></div>
+
+    <!-- L6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">A choreographed insurance-journey flow has grown to eight services reacting to each other's events. No single person can currently draw the full flow from memory.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">A recent bug took three days to trace because understanding "what happens when a policy sync fails" required reading event handlers in five separate codebases, none of which referenced the others directly.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Documents the current event flow in a wiki diagram — helpful today, but drifts out of date the next time someone adds a handler.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Weighs migrating this specific flow to an orchestrated model against keeping choreography but investing in distributed tracing across the event chain to make the flow observable without changing its shape.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Asks whether choreography was chosen deliberately for this flow originally, or whether it just accumulated one event handler at a time without anyone deciding on the coordination model up front.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the real cost: three engineer-days to trace one bug is a recurring tax, and asks what threshold (number of participating services) should trigger an automatic architecture review.</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Asks how this invisibility affects the team's ability to commit to reliable delivery timelines for new insurance features, since nobody can confidently say how a change will ripple through eight reactive services.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> At what point does choreography's flexibility stop being an asset and start being a debugging tax nobody budgeted for?</div>
+        <div class="learning"><b>Learning:</b> Choreography doesn't fail loudly — it fails by slowly becoming unreadable, one added event handler at a time, until a routine bug takes days instead of hours to trace. That drift needs a deliberate trigger to catch, not just hindsight.</div>
+      </div></div></div>
+
+    <!-- L7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">A regulator asks for proof of the exact sequence of events in a specific LAMF disbursal from three weeks ago. The saga's workflow state was overwritten on completion — only the final state remains.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team can prove the loan was eventually disbursed correctly, but cannot reconstruct the exact order and timing of lien-marking, valuation, and disbursal — the precise causal sequence the regulator is asking for, because the saga's intermediate states were never retained past completion.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Starts retaining full state-transition history going forward — helps the next request, not this one.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Solutions Architect</span><p>Separates "current workflow state" (needed for live operation) from "full transition history" (needed for audit and compliance) as two distinct, deliberately-retained data stores, since the platform had only ever built the first.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Frames it as a governance gap, not a technical one: nobody defined retention requirements for regulated financial workflows before the saga engine was built.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks the sharper question: for every regulated flow (allotment, redemption, disbursal, demat), was transition-history retention ever a deliberate compliance decision, or did it just default to whatever the workflow engine happened to keep?</p></div>
+        <div class="role-block" style="--role:#B0468C;"><span class="role-tag">Product Owner</span><p>Weighs the retention buildout against other roadmap priorities — but flags that failing this exact audit request has a cost (regulatory relationship, potential penalty) that likely outranks most features currently ahead of it in the backlog.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> If a regulator asks for proof of exact step sequencing on any of our regulated flows tomorrow, do we know how far back we can actually answer — and was that a deliberate decision, or an accident of what the workflow engine happened to keep?</div>
+        <div class="learning"><b>Learning:</b> Workflow state retention is a compliance decision wearing an engineering costume. Keeping only the final state is fine for running the system, and completely inadequate for proving what happened on a regulated transaction weeks later — and that gap has to be designed in before the regulator asks, not after.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I fix this step," solutions architects ask "what coordination or ordering design caused this and what's the durable fix," CTOs ask "what governance or platform-standard gap let this happen," directors ask "what's the business or compliance cost, and who owns this decision," and product owners ask "how does this affect what the customer sees and trusts, and is it worth prioritizing over the next feature." A leadership role means holding all five at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: a business action spans many services → each does its own local commit →
+    failures land mid-workflow, not cleanly at the edges → retries create duplicates unless every step
+    (and every compensation) is idempotent → rollback is rarely a true rollback, so compensation has to
+    be designed deliberately, ordered by reversibility → timeouts mean unknown, not failed, so
+    reconciliation exists for exactly that gap → and the platform's real maturity shows up in whether
+    anyone decided these boundaries on purpose, not whether the code technically runs.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
