@@ -240,6 +240,7 @@
 
   .topic-group {
     border: 1px solid var(--border);
+    border-top: 3px solid var(--topic-color, var(--border));
     border-radius: 6px;
     overflow: hidden;
     background: var(--surface);
@@ -250,7 +251,7 @@
     align-items: center;
     gap: 12px;
     padding: 14px 24px;
-    background: var(--tag-bg);
+    background: var(--topic-tint, var(--tag-bg));
     border-bottom: 1px solid var(--border);
   }
 
@@ -258,9 +259,32 @@
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 15px;
     font-weight: normal;
-    color: var(--ink);
+    color: var(--topic-color, var(--ink));
     letter-spacing: 0.01em;
   }
+
+  /* ── Per-topic color palette ── */
+  .topic-kafka  { --topic-color: #6366F1; --topic-tint: rgba(99,102,241,0.07); }
+  .topic-tracing{ --topic-color: #8B5CF6; --topic-tint: rgba(139,92,246,0.07); }
+  .topic-txns   { --topic-color: #0D9488; --topic-tint: rgba(13,148,136,0.07); }
+  .topic-lb     { --topic-color: #D97706; --topic-tint: rgba(217,119,6,0.07);  }
+  .topic-nosql  { --topic-color: #059669; --topic-tint: rgba(5,150,105,0.07);  }
+  .topic-sql    { --topic-color: #E11D48; --topic-tint: rgba(225,29,72,0.07);  }
+
+  @media (prefers-color-scheme: dark) {
+    .topic-kafka  { --topic-tint: rgba(99,102,241,0.12); }
+    .topic-tracing{ --topic-tint: rgba(139,92,246,0.12); }
+    .topic-txns   { --topic-tint: rgba(13,148,136,0.12); }
+    .topic-lb     { --topic-tint: rgba(217,119,6,0.12);  }
+    .topic-nosql  { --topic-tint: rgba(5,150,105,0.12);  }
+    .topic-sql    { --topic-tint: rgba(225,29,72,0.12);  }
+  }
+  :root[data-theme="dark"] .topic-kafka  { --topic-tint: rgba(99,102,241,0.12); }
+  :root[data-theme="dark"] .topic-tracing{ --topic-tint: rgba(139,92,246,0.12); }
+  :root[data-theme="dark"] .topic-txns   { --topic-tint: rgba(13,148,136,0.12); }
+  :root[data-theme="dark"] .topic-lb     { --topic-tint: rgba(217,119,6,0.12);  }
+  :root[data-theme="dark"] .topic-nosql  { --topic-tint: rgba(5,150,105,0.12);  }
+  :root[data-theme="dark"] .topic-sql    { --topic-tint: rgba(225,29,72,0.12);  }
 
   .topic-note-count {
     font-family: 'Courier New', Courier, monospace;
@@ -294,8 +318,8 @@
   }
 
   .note-card:hover {
-    background: var(--accent-tint);
-    border-left-color: var(--accent);
+    background: var(--topic-tint, var(--accent-tint));
+    border-left-color: var(--topic-color, var(--accent));
   }
 
   .note-card-body {
@@ -412,7 +436,7 @@
     <div class="topic-groups" id="topic-groups">
 
       <!-- ── Kafka ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-kafka">
         <div class="topic-group-header">
           <span class="topic-group-title">Kafka</span>
           <span class="topic-note-count">2 notes</span>
@@ -448,7 +472,7 @@
       </div>
 
       <!-- ── Distributed Tracing ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-tracing">
         <div class="topic-group-header">
           <span class="topic-group-title">Distributed Tracing</span>
           <span class="topic-note-count">2 notes</span>
@@ -484,7 +508,7 @@
       </div>
 
       <!-- ── Distributed Transactions ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-txns">
         <div class="topic-group-header">
           <span class="topic-group-title">Distributed Transactions</span>
           <span class="topic-note-count">2 notes</span>
@@ -522,7 +546,7 @@
       </div>
 
       <!-- ── Load Balancer ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-lb">
         <div class="topic-group-header">
           <span class="topic-group-title">Load Balancer</span>
           <span class="topic-note-count">2 notes</span>
@@ -558,7 +582,7 @@
       </div>
 
       <!-- ── NoSQL ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-nosql">
         <div class="topic-group-header">
           <span class="topic-group-title">NoSQL Databases</span>
           <span class="topic-note-count">2 notes</span>
@@ -594,7 +618,7 @@
       </div>
 
       <!-- ── SQL ── -->
-      <div class="topic-group">
+      <div class="topic-group topic-sql">
         <div class="topic-group-header">
           <span class="topic-group-title">SQL Databases</span>
           <span class="topic-note-count">2 notes</span>
