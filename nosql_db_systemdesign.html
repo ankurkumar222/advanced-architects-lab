@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NoSQL Databases — The Tradeoff, Not The Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>NoSQL Databases: the <em>tradeoff</em>, not the table</h1>
+    <p class="sub">A revision session built only on what makes a distributed NoSQL database fundamentally different from "a table you can't join" — partitioning, replication, the write/read path, consistency tradeoffs, indexing, storage engines, and a leadership decision-making section. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>16 segments</b></span>
+      <span>~4 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: reasoning, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Mental Model</a>
+    <a href="#s2" style="color:#2E8B82;">02 Choosing the Model</a>
+    <a href="#s3" style="color:#C1543A;">03 Partitioning</a>
+    <a href="#s4" style="color:#7A63B8;">04 Replication</a>
+    <a href="#s5" style="color:#3480B0;">05 Write Path</a>
+    <a href="#s6" style="color:#6B9A44;">06 Read Path</a>
+    <a href="#s7" style="color:#C1547A;">07 Consistency & Quorum</a>
+    <a href="#s8" style="color:#B9971F;">08 Access-Pattern Design</a>
+    <a href="#s9" style="color:#279090;">09 Secondary Indexing</a>
+    <a href="#s10" style="color:#9A62D6;">10 Storage Engines</a>
+    <a href="#s11" style="color:#C9871F;">11 Routing & Rebalancing</a>
+    <a href="#s12" style="color:#2E8B82;">12 Failure & Repair</a>
+    <a href="#s13" style="color:#C1543A;">13 TTL, Txns & Multi-Region</a>
+    <a href="#s14" style="color:#7A63B8;">14 Our Deployment</a>
+    <a href="#s15" style="color:#3480B0;">15 Rapid Fire</a>
+    <a href="#s16" style="color:#4A5FBF;">16 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 : AMBER -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The mental model shift</h2></div>
+    <p class="segment-note">A relational mindset asks: <code>"what's the schema, and how do I join?"</code> A NoSQL mindset asks: <code>"where does this record live, how many copies of it exist, and what happens the moment a machine holding it disappears?"</code> Everything below falls out of that one difference.</p>
+    <pre class="sketch">Naive view:      App --> put/get --> "the database"
+
+Real view:       App --> Coordinator --> partition owner --> replicas --> disk
+                              |
+                              v
+                    which node? how many copies? how fresh? how durable?
+
+A table is a promise about structure.
+A NoSQL cluster is a promise about physics — where bytes sit and how they survive.</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">Someone says "we use NoSQL because it's faster than SQL." What's wrong with that framing?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">NoSQL isn't inherently faster — it's a different set of <b>defaults and tradeoffs</b>: flexible schema, horizontal partitioning by default, and (often) relaxed consistency in exchange for availability and write throughput. A single-node SQL database on the right hardware can outperform a poorly-designed NoSQL cluster. The real reason to choose NoSQL is a specific access pattern or scale problem, not a speed folklore.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">What is the one question that separates "I can use a NoSQL database" from "I can design one"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>"When a node dies mid-write, what exactly happens to this record — and does the client find out?"</b> Anyone can call <code>put()</code>. Designing the system means owning the answer to that question for every write path in your platform.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Why does "NoSQL" as a category resist a single definition?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it's defined by what it <b>isn't</b> (not the relational/ACID-by-default model) rather than what it is. Key-value, document, wide-column, and graph stores solve genuinely different problems and make different tradeoffs — lumping them together is like saying "not a car" covers bicycles, planes, and boats equally well.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">If someone asks "should we move this table to NoSQL," what's the first thing you should ask back?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>"What are the actual read and write access patterns — and at what scale?"</b> NoSQL is a consequence of an access-pattern and scale decision, not a starting point. Asking about the model before asking about the query is designing backwards.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : TEAL -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Choosing the model — four families, four bets</h2></div>
+    <p class="segment-note">Before any design decision, you're placing a bet on which shape your data and queries will take. Get this wrong and every later layer — partitioning, indexing, query design — fights you.</p>
+    <pre class="sketch">Key-Value        user:1001 -> {opaque blob}                bet: pure lookup by key, app owns structure
+Document         user:1001 -> {name, city, orders:[...]}    bet: semi-structured, read-together fields
+Wide-Column      partition=user, rows ordered by time        bet: huge rows, time-ordered/range access
+Graph            nodes + edges + traversals                  bet: relationships ARE the query</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">You need "all transactions for customer 1001, newest first, fetched fast." Which family fits best, and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Wide-column.</b> Partition by <code>customer_id</code>, cluster/sort rows by <code>created_at desc</code> — the storage layout itself matches the query, so it's a sequential scan on disk rather than a scatter-gather across the cluster.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Why is a document store often the wrong choice for "who are all the beneficiaries connected to this account, up to 3 hops away"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because that question is fundamentally about <b>traversal</b>, not lookup. A document store makes you either denormalize relationships (which goes stale) or perform multiple round-trip lookups per hop. A graph store makes the traversal itself the native operation.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Two teams pick different families for what looks like the same problem — one picks key-value, one picks document. Are they both wrong?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not necessarily. If the app always reads/writes the <b>entire blob</b> and never queries into its internals, key-value is simpler and often faster. If the app needs to <b>query or partially update fields inside</b> the object, document is the better fit. The right answer depends on query granularity, not on which one "sounds more modern."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Why is choosing the wrong family often more expensive to fix later than a bad partition key?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A bad partition key is a <b>data-layout</b> problem — painful but fixable via resharding. A wrong family choice is an <b>application-shape</b> problem — every query, every index, and often every service contract was written assuming a data model that doesn't fit. It usually means a rewrite, not a migration.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : CORAL -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Partitioning — where does a record actually live</h2></div>
+    <p class="segment-note">One machine can't hold everything. The first deep distributed decision is <code>hash(key) -> partition -> node</code>, and every downstream property — hotspots, range scans, rebalancing cost — is a consequence of this one choice.</p>
+    <pre class="sketch">Range partitioning                      Hash partitioning
+user_id 1-10000    -> shard 1           hash(user_id) % N -> shard
+user_id 10001-20000-> shard 2
++ range scans are easy                  + spreads load evenly
+- new/hot IDs cluster -> hotspot        - range queries need scatter-gather</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">An IPO opens for subscription and everyone hits the same "hot" scheme_id on allotment day. Range partitioning by scheme_id — good or bad idea?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Bad.</b> Range partitioning by a naturally hot, sequentially-accessed key concentrates all traffic on one partition — exactly the opposite of what you want under a traffic spike. Hashing spreads the same key across partitions evenly; if range access is also needed, a composite key (hash bucket + range) can give both.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">Why does hash partitioning make "give me the last 30 days of transactions" harder, not easier?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a hash scatters logically-adjacent records (same time window) across <b>unrelated</b> partitions. What was a sequential scan under range partitioning becomes a <b>scatter-gather across every partition</b>, merged at the coordinator — more nodes touched, more tail-latency exposure per query.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">What's the practical fix when you need both "spread evenly" and "range-scan efficiently" on the same dataset?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A <b>composite partition key</b>: hash the high-cardinality part (e.g. customer_id) to choose the partition, then range-sort the low-cardinality part (e.g. transaction date) within that partition. You get even spread across customers and cheap ordered scans within one customer's data — this is the wide-column pattern from segment 2.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">If partitioning decides where data is split, what's the one thing it does NOT solve?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Survival.</b> Partitioning tells you which single node owns a record — which means that node is also a single point of failure for that record, until replication is layered on top. Partitioning and replication answer two completely different questions.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : VIOLET -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Replication — surviving the node that will eventually die</h2></div>
+    <p class="segment-note">Partitioning decides where data is split. Replication decides how each split survives failure. Treat these as two independent design decisions, not one.</p>
+    <pre class="sketch">Leader-based                          Leaderless / quorum
+Partition P17                         Partition P17 copies on A, B, C
+ Leader   -> Node A                    all nodes can accept reads/writes
+ Replica  -> Node B                    quorum math decides correctness
+ Replica  -> Node C                    (W + R > N gives you overlap)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">What's the core tradeoff between leader-based and leaderless replication?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Leader-based gives you a <b>simpler consistency story</b> (one authoritative writer per partition) at the cost of a failover pause when the leader dies. Leaderless gives you <b>no single point of write unavailability</b>, but pushes correctness onto quorum math and conflict resolution that the application (or the DB) must handle explicitly.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">A leader node for a partition crashes mid-write. What are the two failure modes a leader-based system must explicitly design for?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">1) The write was acknowledged to the client but <b>never replicated</b> before the crash — a lost write. 2) A <b>new leader is elected</b> from a replica that was slightly behind, and it now serves stale data as if it were current. Both are why "leader election" is a much deeper problem than "pick another node."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Replication factor is set to 3. Why isn't "3 copies" by itself a durability guarantee?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because durability depends on <b>how many copies must acknowledge before the write is considered successful</b>, not how many copies eventually exist. If a write is acked after reaching only 1 of 3 replicas, you have 3x storage redundancy but a durability guarantee no stronger than a single node.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Why do most systems place replicas across availability zones or racks rather than on adjacent servers in the same rack?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because failures are <b>correlated</b> — a rack power event or an AZ network issue can take out multiple "independent" replicas at once if they share physical infrastructure. Replica placement has to model realistic failure domains, not just count copies.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : BLUE -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Write path — where durability is actually engineered</h2></div>
+    <p class="segment-note">"PUT key=K value=V" looks like one operation. Internally it's a sequence of durability decisions — and the order of those steps is the entire design.</p>
+    <pre class="sketch">Client -> Coordinator -> Leader for partition P
+                            |
+                            +--> append to WAL / commit log   (durable on disk first)
+                            +--> update memtable              (fast in-memory read path)
+                            +--> replicate to followers        (survive node loss)
+                            |
+                            v
+                          ack client  <-- WHEN exactly? that's the design decision</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Why does the WAL (write-ahead log) get appended before the in-memory structure is updated, not after?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the WAL is the <b>recovery source of truth</b>. If the process crashes after updating memory but before the WAL write lands, that write never happened as far as any replay is concerned. Writing the log first guarantees that anything the client was told succeeded can always be reconstructed, even from a cold restart.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">A write is acknowledged to the client the instant the leader's memtable is updated, before replication completes. What's the risk, and when is it acceptable?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The risk is a <b>lost write</b> if the leader dies before replicating — the client believes the write succeeded, but it never reaches a surviving replica. This is acceptable for low-value, high-throughput data (session state, clickstream) where occasional loss is tolerable, and unacceptable for anything regulatory or financial, where the ack must wait for replica confirmation.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">What exactly does "the write is durable" mean, precisely, in a distributed write path?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It means the write has been <b>persisted to disk on enough independent replicas</b> that it survives the expected class of failure (a single node crash, an AZ outage) without being lost — and the client's ack was withheld until that threshold was actually reached. "Durable" is a claim about a threshold that was crossed, not a property of the data itself.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Why does the write path design directly determine your consistency model, rather than the two being independent decisions?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because <b>how many replicas must ack before the client is told "success"</b> IS the write-side half of the consistency contract. A system that acks after 1 replica cannot honestly claim strong read-your-writes consistency later — the write path already decided that promise couldn't be kept.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : GREEN -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Read path — where staleness actually comes from</h2></div>
+    <p class="segment-note">"GET key=K" has to answer two questions before returning anything: which partition owns this key, and which replica of that partition should serve the read. The second question is where staleness is born.</p>
+    <pre class="sketch">Client -> Coordinator -> find partition P for key K
+                              |
+                              +--> read from leader     (freshest, less scalable)
+                              or
+                              +--> read from any replica (scales reads, may be stale)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">A customer redeems a mutual fund unit and refreshes their portfolio page 200ms later — the redemption isn't reflected yet. Where, structurally, did that staleness come from?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The read almost certainly hit a <b>replica</b> that hadn't yet received the async replication from the leader that accepted the write. This isn't a bug — it's the direct, predictable consequence of reading from replicas for scale while writing to a leader for consistency. The fix isn't "find the bug," it's "decide the read-your-writes guarantee explicitly."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">What is "read-your-writes" consistency, and what does it cost to guarantee?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A guarantee that a client always sees its <b>own</b> prior writes, even if other clients might see stale data. It's typically implemented by routing that client's subsequent reads to the leader (or a replica known to be caught up) for some window after their write — which costs either sticky routing complexity or reduced read scalability for that client.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">Why is "just always read from the leader" not automatically the safe default?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it collapses the entire read scalability benefit that replicas exist to provide — the leader becomes a bottleneck for both reads and writes, and a single point of read unavailability. It's the correct choice for data where freshness genuinely matters more than scale, not a universal safe default.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">Can two different reads for the same key, issued a few milliseconds apart, correctly return different values with no bug involved?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Yes</b> — if they land on replicas at different replication lag, or if a concurrent write is in flight. This is expected, designed-for behavior under eventual consistency, not a correctness violation. The real question is whether your application's consistency model was chosen deliberately or discovered accidentally in production.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : PINK -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Consistency models & quorum math — the real differentiator</h2></div>
+    <p class="segment-note">This is where NoSQL systems diverge most from each other. Consistency isn't binary (strong vs. eventual) — it's a spectrum, and quorum configuration is how you dial your position on it.</p>
+    <pre class="sketch">Replication factor N = 3
+Write quorum W, Read quorum R
+
+If W + R > N   -> read and write sets are guaranteed to overlap -> stronger freshness
+If W + R <= N  -> read and write sets can miss each other        -> stale reads possible
+
+Example: N=3, W=2, R=2  ->  2+2=4 > 3  -> overlap guaranteed
+Example: N=3, W=1, R=1  ->  1+1=2 <= 3 -> overlap NOT guaranteed, fastest, weakest</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Why does W+R > N give you a stronger consistency guarantee without needing a single global leader?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it mathematically guarantees the set of replicas that accepted the write and the set of replicas queried by the read <b>must share at least one node</b> — so the read can always find the latest value among the replicas it consults, even in a leaderless system. It's overlap by pigeonhole, not by coordination.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">A team sets W=1, R=1 on a ledger-adjacent table "for speed." What are they actually trading away?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">They've disabled the quorum overlap guarantee entirely — reads can return stale or even <b>conflicting</b> values with no built-in reconciliation guarantee, and a single node's failure during a write can silently lose it. This configuration is defensible for ephemeral, low-value data; it's a serious risk for anything regulatory.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">"Eventual consistency" — eventual by when? Why does that vague word matter operationally?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because "eventual" without a bound is not a guarantee an SLA can be built on. Mature systems replace "eventually" with a measured <b>replication lag distribution</b> (p50/p99 convergence time) so teams can reason about the actual staleness window instead of an open-ended promise.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Is strong consistency ever "free" in a distributed NoSQL system?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> It always costs something — latency (waiting for quorum acks or leader round-trips), availability (rejecting writes/reads during partitions rather than serving stale data), or both. The CAP-style tradeoff doesn't disappear because a vendor markets "strongly consistent" — it just moves to wherever the vendor chose to pay the cost.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : OLIVE -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Access-pattern-first design — schema thinking never left</h2></div>
+    <p class="segment-note">"Schemaless" is one of the most misleading words in the NoSQL vocabulary. The schema didn't disappear — it moved from the database's enforcement to your query patterns' assumptions, and got far less forgiving to get wrong.</p>
+    <pre class="sketch">Access pattern + Partition key + Data model + Index strategy = actual system performance
+
+Need: "all orders for customer 1001, newest first"
+Strong model:  partition by customer_id, cluster/sort by created_at desc
+Weak model:    partition by order_id, hope a secondary index saves you later</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">In a relational design, you can bolt on a new query with a new index later. Why is that much riskier in a NoSQL design?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the <b>partition key itself</b> — not just an index — was chosen to match a specific access pattern. A genuinely new access pattern (a different "find by X") often means the data needs to live somewhere else entirely, which means a reshape or a full re-partitioning, not a lightweight index addition.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">A team designs a NoSQL table by mirroring their existing SQL schema table-for-table. What's the predictable failure mode?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Every query that used to be a <b>join</b> becomes either a scatter-gather across partitions or a chain of sequential lookups from the application — both slow, both fragile under load. The fix is designing the partition and clustering keys around the actual query shapes, sometimes duplicating data deliberately (denormalization) to avoid the join entirely.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Why is "list every access pattern before writing a single line of schema" the single highest-leverage step in NoSQL design?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the partition key decision is expensive to reverse, and it can only be made correctly if every query the data must serve is known upfront. Skipping this step doesn't remove the schema decision — it just defers it to production, where it's discovered as a performance incident instead of a design review comment.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : CYAN -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Secondary indexing — the hidden distributed problem</h2></div>
+    <p class="segment-note">Primary-key lookup is the easy case — it's the same partitioning logic you already solved. A secondary index (find by email, not by user_id) is a second, independently-partitioned dataset that must now stay in sync with the first.</p>
+    <pre class="sketch">Main record:   user_id -> document           (lives on partition owning user_id)
+Need query:    find by email
+Index record:  email -> user_id               (lives on a DIFFERENT partition, by email hash)
+
+write document
+  +--> update primary storage
+  +--> update secondary index         <-- now TWO writes, TWO partitions, ONE logical operation</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Why does adding a secondary index reintroduce a consistency problem the primary key design had already avoided?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because updating a record now requires <b>two writes to two independently-partitioned pieces of data</b> — the primary record and the index entry — with no natural atomicity between them across a partition boundary. If the second write fails or lags, the index can point to a stale or nonexistent record.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">What's the practical difference between a "local secondary index" and a "global secondary index"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A <b>local</b> index is co-located with the base data on the same partition — cheap to keep consistent, but only useful if the query already knows the partition key. A <b>global</b> index is partitioned independently by the indexed field — supports queries without the partition key, but pays for it with asynchronous propagation and a real staleness window.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">A user updates their email. A query "find by old email" briefly still returns a match. Is this a bug?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>not a bug</b> — it's the visible edge of asynchronous secondary index propagation. Whether it's acceptable depends entirely on whether that index was designed for strongly consistent lookups (rare, expensive) or eventually consistent ones (common, cheap). The team's job is to know which promise was made, not to be surprised by it.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : PURPLE -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Storage engines — B-tree thinking vs. LSM thinking</h2></div>
+    <p class="segment-note">This is the one layer most engineers never touch directly, yet it silently decides your write throughput, your read latency shape, and your compaction bill.</p>
+    <pre class="sketch">B-tree style                          LSM (log-structured merge) style
+data updated in place / page-oriented  write -> WAL -> memtable -> flush -> SSTable files
+good for point lookups + range scans   append-only, fast writes, compact later
+
+                                        write
+                                          |
+                                          v
+                                        WAL -> memtable -> flush -> SSTable -> compaction -> merged files</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">Why do LSM-based stores generally win on write throughput compared to B-tree stores?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because writes are <b>sequential appends</b> to a log and an in-memory structure — no random-access disk seeks, no in-place page rewrites. B-trees, by contrast, often need to read-modify-write a page in place, which under heavy write load means far more random I/O.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">What do you pay for that write-throughput advantage in an LSM system?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Read amplification and compaction cost.</b> A single key's latest value might be spread across several SSTable files, so a read may need to check multiple files. Compaction merges and rewrites these files in the background — a CPU/IO-heavy process that, if it falls behind, causes read latency and space usage to degrade visibly.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q37</span><span class="q-text">A batch job runs an end-of-day settlement sweep, hammering an LSM-backed table with writes. p99 read latency spikes badly during the same window. What's the likely mechanism?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The write burst is generating SSTables faster than <b>compaction</b> can merge them — reads now have to check a growing number of uncompacted files per key (read amplification), and compaction itself is competing for the same CPU/IO the reads need. This is a storage-engine-level interaction, not an application bug.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q38</span><span class="q-text">If your workload is point-lookup-heavy with a stable, moderate write rate, is an LSM engine automatically the right choice because it's "modern"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No.</b> A B-tree-style engine may serve stable point lookups with more predictable latency and no compaction overhead to manage. LSM earns its complexity specifically under write-heavy, append-dominated workloads — choosing it because it's the trendier default is a tradeoff made without evaluating the actual workload.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 11 : AMBER-2 -->
+  <section class="segment" id="s11" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Routing & rebalancing — the cluster is never static</h2></div>
+    <p class="segment-note">Clients must know where a partition lives, and that answer changes every time the cluster grows, shrinks, or recovers — routing and rebalancing are the same problem viewed at two different timescales.</p>
+    <pre class="sketch">Client -> asks metadata / partition map -> routes to right node
+
+Before:  P1->A  P2->B  P3->C
+Add Node D
+After:   some partitions/splits move to D  <-- while traffic keeps arriving</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q39</span><span class="q-text">What's the risk if the client caches the partition map and a rebalance happens without invalidating that cache?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The client keeps routing requests to a node that <b>no longer owns</b> that partition, causing avoidable errors, retries, or (worse) a stale node silently serving reads from data it's no longer authoritative for. Partition-map staleness has to be actively detected and refreshed, not assumed static.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q40</span><span class="q-text">Why is rebalancing considered one of the hardest operational problems in a NoSQL cluster, harder than the initial partitioning decision?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it has to happen <b>while the system stays live</b> — data must move between nodes without pausing writes, ownership has to switch atomically enough that no write is accepted by two owners or lost between owners, and the move itself consumes the same network/disk resources production traffic needs.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q41</span><span class="q-text">A node is added to relieve a hot partition, but the hot key itself doesn't move to the new node. Did the rebalance help?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually <b>no</b> — if the hotspot is a single popular key (not an evenly-hot partition), adding nodes doesn't split that key's ownership; it's still served by one node. This is why hash partitioning alone doesn't fix hotspots caused by access skew — it only fixes hotspots caused by uneven key distribution.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 12 : TEAL-2 -->
+  <section class="segment" id="s12" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Failure handling & repair — the real test of maturity</h2></div>
+    <p class="segment-note">Failures aren't an edge case in distributed NoSQL — they're a certainty on a long enough timeline. Whether the design was mature shows up entirely in how gracefully it degrades and recovers, not in how it behaves when everything's healthy.</p>
+    <pre class="sketch">Failure map:  Client -> Router -> Leader -> Replicas -> Disk   (failure can happen anywhere)
+
+Case 1  Node crash          -> leader dies, new leader must take over
+Case 2  Network partition   -> some replicas can't talk, who is authoritative?
+Case 3  Disk crash/corrupt  -> needs log replay / replica recovery
+Repair  Replica drift       -> compare state via Merkle-like summaries, sync missing data</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q42</span><span class="q-text">During a network partition, two sides of the cluster both think they're authoritative for the same partition and both accept writes. What is this called, and why is it dangerous?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This is <b>split-brain</b>. It's dangerous because both sides diverge independently, accepting writes the other side never sees — when the partition heals, the system has two conflicting histories for the same data with no obvious way to know which write "really" happened first, especially damaging for anything requiring a single source of truth like a ledger.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q43</span><span class="q-text">Why can't replicas simply "always be in sync" even under normal, healthy operation?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because replication is asynchronous by default in most NoSQL systems for performance reasons — there's always some propagation delay between the leader accepting a write and a replica applying it. "Drift" isn't a malfunction; it's the baseline state, which is exactly why anti-entropy/repair processes exist as an ongoing background job, not a one-time fix.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q44</span><span class="q-text">What's the point of comparing "Merkle-like summaries" between replicas instead of comparing every record directly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A full record-by-record comparison across large datasets is prohibitively expensive in bandwidth and time. A hash-tree summary lets two replicas compare small hashes of large ranges first, and only drill down into the specific sub-ranges that actually differ — turning an O(all data) comparison into something close to O(the actual drift).</div></div></div>
+  </section>
+
+  <!-- SEGMENT 13 : CORAL-2 -->
+  <section class="segment" id="s13" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 12</span><h2>TTL, transactions & multi-region — the edges most teams skip</h2></div>
+    <p class="segment-note">Three problems that rarely show up in a proof-of-concept but define whether a NoSQL system is actually production-grade for a regulated platform: expiring data safely, updating more than one record atomically, and surviving an entire region going dark.</p>
+    <pre class="sketch">single-document update  -> easy atomic unit
+multi-partition update  -> much harder, often needs explicit distributed transaction support
+
+session:123  created 10:00  TTL=24h  -> logically expired -> physically cleaned up later (not instantly)
+
+Region A <----> Region B <----> Region C
+choices: single-writer multi-region / multi-writer replication / leader-per-region / global tables</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q45</span><span class="q-text">Why is "update the account balance AND the transaction log in one atomic step" much harder in NoSQL than in a relational database?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because those two records likely live on <b>different partitions</b>, and most NoSQL engines were built around single-key/single-document atomicity as the strong guarantee. Multi-key atomicity across partitions requires an explicit distributed transaction protocol (two-phase commit, or a DB-native multi-document transaction feature) — a deliberate, expensive design choice, not a default.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q46</span><span class="q-text">A session record has TTL=24h. A query runs 30 minutes after expiry and still returns the record. Is this broken?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Often not — many TTL implementations mark data <b>logically expired</b> (excluded from reads) well before it's <b>physically deleted</b> by a background compaction/cleanup process. The gap between logical and physical deletion is a real design parameter, and it matters a lot if "expired" is supposed to mean "gone" for compliance reasons.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q47</span><span class="q-text">Why does multi-writer multi-region replication introduce a problem that single-region replication never had?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because now <b>two regions can accept conflicting writes to the same key concurrently</b>, separated by real network latency between them — there's no single leader to serialize the order. The system needs an explicit conflict resolution strategy (last-write-wins by timestamp, vector clocks, application-level merge) or it silently picks a loser without anyone deciding to.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 14 : VIOLET-2 -->
+  <section class="segment" id="s14" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 13</span><h2>Our deployment — Wealth / Demat Platform NoSQL footprint</h2></div>
+    <p class="segment-note">This is the shape of NoSQL usage behind mutual fund order flow, IPO allotment, NSDL demat sync, PolicyBazaar insurance journeys, and LAMF — the numbers to have ready when asked "have you actually run this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Wide-column tables</div><div class="value">MF ledger <span>+ txn history</span></div></div>
+      <div class="stat-card"><div class="label">Document store</div><div class="value">KYC <span>+ profiles</span></div></div>
+      <div class="stat-card"><div class="label">Replication factor</div><div class="value">N=3 <span>cross-AZ</span></div></div>
+      <div class="stat-card"><div class="label">Quorum (ledger-adjacent)</div><div class="value">W=2, R=2 <span>overlap safe</span></div></div>
+      <div class="stat-card"><div class="label">Quorum (session/cache)</div><div class="value">W=1, R=1 <span>fast, best-effort</span></div></div>
+      <div class="stat-card"><div class="label">Hot storage TTL</div><div class="value">7d <span>then cold archive</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Flow</th><th>Model / store</th><th>Partition key</th><th>Known hotspot</th></tr>
+      <tr><td>MF order &amp; NAV ledger</td><td>Wide-column</td><td>customer_id, sort by txn_time</td><td>NAV cutoff-window write burst</td></tr>
+      <tr><td>IPO allotment</td><td>Wide-column</td><td>scheme_id (hashed) + applicant_id</td><td>Popular NFO — hot scheme_id at open</td></tr>
+      <tr><td>KYC / customer profile</td><td>Document</td><td>customer_id</td><td>MPO image blob size skew per device</td></tr>
+      <tr><td>Demat holdings (NSDL sync)</td><td>Wide-column</td><td>demat_account_id, sort by settlement_date</td><td>Secondary index on ISIN lags under bulk corp actions</td></tr>
+      <tr><td>Insurance journey (PolicyBazaar)</td><td>Document</td><td>policy_id</td><td>Cross-region write during vendor failover</td></tr>
+      <tr><td>LAMF lien &amp; valuation cache</td><td>Key-value</td><td>folio_id</td><td>W=1 cache staleness during NAV volatility</td></tr>
+    </table>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real issues we've actually hit</h3>
+
+    <div class="error-card"><div class="err-name">Hot partition on NFO day</div>
+      <div class="err-fix">A popular IPO scheme_id concentrated allotment writes on a single partition despite hash partitioning, because the hash bucket count was too small relative to concurrent applicants. <b>Fix:</b> increased virtual-node count per physical node so hot keys spread across more physical partitions.</div></div>
+    <div class="error-card"><div class="err-name">Stale portfolio read right after redemption</div>
+      <div class="err-fix">Customers saw pre-redemption balances for a few hundred milliseconds because reads defaulted to nearest-replica routing. <b>Fix:</b> read-your-writes routing to the leader for a short window immediately following any write from that session.</div></div>
+    <div class="error-card"><div class="err-name">Secondary index drift on ISIN lookup</div>
+      <div class="err-fix">A bulk corporate-action update touched thousands of holdings records; the global secondary index on ISIN lagged the primary table by several minutes under load. <b>Fix:</b> batched index updates were rate-limited separately from primary writes, with an explicit staleness SLO communicated to downstream consumers instead of assumed-instant sync.</div></div>
+    <div class="error-card"><div class="err-name">Compaction storm during EOD settlement</div>
+      <div class="err-fix">The nightly settlement sweep's write burst on the LSM-backed ledger table outpaced compaction, causing p99 read latency to spike 8x for an hour. <b>Fix:</b> settlement writes now go through a rate limiter tuned below the observed safe compaction throughput, and compaction concurrency was raised during the maintenance window.</div></div>
+    <div class="error-card"><div class="err-name">W=1 cache told a wrong LAMF valuation</div>
+      <div class="err-fix">During a volatile NAV day, a W=1/R=1 valuation cache served a stale lien value from a lagging node, momentarily under-marking a lien. <b>Fix:</b> lien-marking reads were moved to a quorum-consistent path (W=2, R=2); only the display-only valuation widget kept the fast W=1 path.</div></div>
+
+    <p class="segment-note">The line worth saying in an interview: <em>"We treat consistency level as a per-table decision made deliberately for the value of the data, not a cluster-wide default — our biggest incidents came from ledger-adjacent data quietly inheriting a cache-tier consistency setting, not from the storage engine misbehaving."</em></p>
+  </section>
+
+  <!-- SEGMENT 15 : BLUE-2 -->
+  <section class="segment" id="s15" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 14</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why does partitioning decide "where," and replication decide "how it survives" — and why must both be reasoned about separately?</li>
+      <li>Why can hash partitioning make range queries harder even though it fixes hotspots?</li>
+      <li>Why is "the write was acknowledged" not the same claim as "the write is durable"?</li>
+      <li>Why does reading from a replica instead of the leader trade freshness for scale?</li>
+      <li>Why does W+R > N guarantee overlap without needing a single leader?</li>
+      <li>Why does "schemaless" not mean the schema decision disappeared?</li>
+      <li>Why does a secondary index reintroduce the exact consistency problem the primary key design avoided?</li>
+      <li>Why do LSM engines trade read amplification and compaction cost for write throughput?</li>
+      <li>Why is rebalancing harder while the system stays live than the original partitioning decision was?</li>
+      <li>Why is split-brain specifically dangerous for ledger-like data, more than for cache-like data?</li>
+      <li>Why is multi-key atomicity across partitions a deliberate, expensive feature rather than a default?</li>
+      <li>Why should TTL's "logical expiry" and "physical deletion" be treated as two different guarantees?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 16 : LEADERSHIP PERSPECTIVES -->
+  <section class="segment" id="s16" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 15</span><h2>Leadership perspectives — same incident, four minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, an <b style="color:#7A63B8;">architect</b>, a <b style="color:#C1543A;">CTO</b>, and a <b style="color:#A9861E;">director</b>. Click to reveal how the same incident produces four different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- L1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">On an NFO launch day, allotment writes for the hottest scheme grind a single partition to a crawl while every other partition sits idle.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The cluster had "plenty of capacity" on paper — 40% average utilization across all nodes. But one scheme_id, hashed to one partition, absorbed 60% of the day's write volume alone. Capacity planning had looked at cluster averages, not per-key skew.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a retry-with-backoff on the client side for the hot partition — reduces visible errors, does nothing about the underlying skew.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Introduces a salted/composite key for known hot entities (append a random suffix, fan out writes, merge on read) — trades read complexity for write spread on the specific keys expected to be hot.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out capacity planning measured cluster-average utilization, which completely hid a single-key hotspot — the dashboards were answering the wrong question.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether every future high-profile NFO should get this treatment proactively, or whether the team will keep discovering hot keys reactively on launch day.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we have a way to predict which keys will be hot before launch day, or do we only find out from the incident?</div>
+        <div class="learning"><b>Learning:</b> Average cluster utilization is a dangerously reassuring number. Partition-level skew is invisible until you specifically instrument for it — and by definition, the worst skew hides behind the best-looking average.</div>
+      </div></div></div>
+
+    <!-- L2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">A customer redeems mutual fund units, refreshes the app 300ms later, and sees the pre-redemption balance. They screenshot it and escalate as "your app is lying to me."</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Nothing was wrong technically — the read simply hit a replica that hadn't caught up yet. But "eventual consistency working as designed" is not a sentence that calms an escalated customer, and support had no framework for explaining it.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a manual "refresh" button that forces a leader read — fixes the symptom for users who know to tap it.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Implements read-your-writes routing by default immediately after any write from that session, without requiring the user to do anything.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes this is the third consistency-related escalation this quarter, and none of them were caused by a bug — all were the system behaving exactly as configured, with nobody having decided that configuration was right for customer-facing balance data.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks which other customer-facing screens are quietly reading from replicas without a read-your-writes guarantee, and whether that was ever a deliberate list.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Did we choose eventual consistency for this screen, or did we inherit it by using the platform's default read path without reviewing it?</div>
+        <div class="learning"><b>Learning:</b> A consistency model working exactly as designed can still be the wrong design for the specific screen it's powering. "It's not a bug" is true and irrelevant if the customer experience it produces was never actually decided on.</div>
+      </div></div></div>
+
+    <!-- L3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">A bulk corporate-action update touches thousands of demat holdings. For several minutes, searching by ISIN returns incomplete results while the direct account lookup is fully correct.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The primary table was fully up to date the entire time — the global secondary index on ISIN was lagging under the bulk write load. Nobody had documented that the index had a different consistency guarantee than the table it was built from.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a manual re-sync script to run after known bulk operations — a workaround that depends on remembering to run it.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Rate-limits index-update throughput separately from primary-write throughput, and defines an explicit staleness SLO for the index that downstream consumers can rely on instead of assuming instant sync.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out that "secondary index" was treated internally as if it meant "as consistent as the primary table" — a false assumption baked into three other services that also query by ISIN.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how many other secondary indexes across the platform carry the same undocumented assumption, and whether an index inventory with stated consistency guarantees exists anywhere.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> If a downstream team queries one of our secondary indexes today, do they know — in writing — how stale it's allowed to be, or are they guessing based on how it usually behaves?</div>
+        <div class="learning"><b>Learning:</b> A secondary index is a second dataset with its own consistency contract, not a free extra view on the first one. Undocumented, that contract defaults to "whatever it happens to do under normal load" — which is exactly what breaks first under abnormal load.</div>
+      </div></div></div>
+
+    <!-- L4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">The nightly settlement batch triggers an LSM compaction storm on the ledger table; p99 read latency spikes 8x and stays elevated for an hour after the batch finishes.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The write burst wasn't the direct cause of the slow reads — it was that the burst outpaced background compaction, so reads had to check a growing pile of uncompacted files per key, and compaction kept competing with production reads for the same I/O even after the batch job itself completed.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Reruns the batch job during a quieter hour — pushes the problem later without solving the underlying throughput mismatch.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Rate-limits the batch write throughput to stay under the storage engine's proven compaction rate, and raises compaction concurrency during the maintenance window as a second lever.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes the storage engine's internal behavior (LSM compaction) was never load-tested against the actual batch job's write profile before go-live — it was tested for steady-state traffic only.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether every scheduled batch job that writes heavily to a shared table is now a known risk to production read latency, and whether that risk is on anyone's runbook.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we load-test storage-engine behavior under our actual batch/burst write patterns, or only under smooth average throughput?</div>
+        <div class="learning"><b>Learning:</b> Storage engine internals aren't an implementation detail you can ignore once you pick a database — under bursty write patterns, they become a first-class capacity planning input, and steady-state benchmarks won't reveal that in advance.</div>
+      </div></div></div>
+
+    <!-- L5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">A brief network partition splits the cluster during a PolicyBazaar vendor failover. Both sides accept writes for the same policy_id before the partition heals.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">When the partition healed, two conflicting updates to the same policy record existed with no obvious way to know which was "real." The system had been configured multi-writer for availability during vendor instability, without anyone deciding what conflict resolution should look like.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Manually reconciles the conflicting records by inspecting timestamps — resolves this one incident, not the next one.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Weighs moving to single-writer-per-region with a defined failover leader (simpler conflict story, brief unavailability during failover) against keeping multi-writer with an explicit, tested conflict-resolution rule (higher availability, more complexity to get right).</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes multi-writer replication was chosen for availability during vendor outages, but nobody had explicitly signed off on "last-write-wins" or any other conflict policy — it was an implicit default nobody reviewed.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether policy data — something with real regulatory and customer-money implications — should ever have been on a multi-writer topology without an explicit conflict-resolution decision documented and approved.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> For every dataset running multi-writer replication today, can we name the conflict-resolution rule in one sentence — and was it a deliberate decision, or the database's undocumented default?</div>
+        <div class="learning"><b>Learning:</b> Multi-writer replication buys availability by giving up a single source of truth during conflicts. That's a legitimate tradeoff for some data and a dangerous one for regulated data — but it's only a tradeoff at all if someone actually chose the conflict-resolution policy on purpose.</div>
+      </div></div></div>
+
+    <!-- L6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">During a volatile NAV day, the LAMF lien-marking flow briefly under-marks a customer's lien because the valuation cache served a stale value from a lagging replica.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The valuation cache had been set to W=1, R=1 for speed — a reasonable choice for a display-only widget. But lien-marking, a financially binding action, had been quietly reading from the same fast, weakly-consistent cache instead of the quorum-consistent source it should have used.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a sanity-check re-read before finalizing the lien — catches some cases, adds latency, doesn't fix the root routing mistake.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Splits the read paths explicitly: lien-marking reads go through the quorum-consistent (W=2, R=2) path; only the non-binding display widget keeps the fast W=1 path.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out that consistency level had been set per-table for performance reasons, but two very different-stakes operations (display vs. binding lien action) had been sharing the same table and the same setting.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether "consistency level" should be a decision made per data-store, or per business action — since this incident shows the same store can be safely fast for one use and unsafely fast for another.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we have a rule for which category of action — display vs. binding — is allowed to read from a weakly-consistent path, or does that decision get made implicitly by whichever engineer wired up the query?</div>
+        <div class="learning"><b>Learning:</b> Consistency level is not a database-wide setting you pick once — it's a per-use-case decision. The same weakly-consistent read that's perfectly fine for a UI widget can be a real financial risk for the binding action sitting three lines of code below it.</div>
+      </div></div></div>
+
+    <!-- L7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">A regulator asks for proof of the exact sequence and state of a customer's demat holdings at a specific timestamp 10 days ago. Hot storage retention is 7 days — the precise historical state is already gone.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The team could reconstruct an approximate picture from transaction logs, but couldn't produce the exact point-in-time state the regulator wanted with full confidence — precisely because the system was designed to answer "what is the current state," not "what was the state at any past moment," and nobody had built the second capability.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Extends hot storage retention going forward from today — fixes the next request, not this one.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Distinguishes current-state storage (fast, mutable, short retention, for live queries) from an append-only event/change log (immutable, cheap to archive, long retention, capable of reconstructing any past state) — the platform had only ever built the first.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Frames this as a governance gap, not a technical one: nobody had defined what point-in-time reconstruction regulated holdings data actually requires before the storage retention policy was set.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Names the real question: for every regulated flow — demat holdings, IPO allotment, MF ledger — was retention and point-in-time reconstructability ever a deliberate compliance decision, or just whatever the default hot-storage window happened to be?</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> If a regulator asks for the exact state of any regulated dataset at any point in the last year, do we know precisely how far back we can answer with certainty — and did we choose that number deliberately, or did it just default to whatever the storage tier's retention setting happened to be?</div>
+        <div class="learning"><b>Learning:</b> Mutable "current state" storage answers "what is true now" extremely well and "what was true then" not at all. For regulated financial data, an immutable event history isn't a nice-to-have audit feature — it's the only honest way to answer a question the business will eventually be asked, and it has to be designed in before the regulator asks, not after.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I make this read/write correct right now," architects ask "what partitioning, replication, or consistency design caused this and what's the durable fix," CTOs ask "what governance or platform-standard gap let this happen across more than one team," and directors ask "what's the business or compliance cost, and who owns this decision going forward." A leadership role means holding all four at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: one record becomes a partition decision → replicas make it survive failure →
+    the write path decides how many copies must ack before durability is real → the read path decides how fresh
+    a given answer is allowed to be → quorum math (W+R vs N) is the dial between those two → secondary indexes
+    reintroduce the same consistency problem one layer up → the storage engine (B-tree vs LSM) decides the shape
+    of your latency under load → and the platform's real maturity shows up in whether consistency level was chosen
+    deliberately per use case, or inherited by accident from whatever the default happened to be.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

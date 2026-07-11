@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Load Balancer — The Question Before The Algorithm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6){background:#6B9A44;}
+  .ledger-strip span:nth-child(7){background:#C1547A;}
+  .ledger-strip span:nth-child(8){background:#B9971F;}
+  .ledger-strip span:nth-child(9){background:#279090;}
+  .ledger-strip span:nth-child(10){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* LEADERSHIP SECTION */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Load Balancer: the <em>question</em> before the algorithm</h1>
+    <p class="sub">A revision session built the way the design actually unfolds — not "which algorithm" first, but the fifteen decisions that come before and after it. Plus a real deployment section and a leadership decision-making section rooted in the Wealth &amp; Demat platform. Click a question to think first — reveal only when you're ready to check yourself.</p>
+    <div class="meta-bar">
+      <span><b>15 segments</b></span>
+      <span>~3.5 hrs, self-paced</span>
+      <span>Format: think → answer aloud → reveal</span>
+      <span>Goal: judgment, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 L4 vs L7</a>
+    <a href="#s2" style="color:#2E8B82;">02 Traffic Entry</a>
+    <a href="#s3" style="color:#C1543A;">03 Backend Discovery</a>
+    <a href="#s4" style="color:#7A63B8;">04 Backend Selection</a>
+    <a href="#s5" style="color:#3480B0;">05 Health Checking</a>
+    <a href="#s6" style="color:#6B9A44;">06 Connection Handling</a>
+    <a href="#s7" style="color:#C1547A;">07 L7 Content Routing</a>
+    <a href="#s8" style="color:#B9971F;">08 Session Stickiness</a>
+    <a href="#s9" style="color:#279090;">09 Failure Handling</a>
+    <a href="#s10" style="color:#9A62D6;">10 Drain / Scale / Overload</a>
+    <a href="#s11" style="color:#C9871F;">11 Observability &amp; States</a>
+    <a href="#s12" style="color:#2E8B82;">12 Security Boundary</a>
+    <a href="#s13" style="color:#C1543A;">13 Our Deployment</a>
+    <a href="#s14" style="color:#7A63B8;">14 Rapid Fire</a>
+    <a href="#s15" style="color:#4A5FBF;">15 Leadership Perspectives</a>
+  </nav>
+
+  <!-- SEGMENT 1 -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>The first decision — what level does the LB operate at</h2></div>
+    <p class="segment-note">Most people jump straight to <code>"round robin or least connections?"</code> That's the wrong first question. The real first question is: <code>does this load balancer understand TCP/UDP only, or does it understand HTTP?</code> That single choice decides almost everything downstream — what it can route on, what fairness even means, and what it's allowed to inspect.</p>
+    <pre class="sketch">Layer 4 LB                                Layer 7 LB
+-----------                                -----------
+works at TCP/UDP level                     works at HTTP/gRPC/app level
+forwards connections/packets               reads host, path, headers, cookies, method
+blind to request content                   can make per-request decisions
+
+Client --TCP conn--> LB --TCP conn--> Backend      Client --HTTP req--> LB (reads host/path/headers) --> Backend</pre>
+
+    <table class="diff-table">
+      <tr><th>Layer 4 thinks in</th><th>Layer 7 thinks in</th></tr>
+      <tr><td>Connections and packets</td><td>Requests and their content</td></tr>
+      <tr><td>Source/dest IP, port, sequence</td><td>Host, path, headers, cookies, method</td></tr>
+      <tr><td>Fast, cheap, low-level fairness</td><td>Rich, content-aware, slightly heavier</td></tr>
+      <tr><td>Fair at the connection level</td><td>Fair at the actual request level</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">One TCP connection carries 10,000 HTTP requests. A Layer 4 LB sent that connection to Server 1. Is the load still balanced fairly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No — and this is the core trap of Layer 4. It balances <b>connections</b>, not requests. If Client A opens one connection and fires 10,000 requests down it, all 10,000 can land on Server 1 alone while Servers 2 and 3 sit idle. The LB did exactly what it was designed to do; the "unfairness" is a structural property of the layer it operates at, not a bug.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">If Layer 4 has this blind spot, why would anyone still choose it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it's <b>cheaper, faster, and simpler</b> — it doesn't need to parse application protocols, terminate TLS, or hold any request-level state. For raw throughput, protocol-agnostic traffic (not just HTTP), or as a first line in front of an L7 layer, L4 is often exactly right. The choice isn't "L4 is worse" — it's "what am I actually trying to balance: connections or requests?"</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Can a system use both L4 and L7 together, or is it one or the other?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Both, layered — very common in practice. An L4 layer often sits at the very edge (fast, cheap, absorbs connection-level load and DDoS-style volume), and hands traffic to an L7 layer that does the smart, content-aware routing. Treating "L4 or L7" as a single platform-wide choice is usually the wrong framing; the real design question is <b>which layer owns which responsibility</b>.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Why does this "level" decision have to happen before anything else in the design?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it constrains every later decision — what the LB can see (headers? cookies? just IP/port?), what fairness even means, whether content-based routing is possible at all, and whether TLS termination is even a meaningful question. Picking an algorithm before picking a level is designing the interior of a house before deciding whether it has a foundation.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Traffic entry — the first availability problem</h2></div>
+    <p class="segment-note">Before any backend is ever chosen, the client has to reach a <em>live</em> load balancer endpoint. That's a distinct problem from backend load balancing — it's <b>load balancer availability itself</b>, and it's usually solved with a completely different toolset: DNS, Anycast, VIP, or ECMP.</p>
+    <pre class="sketch">Client -> DNS resolves service.com -> LB address -> one LB node accepts traffic
+
+Models:
+1. DNS-based load balancing   (coarse, TTL/caching-limited failover)
+2. Anycast IP                 (same IP announced from many locations, network routes to nearest)
+3. Virtual IP (VIP)           (floating IP moves to a healthy LB node)
+4. ECMP + multiple LB nodes   (router spreads flows across several LB nodes)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Why is "how traffic first enters the system" treated as a separate design problem from "how the LB picks a backend"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because they fail differently. Backend selection assumes a healthy LB is already receiving traffic. Traffic entry is about what happens when the <b>LB node itself</b> is unreachable or dead — a problem one layer earlier. If the entry point isn't highly available, the smartest backend-selection logic behind it never even gets a chance to run.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Why is DNS often called a "coarse" load balancer, and where does that coarseness bite?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">DNS can only hand out an IP; it has no idea which downstream server is actually healthy at request time. Worse, resolvers and clients <b>cache</b> the answer for the TTL, so if an LB node dies, clients keep trying its dead IP until the TTL expires — failover speed is bounded by caching behavior you don't fully control.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Why do VIP or Anycast models generally fail over faster and more transparently than DNS?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the failover happens at the <b>network/routing layer</b>, not in a client-visible, cacheable record. A VIP can move to a healthy node in seconds without the client's IP ever changing; Anycast routes to whichever healthy location is topologically nearest. Neither depends on a client honoring a TTL.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">If you had to pick one sentence to defend "traffic entry is the first availability problem" to a skeptical architect, what would it be?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">"An unreachable load balancer and an unreachable backend look identical to the customer — so the availability of the entry point deserves the same design rigor as the availability of the backend pool it protects."</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Backend discovery — who is the source of truth?</h2></div>
+    <p class="segment-note">A load balancer needs a live, accurate backend pool. The interesting question isn't "does it have a list" — it's <code>who owns that list, how fresh is it, and what happens when it's wrong?</code></p>
+    <pre class="sketch">Static config: easy, but stale the moment a server is added/removed
+Dynamic discovery: harder, but reflects reality
+
++------------------+  backend list   +----------------------+
+|  Load Balancer   | <-------------- |  registry / control  |
++------------------+                  +----------------------+
+                                       config file? service registry?
+                                       control plane? self-registration?</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">A backend appears in the registry but isn't actually ready to serve traffic yet (still warming up). Should the LB send it requests?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not by default. Registry membership answers "does this backend exist," not "is this backend ready right now." That's exactly why health checking has to sit <b>on top of</b> discovery, not be replaced by it — a discovered backend and a traffic-eligible backend are two different states.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">If the registry itself is stale — say it hasn't updated in 30 seconds — can the LB still make safe choices?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Only partially. It can keep routing to the backends it already knows about (assuming their health checks still pass), but it can't discover brand-new capacity or safely detect a backend that vanished without deregistering. This is why LB nodes are usually designed to <b>tolerate eventual consistency</b> rather than block on a perfectly fresh registry.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Why is self-registration by servers considered more "realistic" than static config, but also riskier?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It's realistic because capacity changes constantly in modern deployments (autoscaling, rolling deploys) and a human editing a config file can't keep up. It's riskier because a buggy or crashing server might <b>fail to deregister itself</b> on the way out, leaving a ghost entry the LB keeps trying to use until a health check catches it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Static config vs dynamic discovery — is this really an either/or choice for a mature platform?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Rarely. Many production systems start with static config for stability-critical or low-churn services and move to dynamic discovery where scale/churn justifies the added complexity. The senior question isn't "which one" — it's <b>"which services actually need dynamic discovery, and which ones are just adding operational complexity for no real benefit?"</b></div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Backend selection — what are we actually balancing?</h2></div>
+    <p class="segment-note">Picking "the next server" sounds simple. The deeper question is: what quantity are we trying to keep even — request count, active connections, latency, CPU, or in-flight work? Different answers produce different algorithms, and each algorithm is only fair under certain assumptions.</p>
+    <pre class="sketch">Round robin:            R1->S1  R2->S2  R3->S3  R4->S1  R5->S2
+Least connections:       S1=200  S2=50  S3=120  -> new request goes to S2
+Weighted (S1:5 S2:2 S3:1): S1 S1 S1 S1 S1 S2 S2 S3
+Hash-based (sticky-ish): hash(client_id) -> backend   (A->S2, B->S1, C->S2)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Why can round robin become unfair even though it's mathematically the most "even" distribution?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Round robin assumes every request costs roughly the same amount of work. In real systems, requests vary wildly — a light GET and a heavy report-generation POST get treated identically, so a server that happens to draw several heavy requests in a row can be overloaded while its round-robin "fair share" was technically respected.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Least-connections sounds strictly better than round robin. When does it actually mislead the LB?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">When connection count doesn't correlate with actual load — e.g. a server holding many idle, long-lived WebSocket connections looks "busy" by connection count while being nearly idle on CPU, so the LB avoids a server that actually has plenty of headroom.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Why can latency-aware routing become dangerous if it reacts too aggressively?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it can create <b>oscillation</b>: the LB sees Server A is momentarily fast, floods it with traffic, A slows down under the new load, the LB swings everything to Server B, B slows down too — a herd effect where the "smart" policy destabilizes the very thing it was trying to optimize. Some damping/randomness is usually needed to prevent this.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">What's the one-sentence senior framing for "which algorithm should we use"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The choice isn't about which algorithm is "best" in the abstract — it's about naming the resource that actually constrains your backends (CPU? connections? memory? external dependency slots?) and choosing the algorithm whose signal tracks that resource, while keeping enough randomness/damping to avoid instability.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Health checking — the real heart, and the part that lies</h2></div>
+    <p class="segment-note">Without health checks, an LB is blind. But the harder truth is: <b>health checks can lie</b> — a "200 OK" from <code>/health</code> and a real user request failing are two different questions, answered by two different code paths.</p>
+    <pre class="sketch">LB health checker
+ +--> S1 : /health -> 200 OK      (healthy)
+ +--> S2 : /health -> 500         (unhealthy, removed)
+ +--> S3 : timeout                (unhealthy, removed)
+
+Types:  1. TCP check (can a connection even open?)
+        2. HTTP check (does GET /health return 200?)
+        3. Deep check (app + DB + dependencies also OK?)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">A health endpoint returns 200 OK, but real user requests are still failing. How is that possible, and what does it mean for what "healthy" should measure?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Very possible — a shallow health check only proves the process is alive and the port is open, not that the actual request path (auth, DB, downstream dependency) works. "Healthy" needs a precise definition: process alive, port open, app responsive, dependencies working, and acceptable latency are five different claims, and a shallow check only proves the first two.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">If a deep health check includes a DB call, can the health check itself become a liability?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — a deep check that hits the DB on every poll, from every LB node, at whatever polling interval is configured, adds real load. Under DB stress, the health check can itself contribute to the very degradation it's supposed to detect, or worse, start failing for reasons unrelated to whether the app can actually serve traffic.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Why does "how many failed checks before removal, how many successes before re-adding" matter more than it sounds like it should?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because these two thresholds control <b>flapping</b>. Too sensitive (remove after 1 failure, re-add after 1 success) and a backend can bounce in and out of the pool on transient blips, causing routing instability. Too lax and a genuinely broken backend keeps receiving traffic for too long. The right values depend on how expensive a false removal is versus how expensive a missed detection is.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Should health check depth be uniform across all services, or does it vary?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It should vary deliberately. A stateless, low-risk service might be fine with a shallow HTTP check. A payment or settlement path, where "looks alive but can't actually complete a transaction" is expensive to discover late, usually justifies a deeper (but rate-limited and cached) check — the depth should track the cost of being wrong, not be a platform-wide default nobody revisited.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Connection handling — the LB is managing connections, not just routing requests</h2></div>
+    <p class="segment-note">An LB is rarely "stateless plumbing." It usually terminates the client's connection and opens its own to the backend — which raises questions about TLS, connection reuse, and, at HTTP/2 and gRPC, whether balancing should happen per <em>connection</em> or per <em>stream</em>.</p>
+    <pre class="sketch">Proxy model:      Client <--conn1--> LB <--conn2--> Backend
+Pass-through:      LB forwards at a lower layer, less application awareness
+
+HTTP/2 / gRPC: one connection can carry MANY concurrent streams —
+balancing per-connection can silently become "balancing per multiplexed bundle of requests"</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">Should the LB terminate the client's TCP/TLS connection, or pass traffic through unmodified? Why does this matter architecturally?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Terminating gives the LB full visibility (it can inspect HTTP, do TLS offload, inject headers) but makes the LB a real endpoint in the security and failure path. Pass-through keeps the LB simpler and preserves end-to-end encryption to the backend, but sacrifices content-based routing entirely. This is one of the largest architectural forks in the whole design — it decides whether the LB is "infrastructure" or effectively a proxy/gateway.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">If the LB terminates TLS, where does the trust boundary move to?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It moves from "client to backend" to "client to LB" plus "LB to backend" as two separately-trusted hops. Anything the backend now believes about the client (identity, IP, headers) is only as trustworthy as the LB's own security — the backend has effectively delegated part of its trust decision to the load balancer.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">One client keeps one long-lived connection open. Does that unfairly pin it to one backend forever?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It can — if the LB reuses backend connections and never re-evaluates placement for the life of that connection, a single long-lived client (a persistent WebSocket, a streaming session) becomes structurally stuck on one backend regardless of that backend's later load, unless the design explicitly accounts for connection lifetime in its fairness model.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">At HTTP/2 or gRPC, why is "balance per connection or per stream" described as a very important modern question?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because multiplexing breaks the old assumption that one connection ≈ one unit of work. One HTTP/2 connection can carry hundreds of concurrent streams; balancing "per connection" can silently recreate the exact same connection-vs-request unfairness problem seen with Layer 4 and a single heavy TCP session — just one abstraction layer higher.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>L7 content-based routing — richer power, richer risk</h2></div>
+    <p class="segment-note">Once the LB understands HTTP, it can route on host, path, headers, and method — turning one edge entry point into a traffic router across many service pools. That power comes with a real architectural boundary question.</p>
+    <pre class="sketch">Host: api.shop.com  Path: /checkout       -> Checkout service pool
+Host: static.shop.com  Path: /images/*     -> Static service pool
+
+if host=api.shop.com and path starts /users  -> user service
+if host=api.shop.com and path starts /orders -> order service</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">A bad routing rule is pushed. What's the actual blast radius compared to a bad backend-selection weight?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Much larger. A bad weight might overload one backend pool. A bad routing rule can <b>misroute or blackhole traffic entirely</b> — e.g. sending <code>/orders</code> traffic to the user-service pool, which will simply 404 or error every request. Routing rules need the same change-control discipline as code deploys, not casual config edits.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Where's the line between "the LB routes traffic" and "the LB has become an API gateway"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The line is whether it starts doing things beyond routing — rewriting headers/URLs, enforcing auth, applying business-specific policy, transforming payloads. Once it does, it's no longer "just infrastructure"; it's taken on gateway responsibilities, which changes who owns it, how it's tested, and how carefully its changes need to be reviewed.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">Why might a platform deliberately choose to keep the LB "dumb" (routing only) even though it's technically capable of more?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because concentrating more logic into the LB concentrates more risk into a single, shared, hard-to-test-in-isolation component that every request passes through. Keeping the LB narrowly scoped to routing, and pushing auth/transformation to a purpose-built gateway layer, is often a deliberate blast-radius decision, not a missed opportunity.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Session stickiness — useful, but it's fairness you're trading away</h2></div>
+    <p class="segment-note">Stickiness sends the same user to the same backend repeatedly — good for local cache, in-memory session, or warm context. But every sticky rule is a small, deliberate sacrifice of load fairness, and that trade needs to be scoped, not assumed.</p>
+    <pre class="sketch">User A --> S2
+User A --> S2 (again)
+User A --> S2 (again)
+
+Methods: cookie-based affinity | client-IP hash | session-id hash | custom key hash
+hash(cookie=session123) -> S3</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Why should stickiness usually be optional and route-specific rather than a platform-wide default?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because different routes need different things — a stateless read API gains nothing from stickiness and only inherits its downside (hotspot risk), while a route backed by in-memory session state genuinely needs it. Applying it everywhere "just in case" quietly degrades fairness platform-wide for no benefit on most of that traffic.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">A "hot" user with unusually heavy traffic is stuck on one backend by stickiness. What happens, and whose problem is it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">That single backend absorbs a disproportionate share of that user's load while siblings stay comparatively idle — a self-inflicted hotspot. It's a joint problem: the LB config chose stickiness, but the backend design is what made losing that fairness expensive (i.e., it assumed local state that made stickiness necessary in the first place).</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">The sticky backend for a user dies. What must happen for this to be handled safely?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The LB must remap the user to a healthy backend (stickiness can never override health), and the application layer must be able to <b>rebuild or recover the lost local state</b> — cache warm-up, session reload, reconnect logic. If the app assumed stickiness was permanent and never built a recovery path, this becomes a hard outage instead of a brief blip.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Failure handling — where the LB stops being a splitter and becomes a resilience component</h2></div>
+    <p class="segment-note">Failures can happen at six different points in the path — client-to-LB, the LB node itself, LB-to-backend, the backend app, a backend dependency, or the control plane. Each demands a different answer, and "just retry" is not automatically the right one.</p>
+    <pre class="sketch">Case 1 — backend dies suddenly:  LB thought S2 healthy, sends request, S2 crashes -> request fails. Retry elsewhere?
+Case 2 — backend is slow, not dead:  S2 responds in 15s, health check still says "alive." Keep sending traffic?
+Case 3 — LB node itself dies:  active connections on that node — what happens to them?
+Case 4 — partial overload:  S1 CPU 95%, S2 40%, S3 35% — react before S1 fully fails, or wait?</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Why is "just retry on another backend" not automatically safe?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a retry re-sends a request that may have <b>already partially executed</b> on the failed backend. For a GET, that's usually harmless. For a POST — payment, order placement, redemption — a blind retry without idempotency guarantees can create a duplicate. Retry safety is a property of the request semantics, not a universal LB feature to just "turn on."</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">A backend is slow (15s) but its health check still says "alive." Should the LB keep sending it traffic?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This is exactly why health alone is insufficient — a good LB also watches <b>performance signals</b> (latency, error rate) alongside binary health, and should gradually reduce traffic to a slow-but-technically-alive backend rather than treating "healthy" as a single all-or-nothing gate.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">An LB node itself crashes. What happens to the active connections it was holding?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Those connections are lost unless the client or protocol can reconnect and the new LB node (or entry mechanism) picks it back up cleanly — which is exactly why traffic-entry availability (segment 2) and failure handling aren't separate concerns; an LB node failure is a failure at both layers simultaneously.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">S1 is at 95% CPU but hasn't failed yet. Should the LB react now, or wait for an actual failure?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The stronger design reacts before full failure — reducing traffic share to S1 as its load signal rises is cheaper than waiting for it to fail outright and then recovering. Waiting for hard failure treats the LB as purely reactive; watching leading indicators makes it preventive.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>Draining, scaling the LB itself, and overload protection</h2></div>
+    <p class="segment-note">Three problems that all show up during real operations: removing a server without dropping active work, scaling the LB layer without turning it into a bottleneck, and protecting the backend when incoming demand simply exceeds capacity.</p>
+    <pre class="sketch">Draining:  ACTIVE -> DRAINING (no new traffic, old traffic finishes) -> REMOVED
+
+Scaling the LB:
+Clients -> [ LB1 LB2 LB3 LB4 ] -> Backend Service Pool
+LB nodes stay mostly independent, pull shared config from a control plane,
+tolerate small eventual inconsistency rather than coordinate on every request.
+
+Overload protection:
+Incoming = 100k rps, backend safe capacity = 60k rps
+LB must not blindly forward all 100k -> queue briefly / shed load / rate limit / return 503</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">Why is graceful draining ("no new traffic, let old traffic finish") a deployment-safety feature, not just a nice-to-have?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Without it, removing a server for a deploy means killing in-flight requests mid-transaction — for something like an order or allotment write, that can leave partial state. Draining converts a hard cutoff into a controlled wind-down, which is often the difference between a clean deploy and a data-consistency incident.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">Why should LB nodes avoid coordinating with each other on every single request as they scale out?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because tight coordination adds latency to the hot path and turns the LB layer itself into a bottleneck and a single point of contention — the exact thing it exists to prevent for the backend. It's usually better for LB nodes to make slightly different routing decisions for a short window (tolerating small inconsistency) than to force synchronized agreement on every request.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q37</span><span class="q-text">If backend capacity is 60k rps and traffic is 100k rps, why is "distribute it evenly across backends" not a real solution?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because even perfectly even distribution still sends 40k rps more than the pool can safely absorb — fairness doesn't create capacity. The only real answers are to shed/queue/rate-limit some of the demand, or add capacity; balancing an impossible total more evenly just spreads the failure instead of preventing it.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q38</span><span class="q-text">Why does overload protection sometimes matter more than smart backend selection?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because a perfectly balanced overload still crashes the whole pool — evenly distributing 100k rps across backends built for 60k just makes every backend fail together instead of one failing first. Detecting saturation early (queue depth, latency, error rate) and shedding load in a controlled way protects the system as a whole, which a purely "fair" algorithm doesn't guarantee on its own.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 11 -->
+  <section class="segment" id="s11" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 10</span><h2>Observability, and rethinking "healthy vs unhealthy" as real states</h2></div>
+    <p class="segment-note">A binary healthy/unhealthy view is often too simplistic. And without observability, an LB is a black box — health status alone can hide real performance degradation.</p>
+    <pre class="sketch">HEALTHY -> (problem detected) -> DEGRADED -> (too many failures) -> UNHEALTHY -> (recovers consistently) -> HEALTHY
+Add draining:  HEALTHY -> DRAINING -> REMOVED
+
+Key metrics: selection counts | error counts | tail latency (p95/p99) |
+             queue depth | active streams | retry counts</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q39</span><span class="q-text">Why is a DEGRADED state more useful than a strict binary healthy/unhealthy model?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A backend that's "still working, but with higher latency or a partial dependency failure" is a real, common state that binary health can't express — it forces a false choice between full traffic and zero traffic. DEGRADED lets the LB send it <b>reduced</b> traffic, which is both safer and gives a live signal to watch for recovery, almost like an automatic canary.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q40</span><span class="q-text">Can "health status alone" hide a real performance degradation? How?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Yes — a backend can be technically "healthy" (process up, port open, even 200 on <code>/health</code>) while its p95 latency has quietly tripled. Health checks answer "is it alive," not "is it performing acceptably" — that gap is exactly why per-backend latency histograms and tail-latency metrics matter as much as the pass/fail health signal.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q41</span><span class="q-text">Of the listed metrics — selection counts, error counts, tail latency, queue depth, active streams, retry counts — which one most often gets skipped, and why does that matter?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Retry counts is the common blind spot. A rising retry rate is often the earliest signal that something's degrading — before error rate or latency alarms even fire — because retries are the LB quietly compensating for failures the dashboard hasn't flagged yet. Skipping it means finding out about a problem only after the compensation stops working.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 12 -->
+  <section class="segment" id="s12" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 11</span><h2>Security and the trust boundary</h2></div>
+    <p class="segment-note">A real LB often sits at the exact seam between the public internet and the private backend network — which means every decision it makes about what to trust and forward becomes a decision the entire backend inherits.</p>
+    <pre class="sketch">Internet -> Load Balancer -> private backend network
+
+LB may do: TLS termination | header injection (client IP, identity) |
+           WAF integration | auth gateway integration</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q42</span><span class="q-text">The LB injects the client's real IP into a header for the backend to use. What has to be true for the backend to trust that header safely?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The backend must be reachable <b>only</b> through the LB — if a client (or another internal service) can reach the backend directly and set that same header itself, the header becomes spoofable and the backend is trusting an unverified claim. The header is only trustworthy if the network topology actually enforces the LB as the sole path in.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q43</span><span class="q-text">Why does "how much the LB does" (WAF, auth, header rewriting) become a security architecture decision, not just a convenience one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because every responsibility the LB takes on expands the set of things the entire platform is trusting a single shared component to get right. An auth bug in the LB now affects every service behind it at once — concentrating trust logic in one place is powerful, but it also concentrates the blast radius of getting it wrong.</div></div></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q44</span><span class="q-text">What's the real decision hiding inside "should the LB stay focused on transport/routing, or take on security-boundary responsibilities"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It's really asking: <b>who is accountable for the trust boundary</b> — a dedicated, deliberately-designed security/gateway layer, or an LB that accumulated security responsibilities incrementally because it was "already there"? The second path is common and usually unintentional, which is exactly why it deserves a deliberate review rather than being assumed.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 13 -->
+  <section class="segment" id="s13" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 12</span><h2>Our deployment — Wealth / Demat Platform load-balancing footprint</h2></div>
+    <p class="segment-note">The shape of load balancing behind mutual fund orders, IPO allotment, NSDL demat sync, PolicyBazaar insurance journeys, and LAMF — the numbers to have ready when asked "have you actually thought about this in production?"</p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Edge layer</div><div class="value">L4 <span>+ L7 layered</span></div></div>
+      <div class="stat-card"><div class="label">Services behind LB</div><div class="value">80+ <span>microservices</span></div></div>
+      <div class="stat-card"><div class="label">Health check depth</div><div class="value">Mixed <span>shallow + deep</span></div></div>
+      <div class="stat-card"><div class="label">Stickiness</div><div class="value">Selective <span>route-specific</span></div></div>
+      <div class="stat-card"><div class="label">TLS termination</div><div class="value">At LB <span>edge boundary</span></div></div>
+      <div class="stat-card"><div class="label">Overload posture</div><div class="value">Rate-limit <span>+ 503 shed</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Flow</th><th>Path / dependency</th><th>LB-relevant risk</th><th>Design lever</th></tr>
+      <tr><td>MF redemption request</td><td>gateway → order-svc → NAV-svc → payment → ledger</td><td>Retry after timeout could double-submit</td><td>Idempotency key before retry policy</td></tr>
+      <tr><td>IPO allotment sync</td><td>mofsl-webhook-adapter → allotment-svc</td><td>Heavy webhook burst on allotment day</td><td>Overload protection / queueing at edge</td></tr>
+      <tr><td>Instant demat (NSDL)</td><td>onboarding-svc → nsdl-adapter → kyc-svc</td><td>NSDL slow-but-alive not caught by shallow check</td><td>Deep health + latency-aware routing</td></tr>
+      <tr><td>Insurance journey</td><td>policy-gateway → policybazaar-adapter</td><td>Trust boundary at 3rd-party adapter</td><td>Header verification, WAF at edge</td></tr>
+      <tr><td>LAMF (loan against MF)</td><td>loan-svc → valuation-svc → lien-marking-svc</td><td>Session state pinning during valuation</td><td>Scoped stickiness, safe rebalance on failure</td></tr>
+    </table>
+
+    <h3 style="font-family:'Fraunces',serif;font-size:1.1rem;margin:26px 0 12px;color:var(--text);">Real issues worth designing for deliberately</h3>
+    <div class="error-card"><div class="err-name">One institutional client's single connection hot-spots a backend</div><div class="err-fix">Root cause: L4 balances connections, not requests. <b>Fix:</b> move heavy, request-bursty clients to an L7-aware pool, or cap requests per connection.</div></div>
+    <div class="error-card"><div class="err-name">NSDL adapter shows "healthy" but real calls are timing out</div><div class="err-fix">Root cause: shallow TCP/HTTP health check, not a deep dependency check. <b>Fix:</b> combine health status with live latency/error-rate signal, not health alone.</div></div>
+    <div class="error-card"><div class="err-name">Deploy drops in-flight allotment writes</div><div class="err-fix">Root cause: no draining state before removal. <b>Fix:</b> ACTIVE → DRAINING → REMOVED lifecycle enforced in the deploy pipeline, not left to chance.</div></div>
+    <div class="error-card"><div class="err-name">Retry on POST creates duplicate redemption</div><div class="err-fix">Root cause: retry policy applied uniformly regardless of request semantics. <b>Fix:</b> idempotency keys mandatory before retry is ever enabled on a write path.</div></div>
+    <div class="error-card"><div class="err-name">Allotment-day burst exceeds backend safe capacity</div><div class="err-fix">Root cause: no explicit overload posture, LB just forwards everything. <b>Fix:</b> defined safe-capacity ceiling per pool with queue/shed/503 behavior above it.</div></div>
+  </section>
+
+  <!-- SEGMENT 14 -->
+  <section class="segment" id="s14" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 13</span><h2>Rapid fire — say the "why" out loud, then move on</h2></div>
+    <p class="segment-note">No hidden answers here — if you can answer each in one breath, you're ready. If you stall on one, that's your revision signal.</p>
+    <ol class="rapid-list">
+      <li>Why does Layer 4 fairness break down when one connection carries thousands of requests?</li>
+      <li>Why is traffic-entry availability a separate design problem from backend load balancing?</li>
+      <li>Why does registry membership not automatically mean "ready for traffic"?</li>
+      <li>Why can least-connections mislead the LB for long-lived, low-CPU connections?</li>
+      <li>Why can latency-aware routing cause oscillation instead of preventing it?</li>
+      <li>Why can a health check return 200 while real requests still fail?</li>
+      <li>Why is "should the LB terminate TLS" one of the biggest architectural forks in the whole design?</li>
+      <li>Why does balancing per HTTP/2 connection risk recreating the L4 connection-fairness problem?</li>
+      <li>Why should stickiness be optional and route-specific, not global?</li>
+      <li>Why is retry unsafe by default on a POST/payment path?</li>
+      <li>Why doesn't perfectly even distribution solve an overload problem?</li>
+      <li>Why is a DEGRADED state more useful than a binary healthy/unhealthy model?</li>
+      <li>Why does trusting a client-IP header from the LB require a network-level guarantee, not just convention?</li>
+    </ol>
+  </section>
+
+  <!-- SEGMENT 15 -->
+  <section class="segment" id="s15" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">offset 14</span><h2>Leadership perspectives — same incident, four minds</h2></div>
+    <p class="segment-note">Seven situations. Each one is read differently by a <b style="color:#2E8B82;">developer</b>, an <b style="color:#7A63B8;">architect</b>, a <b style="color:#C1543A;">CTO</b>, and a <b style="color:#A9861E;">director</b>. Click to reveal how the same incident produces four different decisions — and the one "invisible question" that separates leading the system from just fixing it.</p>
+
+    <!-- L1 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">During the MF redemption cutoff window, one backend is pinned at 95% CPU while two siblings sit near idle. Cookie-based stickiness is routing a small set of high-frequency users to that one server.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The stickiness rule was added months earlier for a caching benefit that a later refactor made unnecessary — nobody removed the rule once its original reason disappeared. It was quietly creating a hotspot on the platform's single most time-sensitive daily window.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds capacity to that one backend to absorb the pinned load — treats the symptom, and the same class of user stays pinned to whichever server eventually becomes "the sticky one."</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Verifies whether the original caching reason for stickiness still holds; if the refactor removed the need, the fix is removing the rule, not tuning around it.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Notes there's no process that revisits stickiness rules after the systems they were designed around change — configuration decisions outlive their justification silently.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how many other routing rules across the 80+ microservices were added for a reason that no longer applies, and whether any audit trail even exists to check.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we review why a routing rule exists before we tune around its symptoms, or does every hotspot get treated as a capacity problem instead of a stale-decision problem?</div>
+        <div class="learning"><b>Learning:</b> Stickiness is a fairness trade made for a specific reason. When the reason disappears, the trade should be re-evaluated — but nothing forces that re-evaluation automatically, which is exactly how "temporary" config becomes permanent risk.</div>
+      </div></div></div>
+
+    <!-- L2 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">The NSDL adapter's health check is a shallow TCP probe. NSDL's own API degrades to 8-second responses for two hours — the adapter shows "healthy" the entire time, and demat onboarding failures spike.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Support escalated a wave of onboarding complaints before engineering even looked at the LB dashboard — the health panel showed every backend green the whole time, because "green" only ever meant "port is open."</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds a synthetic call to NSDL inside the health check — closes this specific gap, but risks the health check itself becoming an extra load source on NSDL.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Separates "is the adapter alive" (shallow, cheap, frequent) from "is the adapter's real dependency performing" (latency/error-rate signal fed from actual traffic, not a synthetic probe) — avoiding extra load on NSDL while still catching degradation.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes every external-vendor adapter on the platform (NSDL, MOFSL, PolicyBazaar) was built with the same shallow-check assumption — this isn't a one-adapter bug, it's a pattern across every third-party integration.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether "healthy" has ever been explicitly defined per integration, or whether every team quietly assumed "port open" was good enough until an incident proved otherwise.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> For every backend on our health dashboard, do we actually know what "healthy" is measuring — or are we trusting a green light that only ever proved the process didn't crash?</div>
+        <div class="learning"><b>Learning:</b> A health check that only proves aliveness gives false confidence precisely when it matters most — during a slow degradation, not a clean crash. "Healthy" needs a definition that matches what a real user request actually depends on.</div>
+      </div></div></div>
+
+    <!-- L3 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L3</span><span class="q-text">A deploy removes a backend from the pool mid-traffic. Several in-flight IPO allotment writes are cut off mid-transaction, leaving partial records that need manual reconciliation.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The deployment tooling removed the pod the instant the new version was ready, with no drain window — a pattern that had worked fine for stateless read endpoints and was never revisited for write-heavy allotment flows.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Manually reconciles the affected allotment records — fixes this incident, not the next deploy.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Introduces an explicit ACTIVE → DRAINING → REMOVED state into the deploy pipeline, so no backend is pulled while it still has in-flight work.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out the deploy tooling was copied from a stateless-service template and never adapted for write-heavy financial flows — a platform-standard gap, not a one-team mistake.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks which other write-heavy flows (redemption, lien-marking, settlement) share the same deploy template and are exposed to the identical risk right now.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Does every write-critical flow have draining enforced by the pipeline, or does it depend on whether that particular team remembered to configure it?</div>
+        <div class="learning"><b>Learning:</b> Draining isn't a load-balancer feature you either "have" or "don't" — it's a guarantee that has to be enforced per flow, deliberately, especially where in-flight work has real consequences if cut short.</div>
+      </div></div></div>
+
+    <!-- L4 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L4</span><span class="q-text">One large institutional client integrates via a single persistent TCP connection and fires thousands of order requests through it. The Layer 4 LB sent that whole connection to one backend — which is now visibly overloaded while three siblings idle.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">On paper, the LB's connection-level distribution was perfectly fair — every connection got exactly the same treatment. In practice, one connection carried orders of magnitude more work than the others, and fairness at the wrong unit of measurement produced a real hotspot.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds capacity to the overloaded backend — buys headroom, doesn't fix the structural mismatch for the next large client.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Moves high-volume institutional integrations to an L7-aware pool that can balance per request, or caps requests-per-connection to force natural redistribution.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Recognizes this as a foreseeable consequence of choosing L4 for a client class whose traffic pattern was known in advance — a design review gap, not a surprise failure.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks whether institutional/high-volume clients should have a documented integration pattern (connection limits, pooled connections) instead of being onboarded the same way as a retail app.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Did we choose Layer 4 because it was the right fit for this traffic shape, or because it's what we already had — and did anyone check that assumption against how our largest clients actually connect?</div>
+        <div class="learning"><b>Learning:</b> "Fair" only means something once you've named the unit being balanced. A perfectly fair distribution of connections can still be a deeply unfair distribution of work — the two are only the same thing under an assumption (uniform request volume per connection) that heavy clients routinely break.</div>
+      </div></div></div>
+
+    <!-- L5 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L5</span><span class="q-text">On IPO allotment day, incoming traffic hits 100k rps against a backend pool safely rated for 60k rps. The LB forwards everything it receives — the pool starts failing under load within minutes.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">Every prior load test had used realistic-but-not-peak traffic, so the LB had never actually been asked to make a shed-or-forward decision before — it simply didn't have that behavior built in, because nobody had needed it yet.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Scales the backend pool up reactively during the incident — buys time this once, doesn't change what happens next allotment day if demand grows again.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Defines an explicit safe-capacity ceiling per pool and adds queuing/rate-limiting/503 shedding above it, so the LB actively protects the backend instead of passively forwarding demand.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Points out that overload protection was treated as "something we'll add later" — a known gap that was accepted as tolerable risk until the first day that actually tested it.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks which other known-but-deprioritized gaps are quietly waiting for their own "first day that tests them," and whether allotment-day-scale events should trigger a pre-emptive capacity and shedding review every time.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> Do we know, in advance, the exact number where our platform stops being "under load" and starts being "in overload" — and does the LB actually act on that number, or just report it after the fact?</div>
+        <div class="learning"><b>Learning:</b> Perfectly balanced overload is still overload. Fair distribution has no answer to "there simply isn't enough capacity for this demand" — only explicit shedding, queuing, or rate-limiting does, and it has to be designed in before the peak day, not during it.</div>
+      </div></div></div>
+
+    <!-- L6 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L6</span><span class="q-text">The LB terminates TLS and injects the client's real IP into a header. A downstream service uses that header for fraud scoring — but a security review finds the backend network also allows direct access, bypassing the LB entirely.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The header was designed correctly. The network wasn't. Anyone who could reach the backend directly — a misconfigured internal service, a compromised host on the same subnet — could set that same header to any value they wanted, and the fraud-scoring logic would trust it completely.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Adds validation logic in the backend to sanity-check the header — a partial mitigation that doesn't remove the underlying direct-access path.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Closes the direct-access path at the network layer so the LB is the only route in — the header is only as trustworthy as the topology that enforces it.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Flags this as a trust-boundary design gap, not a header bug — the LB was assumed to be the sole entry point, but that assumption was never actually enforced or verified.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how many other backend services carry the same unverified assumption — "the LB is the only way in" — without network policy actually guaranteeing it.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question:</b> When we say the LB is our trust boundary, is that a network guarantee we've verified, or a convention we're hoping nobody breaks?</div>
+        <div class="learning"><b>Learning:</b> A header injected by the LB is only trustworthy if the LB is provably the only path to the backend. Trust boundaries described in an architecture diagram and trust boundaries enforced by network policy are two different things, and only the second one actually protects anything.</div>
+      </div></div></div>
+
+    <!-- L7 -->
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L7</span><span class="q-text">Retry-on-failure is enabled platform-wide "for resilience." A backend times out mid-redemption after the write actually succeeded; the LB retries on another backend, which processes the redemption a second time.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="situation-ext">The retry setting had been enabled years earlier for a handful of read-only endpoints and was never scoped down as new write-heavy services were added behind the same LB — "resilience by default" quietly became "duplicate risk by default" for every POST added since.</div>
+        <div class="role-block" style="--role:#2E8B82;"><span class="role-tag">Developer</span><p>Disables retry for the redemption endpoint specifically — fixes this one path, leaves every other write endpoint on the same risky default.</p></div>
+        <div class="role-block" style="--role:#7A63B8;"><span class="role-tag">Architect</span><p>Makes retry-safety an explicit, per-endpoint declaration tied to idempotency support — retry is opt-in for writes, not opt-out, reversing the default that caused this.</p></div>
+        <div class="role-block" style="--role:#C1543A;"><span class="role-tag">CTO</span><p>Realizes retry policy was never reviewed as new endpoints were added to the platform — a governance gap where a resilience feature and a correctness risk were never distinguished from each other.</p></div>
+        <div class="role-block" style="--role:#A9861E;"><span class="role-tag">Director</span><p>Asks how many customer-facing financial write paths across the 80+ microservices currently inherit this same platform-wide retry default without anyone having explicitly reviewed it for that path.</p></div>
+        <div class="invisible-q"><b>The invisible leadership question — the one that separates leaders:</b> Is "retry on failure" a resilience decision we made deliberately for each write path, or a convenience default from years ago that nobody has revisited since — and would we actually know the difference if a regulator asked us to prove it?</div>
+        <div class="learning"><b>Learning:</b> Retry is not free resilience — it's a correctness trade that's only safe once idempotency is guaranteed. A default that was safe for the reads it was designed for silently becomes dangerous the moment it's inherited by writes nobody re-evaluated it against.</div>
+      </div></div></div>
+
+    <p class="segment-note" style="margin-top:20px;"><b style="color:#4A5FBF;">The pattern underneath all seven:</b> developers ask "how do I fix this specific request/backend," architects ask "what structural design choice caused this and what's the durable fix," CTOs ask "what governance or platform-standard gap let this happen across more than one place," and directors ask "what's the business or compliance exposure, and who owns the decision to close it." A leadership role means holding all four at once — and knowing which one should drive the call, each time.</p>
+  </section>
+
+  <footer>
+    // final compression: pick the level (L4 or L7) before the algorithm → secure traffic entry as its own availability
+    problem → treat backend discovery and health as two different questions (exists vs. ready) → choose a selection policy
+    that tracks the resource that actually constrains you → manage connections deliberately (terminate or pass through,
+    per-connection or per-stream) → spend stickiness sparingly, since it's fairness you're trading away → make retry a
+    conscious idempotency decision, not a default → drain before removing, shed before collapsing → and remember the LB
+    is a trust boundary whether or not anyone designed it to be one.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
