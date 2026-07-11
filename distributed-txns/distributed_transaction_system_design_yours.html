@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design Your Own: Distributed Transaction Coordinator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .build-first{color:#E7E3D8;}
+  body.dark-theme .api-meta{color:#A9A69B;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C9871F;} .ledger-strip span:nth-child(2){background:#C1543A;}
+  .ledger-strip span:nth-child(3){background:#7A63B8;} .ledger-strip span:nth-child(4){background:#3480B0;}
+  .ledger-strip span:nth-child(5){background:#6B9A44;} .ledger-strip span:nth-child(6){background:#C1547A;}
+  .ledger-strip span:nth-child(7){background:#B9971F;} .ledger-strip span:nth-child(8){background:#279090;}
+  .ledger-strip span:nth-child(9){background:#9A62D6;} .ledger-strip span:nth-child(10){background:#4A5FBF;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.4rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:70ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.7rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 18px;max-width:72ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  /* BUILD-IT-YOURSELF-FIRST CALLOUT */
+  .build-first{
+    background:var(--panel-2);border:1.5px dashed var(--seg,#C9871F);
+    border-radius:6px;padding:13px 16px;margin:0 0 20px;
+    font-size:.92rem;color:var(--text);
+  }
+  .build-first .bf-tag{
+    font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:.68rem;
+    color:var(--seg,#C9871F);text-transform:uppercase;letter-spacing:.5px;
+    display:block;margin-bottom:5px;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .why-line{
+    margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);
+    font-size:.9rem;color:#3A3934;
+  }
+  .why-line b{color:#2E8B62;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .why-line{color:#C7C2B4;border-color:var(--border);}
+  body.dark-theme .why-line b{color:#5FC28E;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:34%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:22px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.8rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* API CARD */
+  .api-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#3480B0);
+  }
+  .api-method{
+    font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:.68rem;
+    padding:2px 8px;border-radius:3px;color:#fff;margin-right:9px;letter-spacing:.3px;
+  }
+  .api-method.get{background:#3480B0;} .api-method.post{background:#6B9A44;}
+  .api-method.put{background:#C9871F;} .api-method.delete{background:#C1543A;}
+  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.88rem;color:var(--text);font-weight:600;}
+  .api-purpose{margin-top:6px;font-size:.9rem;color:#3A3934;}
+  body.dark-theme .api-purpose{color:#C7C2B4;}
+  .api-meta{margin-top:9px;font-size:.82rem;color:var(--muted);}
+  .api-meta div{margin-bottom:3px;}
+  .api-meta b{color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:.72rem;text-transform:uppercase;margin-right:6px;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.75rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Design Your Own: <em>Distributed Transaction Coordinator</em></h1>
+    <p class="sub">This is not an explainer — you already have that. This is a build session. Every segment gives you a callout telling you exactly what to draw, decide, or write in pseudocode <b>before</b> you're allowed to reveal. The reveal is a reference design to check your own against, not "the" answer.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>Sequence: requirements → decision → components → APIs → data → internals → subsystem → failure → scale → assembly</span>
+      <span>Format: build → commit → reveal → compare</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 FR / NFR</a>
+    <a href="#s2" style="color:#C1543A;">02 Core Decision</a>
+    <a href="#s3" style="color:#7A63B8;">03 Components</a>
+    <a href="#s4" style="color:#3480B0;">04 APIs</a>
+    <a href="#s5" style="color:#6B9A44;">05 Data & Sizing</a>
+    <a href="#s6" style="color:#C1547A;">06 Core Algorithm</a>
+    <a href="#s7" style="color:#B9971F;">07 Reconciliation Loop</a>
+    <a href="#s8" style="color:#279090;">08 Failure & State Machine</a>
+    <a href="#s9" style="color:#9A62D6;">09 Scaling It</a>
+    <a href="#s10" style="color:#4A5FBF;">10 Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1 -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">01</span><h2>Functional & non-functional requirements</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Write your own 5–7 FR bullets and NFR targets (throughput, p99 latency, consistency/availability trade-off) for a coordinator sitting in front of MF redemption, IPO allotment, NSDL demat, PolicyBazaar, and LAMF. Then write one sentence: what are you explicitly scoping OUT, and why?</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">Reveal: a reference FR list — compare shape, not just count.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        1. Start a named saga instance from a caller-supplied definition + business payload.<br>
+        2. Execute steps in a defined order, invoking each participant service's API.<br>
+        3. Track per-step and overall saga state durably, queryable at any time.<br>
+        4. On step failure, run compensations in reverse order for all completed steps.<br>
+        5. Detect and resolve ambiguous outcomes (timeouts) via reconciliation, not blind retry.<br>
+        6. Guarantee idempotent step execution and idempotent compensation under retry.<br>
+        7. Expose saga status to operators/support without requiring log spelunking.
+        <div class="why-line"><b>Why this shape:</b> notice requirement 5 and 6 aren't "nice to have" — they exist because segment-1 FRs for a coordinator have to encode failure handling as a first-class function, not an afterthought. A coordinator whose FR list reads like a CRUD service (create, read, update, delete saga) has already missed the point of what makes this system hard.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">Reveal: NFR targets — and why the numbers should differ per flow, not be one blanket SLA.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Step latency (p99)</div><div class="value">&lt;800ms <span>excl. external calls</span></div></div>
+          <div class="stat-card"><div class="label">Saga start throughput</div><div class="value">2k/s <span>peak, order flow</span></div></div>
+          <div class="stat-card"><div class="label">Coordinator availability</div><div class="value">99.95% <span>control plane</span></div></div>
+          <div class="stat-card"><div class="label">Consistency</div><div class="value">Strong <span>state; eventual effects</span></div></div>
+        </div>
+        <div class="why-line"><b>Why differ per flow:</b> IPO allotment tolerates minutes of latency per step (it's batch-adjacent); LAMF disbursal cannot tolerate an ambiguous intermediate state for long because money is moving. A single blanket NFR either over-engineers the cheap flows or under-protects the expensive ones — NFRs belong to the saga <em>type</em>, not the coordinator as a monolith.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Reveal: what to explicitly scope OUT, and why that's a design decision, not laziness.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Scope OUT: the coordinator does <b>not</b> guarantee exactly-once delivery to participants, does <b>not</b> own participant-side business logic, and does <b>not</b> attempt cross-saga transactions (one saga can't atomically depend on another's outcome).
+        <div class="why-line"><b>Why it matters:</b> every one of those is a tempting scope-creep target — "what if we just also handled cross-saga dependencies" is exactly how coordinators turn into unmaintainable god-services. Scoping out exactly-once specifically forces every participant team to own their own idempotency, which is the correct place for that responsibility to live.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 -->
+  <section class="segment" id="s2" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">02</span><h2>Scope & the core design decision</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Commit, in writing: orchestration or choreography? And: how do steps fail — at-least-once retry with compensation, or true 2PC? Justify each against your own segment-1 numbers, not in the abstract.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Reveal: orchestration vs. choreography for this specific coordinator.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Orchestration.</b> The coordinator you're building is, by definition, the central place that owns workflow sequencing — building it as a choreography engine is a contradiction, since choreography's whole premise is <em>no</em> central owner.
+        <div class="why-line"><b>Why:</b> your 99.95% availability and queryable-state FRs from segment 1 require a single authoritative place to answer "what state is this saga in" — that's only cheap with orchestration. Choreography could still exist elsewhere in the platform for looser flows; it's simply not what this component is.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Reveal: saga-with-compensation, or 2PC — justified against your own NFRs.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Saga with compensation, at-least-once step execution.</b> 2PC is rejected here specifically because your NFR target (2k/s saga starts, 99.95% availability) is incompatible with blocking every participant on a coordinator-driven prepare phase — and MOFSL/NSDL/PolicyBazaar are external systems that categorically cannot join a 2PC protocol at all.
+        <div class="why-line"><b>Why this is the load-bearing decision:</b> this single choice determines everything downstream — your data model needs a compensation log (segment 5), your state machine needs a COMPENSATING state (segment 8), and your APIs need a compensate-callback endpoint (segment 4). Get this wrong and every later segment inherits the mistake.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 -->
+  <section class="segment" id="s3" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">03</span><h2>Component breakdown</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Draw 5–7 boxes. Before revealing, answer: why can't the component that decides "what's the next step" live in the same process/deployable as the component that durably records step outcomes?</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Reveal: reference component diagram.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">+----------------+     +-------------------+     +------------------+
+| Saga Definition|---->| Orchestrator Core |---->| Step Invoker     |
+| Store (config) |     | (state machine     |     | (calls Order/    |
++----------------+     |  executor)         |     |  Payment/NSDL...)|
+                        +---------+---------+     +------------------+
+                                  |
+                       +----------+----------+
+                       |                     |
+              +--------v-------+   +---------v--------+
+              | Saga State     |   | Outbox / Event   |
+              | Store (durable)|   | Publisher        |
+              +----------------+   +------------------+
+                                             |
+                                  +----------v---------+
+                                  | Timeout & Recon-    |
+                                  | ciliation Scheduler |
+                                  +---------------------+</pre>
+        <div class="why-line"><b>Why the split matters:</b> the state store must survive the orchestrator process crashing mid-step — if "decide next step" and "record what happened" are the same in-memory thing, a crash between deciding and recording silently loses the decision. Separating them forces the durable write to happen before the side effect is trusted, which is the same discipline the outbox pattern applies one layer down.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Reveal: why the Timeout/Reconciliation Scheduler has to be its own component, not a method on the Orchestrator Core.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Because it runs on <b>wall-clock triggers, not saga events</b> — it has to wake up and act even when nothing has happened, which is a fundamentally different execution model (poll/sweep) from the Orchestrator Core's event-reactive model (react to a step callback).
+        <div class="why-line"><b>Why it matters:</b> conflating them means a saga that never receives a callback (the exact failure mode a coordinator exists to catch) has nothing forcing it out of limbo — because the only component that reacts to events never gets an event to react to.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 -->
+  <section class="segment" id="s4" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">04</span><h2>Low-level API design</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Sketch 5–6 endpoints yourself: method, path, caller, idempotency behavior. Then decide: should authorization scope by <em>who owns the saga type</em>, or by <em>blast radius</em> (what this specific endpoint can actually do if misused)? Write one sentence on which you'd pick and why, before revealing.</div>
+
+    <div class="api-card"><span class="api-method post">POST</span><span class="api-path">/sagas</span>
+      <div class="api-purpose">Start a new saga instance from a registered definition + business payload.</div>
+      <div class="api-meta"><div><b>Caller</b> upstream business service (order-svc, allotment-svc)</div><div><b>Payload</b> saga_type, business_key, initial context</div><div><b>Idempotency</b> keyed on caller-supplied business_key — replays return the existing saga_id, never start a second instance</div></div>
+    </div>
+    <div class="api-card"><span class="api-method get">GET</span><span class="api-path">/sagas/{id}</span>
+      <div class="api-purpose">Fetch current state, step history, and any pending reconciliation flag.</div>
+      <div class="api-meta"><div><b>Caller</b> support tooling, on-call dashboards, business services polling status</div><div><b>Payload</b> none</div><div><b>Idempotency</b> read-only, trivially idempotent</div></div>
+    </div>
+    <div class="api-card"><span class="api-method post">POST</span><span class="api-path">/sagas/{id}/step-callback</span>
+      <div class="api-purpose">Participant reports a step's outcome (success/failure) back to the coordinator.</div>
+      <div class="api-meta"><div><b>Caller</b> the participant service that was just invoked (payment-svc, nsdl-adapter)</div><div><b>Payload</b> step_id, outcome, idempotency_key used for that step's call</div><div><b>Idempotency</b> keyed on step_id + outcome — a duplicate callback for an already-recorded step is a no-op</div></div>
+    </div>
+    <div class="api-card"><span class="api-method post">POST</span><span class="api-path">/sagas/{id}/compensate</span>
+      <div class="api-purpose">Force compensation of a saga from its current step backward — used by reconciliation or manual ops action.</div>
+      <div class="api-meta"><div><b>Caller</b> the internal Reconciliation Scheduler, or an authorized operator via ops tooling</div><div><b>Payload</b> reason code, triggered_by</div><div><b>Idempotency</b> re-triggering on an already-compensating saga is a no-op, not a second compensation run</div></div>
+    </div>
+    <div class="api-card"><span class="api-method post">POST</span><span class="api-path">/saga-definitions</span>
+      <div class="api-purpose">Register or version a new saga type's step sequence and compensation map.</div>
+      <div class="api-meta"><div><b>Caller</b> a platform/operator during deployment, never a runtime service</div><div><b>Payload</b> saga_type, ordered step list, per-step compensation reference</div><div><b>Idempotency</b> versioned — same definition content produces the same version id, no silent overwrite</div></div>
+    </div>
+    <div class="api-card"><span class="api-method get">GET</span><span class="api-path">/sagas?state=PENDING_RECONCILIATION</span>
+      <div class="api-purpose">List sagas currently stuck in an ambiguous or unresolved state.</div>
+      <div class="api-meta"><div><b>Caller</b> on-call engineer, or an autoscaler-adjacent alerting job watching backlog depth</div><div><b>Payload</b> none (query param filter)</div><div><b>Idempotency</b> read-only</div></div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Reveal: authorization scoping — by ownership, or by blast radius?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Blast radius.</b> <code>POST /sagas/{id}/compensate</code> gets far stricter scoping than <code>GET /sagas/{id}</code> even though both touch "the same resource" — because one can trigger real refunds and reversals across an entire saga, and the other cannot.
+        <div class="why-line"><b>Why ownership-based scoping isn't enough:</b> "payment-svc owns the payment step" sounds right, but payment-svc calling <code>/compensate</code> on a saga it doesn't own the overall lifecycle of is exactly the kind of lateral-authority mistake blast-radius scoping is designed to prevent. Ownership answers "should this caller know about this saga"; blast radius answers "what's the worst thing this caller can trigger if compromised or buggy" — and the second question is the one that actually matters for a compensate endpoint.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 -->
+  <section class="segment" id="s5" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">05</span><h2>Data model & sizing</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Sketch your own schema. Then estimate: rows/day, peak write throughput, and storage growth across your 80+ service footprint. Separate what's durable config from what's ephemeral derived state — write one line naming a piece of each. Finally: is this actually a big-data problem, or not?</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Reveal: reference schema sketch.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">saga_definitions (durable config)
+  saga_type, version, step_sequence[], compensation_map
+
+saga_instances (durable, hot-write)
+  saga_id, saga_type, business_key, state, current_step,
+  created_at, updated_at
+
+saga_step_log (durable, append-only)
+  saga_id, step_id, attempt_no, outcome, idempotency_key,
+  started_at, completed_at
+
+reconciliation_queue (ephemeral / derived)
+  saga_id, reason, next_check_at   -- rebuildable from saga_instances</pre>
+        <div class="why-line"><b>Why append-only for step_log specifically:</b> it's your audit trail and your reconstruction source when saga_instances' current-state pointer disagrees with reality — mutating it in place destroys exactly the evidence you'd need to debug that disagreement.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">Reveal: sizing, and the durable-vs-ephemeral trap.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Saga starts / day</div><div class="value">~4M <span>across flows</span></div></div>
+          <div class="stat-card"><div class="label">Step log rows / day</div><div class="value">~20M <span>avg 5 steps</span></div></div>
+          <div class="stat-card"><div class="label">Peak write rate</div><div class="value">~2k/s <span>step_log inserts</span></div></div>
+          <div class="stat-card"><div class="label">Hot storage window</div><div class="value">90d <span>then cold archive</span></div></div>
+        </div>
+        <b>The trap:</b> the reconciliation_queue is <em>derived</em> from saga_instances (anything past its timeout with no callback) — it must never be treated as the source of truth. Teams that persist it as durable state independently from saga_instances eventually get the two out of sync, and then can't tell which one to trust.
+        <div class="why-line"><b>Why "is this big data" matters as a gut-check:</b> 20M rows/day sounds large, but it's well within a well-indexed relational store's comfort zone at this write rate — reaching for a big-data platform here would trade transactional guarantees (which you need for saga_instances) for horizontal scale you don't yet need. The mistake isn't under-scaling; it's over-engineering the data layer before the numbers justify it.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 -->
+  <section class="segment" id="s6" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">06</span><h2>Core algorithm / internals</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Write actual pseudocode — not prose — for the saga instance data structure and the "execute next step" operation. Cover: what happens under concurrent access (two orchestrator instances picking up the same saga), and what happens when there is no next step to execute (queue exhausted).</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Reveal: reference pseudocode for the executor loop.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">struct SagaInstance {
+  saga_id, saga_type, state, current_step_index,
+  lease_owner, lease_expires_at
+}
+
+function execute_next_step(saga_id):
+  saga = load_and_lock(saga_id)          // SELECT ... FOR UPDATE
+  if saga.lease_owner != self and not expired(saga.lease):
+      return SKIP  // another instance already owns this saga
+
+  acquire_lease(saga, self, ttl=30s)
+
+  if saga.current_step_index >= len(definition.steps):
+      saga.state = COMPLETED
+      persist(saga)
+      return DONE
+
+  step = definition.steps[saga.current_step_index]
+  key = idempotency_key(saga_id, step.id)
+  result = invoke(step.endpoint, payload, key)   // at-least-once call
+
+  if result == SUCCESS:
+      saga.current_step_index += 1
+      persist(saga)
+  elif result == KNOWN_FAILURE:
+      saga.state = COMPENSATING
+      persist(saga)
+  else:  // TIMEOUT / UNKNOWN
+      saga.state = PENDING_RECONCILIATION
+      persist(saga)</pre>
+        <div class="why-line"><b>Why the lease matters:</b> two orchestrator instances racing on the same saga_id without a lease can both invoke the same step — the lease turns "who executes this saga right now" into a single-owner decision without needing a separate distributed lock service, since the lease lives in the same row you're already updating transactionally.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Reveal: the empty/exhausted edge case, made explicit.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <code>current_step_index >= len(steps)</code> is not an error — it's the success terminal state, and it must be checked <b>before</b> attempting to invoke a step, not discovered by an out-of-bounds failure. The equivalent exhaustion check on the compensation path (<code>compensation_index &lt; 0</code>) marks COMPENSATED, the failure terminal state.
+        <div class="why-line"><b>Why this needs to be explicit, not implicit:</b> an off-by-one here either double-executes the last step or silently drops it — and because this is the core loop, that bug replicates into every saga type built on top of it. This is exactly the kind of edge case a "how it works" explainer glosses over and a real build session forces you to confront.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 -->
+  <section class="segment" id="s7" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">07</span><h2>Supporting subsystem — the reconciliation scheduler</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Design the reconciliation loop's logic precisely: what does it check, how often, what does it do on each outcome. Then decide: should this scheduler run as one centralized process, or as a distributed job per orchestrator instance? Justify before revealing.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Reveal: reference reconciliation loop.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">every 60s:
+  sweep = SELECT * FROM saga_instances
+          WHERE state = PENDING_RECONCILIATION
+          AND next_check_at <= now()
+
+  for saga in sweep:
+      truth = query_participant_status(saga.saga_id, saga.current_step)
+      if truth == CONFIRMED_SUCCESS:
+          saga.current_step_index += 1
+          saga.state = IN_PROGRESS
+      elif truth == CONFIRMED_FAILURE:
+          saga.state = COMPENSATING
+      else:  // still unknown
+          saga.attempt_count += 1
+          saga.next_check_at = now() + backoff(saga.attempt_count)
+          if saga.attempt_count > MAX_ATTEMPTS:
+              saga.state = MANUAL_REVIEW
+              alert(saga)
+      persist(saga)</pre>
+        <div class="why-line"><b>Why MANUAL_REVIEW has to exist as a real terminal-ish state:</b> not every ambiguity resolves itself automatically — a participant whose status API is also down can't be reconciled by more polling. Without an explicit escape hatch to a human, this loop just backs off forever and the saga is stuck exactly as badly as before, just with extra steps.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Reveal: centralized vs. distributed reconciliation — which, and why.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Centralized (a small dedicated pool, not one-per-orchestrator-instance).</b> Reconciliation is low-frequency (60s sweep) and read-heavy against external systems — running it per orchestrator instance means every instance independently polls the same ambiguous sagas, multiplying load on already-struggling external APIs at exactly the moment they're least able to absorb it.
+        <div class="why-line"><b>Why this differs from the executor itself:</b> the step executor benefits from being distributed across instances because saga volume is high and steps are independent. Reconciliation volume is comparatively tiny (it only fires on the unhappy path) — the bottleneck risk here isn't coordinator throughput, it's hammering an already-flaky external dependency, which centralizing directly prevents.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 -->
+  <section class="segment" id="s8" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">08</span><h2>Failure handling & state machine</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Draw the full state machine yourself first — every state mentioned in segments 1–7 has to appear somewhere. Then answer: which transition guarantees a saga can never be stuck forever, and where does idempotency actually plug in?</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">Reveal: the full state machine.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">PENDING -> IN_PROGRESS -> COMPLETED
+               |
+               +--(known failure)--> COMPENSATING -> COMPENSATED
+               |
+               +--(timeout/unknown)--> PENDING_RECONCILIATION
+                                            |
+                              +-------------+-------------+
+                              |                           |
+                       (resolved)                  (exhausted retries)
+                              |                           |
+                        IN_PROGRESS/                MANUAL_REVIEW
+                        COMPENSATING                (human closes loop)</pre>
+        <div class="why-line"><b>Why every earlier-segment concept has to land somewhere here:</b> the lease from segment 6 governs the IN_PROGRESS transition; the compensation map from segment 5's schema drives COMPENSATING → COMPENSATED; the reconciliation loop from segment 7 owns the PENDING_RECONCILIATION branch entirely. A state machine that doesn't visibly connect to every earlier decision means one of those decisions wasn't actually load-bearing.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Reveal: the guaranteed-exit mechanism, and where idempotency plugs in.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        The <b>MAX_ATTEMPTS → MANUAL_REVIEW</b> transition in the reconciliation loop is the guaranteed exit — every other state either completes, fails cleanly, or eventually times its way into reconciliation, and reconciliation itself is bounded by attempt count, not by external system behavior. Idempotency plugs in at exactly three points: the step invocation (segment 4's callback keying), the compensation invocation (segment 5's compensation_map + its own idempotency_key), and the lease acquisition (segment 6 — re-acquiring an expired lease you already held must be a no-op, not a new lease).
+        <div class="why-line"><b>Why "guaranteed exit" has to be a design decision, not a hope:</b> without an explicit attempt ceiling, PENDING_RECONCILIATION can retry indefinitely against a participant that will never answer — that's not resilience, it's an invisible resource leak (open sagas, held leases, growing reconciliation_queue) that looks fine on a dashboard until it isn't.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 -->
+  <section class="segment" id="s9" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">09</span><h2>Scaling this component itself</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Not the backend systems it calls — the coordinator itself. How do multiple orchestrator instances stay roughly in sync without a shared lock becoming the bottleneck? And: name one concrete metric, tied to your segment-1 NFRs, that tells you it's time to scale out.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Reveal: how instances avoid becoming a coordination bottleneck.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Per-saga leasing (segment 6), not a global lock.</b> Each orchestrator instance polls a shard of "sagas with work pending" (partitioned by saga_id hash) and only contends on the lease row for the specific saga it's about to touch — instances working on different sagas never block each other at all.
+        <div class="why-line"><b>Why a global coordination layer (e.g. a single leader deciding all work) would be wrong here:</b> saga execution is embarrassingly parallel across different saga_ids — there's no reason instance A working on saga X needs to know anything about instance B working on saga Y. Introducing a global lock or leader for this would recreate exactly the blocking, availability-limiting problem segment 2 rejected 2PC for, one layer up.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Reveal: the concrete scale-out signal, tied back to segment-1 NFRs.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Saga backlog age</b> — the gap between a step becoming eligible to execute and an instance actually picking it up. When p99 of that gap exceeds the segment-1 step-latency target (800ms), that's your scale-out trigger, not raw CPU or instance count.
+        <div class="why-line"><b>Why not CPU:</b> the executor loop is mostly waiting on network I/O to participants, not computing — CPU utilization can look comfortably low while sagas are still backing up because every instance is saturated on in-flight calls, not compute. Backlog age is a direct measurement of the thing your NFR actually promised (step latency), so it's the metric that can't lie to you the way CPU can.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 -->
+  <section class="segment" id="s10" style="--seg:#4A5FBF">
+    <div class="segment-head"><span class="segment-offset">10</span><h2>End-to-end assembly</h2></div>
+    <div class="build-first"><span class="bf-tag">✎ build it yourself first</span>Draw the whole thing from memory — both the hot/data path (a saga actually executing) and the control/config path (registering a new saga type, an operator forcing compensation) in one diagram. No peeking at segments 1–9 while you draw.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Reveal: reference end-to-end diagram.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">CONTROL / CONFIG PATH
+Operator --> POST /saga-definitions --> Saga Definition Store
+
+HOT / DATA PATH
+order-svc --> POST /sagas --> Orchestrator Core --lease--> Saga State Store
+                                     |
+                                     v
+                              Step Invoker --> payment-svc / nsdl-adapter / ...
+                                     ^                        |
+                                     |                 POST /step-callback
+                                     |________________________|
+                                     |
+                        (timeout) --> Reconciliation Scheduler
+                                            |
+                                  query participant status --> resolve or MANUAL_REVIEW
+                                     |
+                              Outbox / Event Publisher --> downstream services</pre>
+        <div class="why-line"><b>Why both paths have to be on one diagram:</b> the control path (definitions) and the hot path (execution) share the Orchestrator Core as their only intersection point — if you drew them as fully separate diagrams, it's easy to forget that a bad saga-definition deploy can break every in-flight saga using it, which is exactly the kind of cross-path risk a single assembled view exposes and two separate ones hide.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20 — no answer key</span><span class="q-text">Trace your own diagram back against your own segment-1 requirements. Where's the gap?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        This one has no reference answer. Walk your FR list from segment 1 line by line against the diagram you just drew — for each FR, point to the exact box and arrow that satisfies it. If any FR doesn't map to something on the page, that's not a documentation gap. That's a component you haven't actually designed yet, no matter how confident the rest of the diagram looks.
+      </div></div></div>
+  </section>
+
+  <footer>
+    // build-session compression: requirements set the numbers you're accountable to → the core decision
+    (orchestration + saga-with-compensation) shapes every component below it → components split along
+    "what must survive a crash" lines → APIs are scoped by blast radius, not convenience → data separates
+    durable config from derived state → the executor loop leases per-saga to stay parallel → reconciliation
+    is the deliberate answer to "timeout means unknown" → the state machine guarantees an exit from every
+    state → scaling watches backlog age, not CPU → and the whole thing only counts as designed once every
+    segment-1 requirement points back to a specific box on the final diagram.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
