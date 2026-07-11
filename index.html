@@ -107,7 +107,6 @@
     gap: 0;
     overflow: hidden;
 
-    /* dot-grid engineering paper texture */
     background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
     background-size: 20px 20px;
     background-color: var(--bg);
@@ -179,8 +178,6 @@
     padding-top: 24px;
   }
 
-
-
   .theme-toggle {
     margin-top: 14px;
     background: none;
@@ -214,7 +211,7 @@
     display: flex;
     align-items: baseline;
     gap: 16px;
-    margin-bottom: 32px;
+    margin-bottom: 36px;
     padding-bottom: 14px;
     border-bottom: 1px solid var(--border);
   }
@@ -234,83 +231,104 @@
     letter-spacing: 0.06em;
   }
 
-  /* ── Design Cards ── */
-  .designs-list {
+  /* ── Topic Groups ── */
+  .topic-groups {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 28px;
   }
 
-  .design-card {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 6px 16px;
-    padding: 20px 0;
+  .topic-group {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .topic-group-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: var(--tag-bg);
     border-bottom: 1px solid var(--border);
-    position: relative;
-    transition: background 0.12s;
+  }
+
+  .topic-group-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 15px;
+    font-weight: normal;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+  }
+
+  .topic-note-count {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+    letter-spacing: 0.06em;
+    margin-left: auto;
+  }
+
+  /* ── Note Cards (inside topic groups) ── */
+  .topic-notes {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .note-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    border-left: 2px solid transparent;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.12s, border-left-color 0.15s;
     cursor: pointer;
   }
 
-  .design-card::before {
-    content: '';
-    position: absolute;
-    left: -48px;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: transparent;
-    transition: background 0.15s;
+  .note-card:last-child {
+    border-bottom: none;
   }
 
-  @media (max-width: 720px) {
-    .design-card::before { left: -24px; }
+  .note-card:hover {
+    background: var(--accent-tint);
+    border-left-color: var(--accent);
   }
 
-  .design-card:hover::before { background: var(--accent); }
+  .note-card-body {
+    flex: 1;
+    min-width: 0;
+  }
 
-  .design-card:hover .card-title { color: var(--accent); }
-
-  .card-title {
+  .note-card-title {
     font-family: Georgia, 'Times New Roman', serif;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: normal;
     color: var(--ink);
-    line-height: 1.3;
+    line-height: 1.35;
     transition: color 0.15s;
-    text-wrap: balance;
-    grid-column: 1;
-    grid-row: 1;
+    margin-bottom: 5px;
   }
 
-  .card-date {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 11px;
+  .note-card:hover .note-card-title {
+    color: var(--accent);
+  }
+
+  .note-card-desc {
+    font-size: 12.5px;
     color: var(--ink-muted);
-    white-space: nowrap;
-    align-self: start;
-    margin-top: 3px;
-    grid-column: 2;
-    grid-row: 1;
+    line-height: 1.55;
+    margin-bottom: 10px;
   }
 
-  .card-desc {
-    font-size: 13.5px;
-    color: var(--ink-muted);
-    line-height: 1.6;
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .card-footer {
+  .note-card-footer {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
-    grid-column: 1 / -1;
-    grid-row: 3;
-    margin-top: 4px;
   }
 
   .tag {
@@ -320,39 +338,24 @@
     text-transform: uppercase;
     color: var(--tag-ink);
     background: var(--tag-bg);
-    padding: 3px 8px;
+    padding: 2px 7px;
     border-radius: 2px;
   }
 
-  .card-link-arrow {
-    margin-left: auto;
+  .note-card-arrow {
     font-size: 13px;
     color: var(--accent);
     opacity: 0;
     transition: opacity 0.15s, transform 0.15s;
-    font-family: system-ui, sans-serif;
+    flex-shrink: 0;
+    align-self: center;
+    margin-left: 16px;
+    padding-top: 1px;
   }
 
-  .design-card:hover .card-link-arrow {
+  .note-card:hover .note-card-arrow {
     opacity: 1;
     transform: translateX(3px);
-  }
-
-  /* ── Coming soon state ── */
-  .design-card.wip .card-title { opacity: 0.5; }
-  .design-card.wip .card-desc  { opacity: 0.4; }
-  .design-card.wip { cursor: default; }
-  .design-card.wip::before { display: none; }
-
-  .wip-badge {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 10px;
-    color: var(--ink-muted);
-    border: 1px solid var(--border);
-    padding: 2px 7px;
-    border-radius: 2px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
 
   /* ── Empty state ── */
@@ -403,87 +406,232 @@
 
     <div class="section-header">
       <h2 class="section-title">All Designs</h2>
-      <span class="section-count" id="design-count">— entries</span>
+      <span class="section-count" id="design-count">— topics</span>
     </div>
 
-    <div class="designs-list" id="designs-list">
+    <div class="topic-groups" id="topic-groups">
 
-      <a class="design-card" href="kafka_system_design.html">
-        <span class="card-title">Kafka — The Log, Not The Queue</span>
-        <span class="card-date">2026-07-05</span>
-        <p class="card-desc">How Kafka reimagines the message queue as a distributed, append-only log — covering topics, partitions, consumer groups, and delivery guarantees at scale.</p>
-        <div class="card-footer">
-          <span class="tag">Event Streaming</span>
-          <span class="tag">Partitions</span>
-          <span class="tag">Messaging</span>
-          <span class="card-link-arrow">→</span>
+      <!-- ── Kafka ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">Kafka</span>
+          <span class="topic-note-count">2 notes</span>
         </div>
-      </a>
+        <div class="topic-notes">
 
-      <a class="design-card" href="distributed_tracing.html">
-        <span class="card-title">Distributed Tracing — The Journey, Not The Event</span>
-        <span class="card-date">2026-07-05</span>
-        <p class="card-desc">Understanding how traces span service boundaries — exploring span propagation, context passing, sampling strategies, and the observability tools that make distributed debugging tractable.</p>
-        <div class="card-footer">
-          <span class="tag">Observability</span>
-          <span class="tag">Microservices</span>
-          <span class="tag">Tracing</span>
-          <span class="card-link-arrow">→</span>
-        </div>
-      </a>
+          <a class="note-card" href="kafka design/kafka_system_design.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Kafka — The Log, Not The Queue</div>
+              <p class="note-card-desc">How Kafka reimagines the message queue as a distributed, append-only log — covering topics, partitions, consumer groups, and delivery guarantees at scale.</p>
+              <div class="note-card-footer">
+                <span class="tag">Event Streaming</span>
+                <span class="tag">Partitions</span>
+                <span class="tag">Messaging</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
 
-      <a class="design-card" href="distributed_transactions.html">
-        <span class="card-title">Distributed Transactions — Correctness, Not Commitment</span>
-        <span class="card-date">2026-07-05</span>
-        <p class="card-desc">When ACID breaks across service boundaries — comparing two-phase commit, sagas, and eventual consistency patterns for building correct systems without coordination overhead.</p>
-        <div class="card-footer">
-          <span class="tag">SAGA</span>
-          <span class="tag">2PC</span>
-          <span class="tag">Consistency</span>
-          <span class="card-link-arrow">→</span>
-        </div>
-      </a>
+          <a class="note-card" href="kafka design/kafka_own_design.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Design Your Own Kafka — A Build Session</div>
+              <p class="note-card-desc">Work through the decisions an engineer faces when building Kafka from scratch — log segments, partition leadership, consumer group coordination, and replication trade-offs.</p>
+              <div class="note-card-footer">
+                <span class="tag">Build Session</span>
+                <span class="tag">Architecture</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
 
-      <a class="design-card" href="Distributed_Transactions_Interactive_Simulator.html">
-        <span class="card-title">Distributed Transactions — Interactive Simulator</span>
-        <span class="card-date">2026-07-07</span>
-        <p class="card-desc">Step through four real-world consistency patterns side-by-side — Two-Phase Commit, Saga, Transactional Outbox, and Idempotency with Reconciliation — with animated walkthroughs and failure scenarios.</p>
-        <div class="card-footer">
-          <span class="tag">Interactive</span>
-          <span class="tag">2PC</span>
-          <span class="tag">Saga</span>
-          <span class="tag">Outbox</span>
-          <span class="card-link-arrow">→</span>
         </div>
-      </a>
+      </div>
 
-      <a class="design-card" href="load_balancer_notes.html">
-        <span class="card-title">Load Balancer — The Question Before The Algorithm</span>
-        <span class="card-date">2026-07-11</span>
-        <p class="card-desc">Why choosing a load balancing strategy starts with understanding your traffic shape — comparing Round Robin, Least Connections, IP Hash, and Weighted strategies against real-world constraints.</p>
-        <div class="card-footer">
-          <span class="tag">Load Balancing</span>
-          <span class="tag">Routing</span>
-          <span class="tag">Scalability</span>
-          <span class="card-link-arrow">→</span>
+      <!-- ── Distributed Tracing ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">Distributed Tracing</span>
+          <span class="topic-note-count">2 notes</span>
         </div>
-      </a>
+        <div class="topic-notes">
 
-      <a class="design-card" href="nosql_db_systemdesign.html">
-        <span class="card-title">NoSQL Databases — The Tradeoff, Not The Table</span>
-        <span class="card-date">2026-07-11</span>
-        <p class="card-desc">How to pick the right NoSQL store for your access patterns — comparing document, key-value, wide-column, and graph models against CAP theorem constraints and real system requirements.</p>
-        <div class="card-footer">
-          <span class="tag">NoSQL</span>
-          <span class="tag">CAP Theorem</span>
-          <span class="tag">Data Modeling</span>
-          <span class="card-link-arrow">→</span>
+          <a class="note-card" href="distributed tracing design/distributed_tracing_prep.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Distributed Tracing — The Journey, Not The Event</div>
+              <p class="note-card-desc">Understanding how traces span service boundaries — exploring span propagation, context passing, sampling strategies, and the observability tools that make distributed debugging tractable.</p>
+              <div class="note-card-footer">
+                <span class="tag">Observability</span>
+                <span class="tag">Microservices</span>
+                <span class="tag">Tracing</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+          <a class="note-card" href="distributed tracing design/distributed_tracing_build_your_own.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Build Your Own Distributed Tracing System</div>
+              <p class="note-card-desc">Design a distributed tracing system from the ground up — span propagation, context injection, sampling decisions, and the storage layer that makes traces queryable at scale.</p>
+              <div class="note-card-footer">
+                <span class="tag">Build Session</span>
+                <span class="tag">Observability</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
         </div>
-      </a>
+      </div>
+
+      <!-- ── Distributed Transactions ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">Distributed Transactions</span>
+          <span class="topic-note-count">2 notes</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-card" href="distributed-txns/distributed_transactions.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Distributed Transactions — Correctness, Not Commitment</div>
+              <p class="note-card-desc">When ACID breaks across service boundaries — comparing two-phase commit, sagas, and eventual consistency patterns for building correct systems without coordination overhead.</p>
+              <div class="note-card-footer">
+                <span class="tag">SAGA</span>
+                <span class="tag">2PC</span>
+                <span class="tag">Consistency</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+          <a class="note-card" href="distributed-txns/distributed_transactions_Interactive_Simulator.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Distributed Transactions — Interactive Simulator</div>
+              <p class="note-card-desc">Step through four real-world consistency patterns side-by-side — Two-Phase Commit, Saga, Transactional Outbox, and Idempotency with Reconciliation — with animated walkthroughs and failure scenarios.</p>
+              <div class="note-card-footer">
+                <span class="tag">Interactive</span>
+                <span class="tag">2PC</span>
+                <span class="tag">Saga</span>
+                <span class="tag">Outbox</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- ── Load Balancer ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">Load Balancer</span>
+          <span class="topic-note-count">2 notes</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-card" href="load-balancer design/load_balancer_notes.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Load Balancer — The Question Before The Algorithm</div>
+              <p class="note-card-desc">Why choosing a load balancing strategy starts with understanding your traffic shape — comparing Round Robin, Least Connections, IP Hash, and Weighted strategies against real-world constraints.</p>
+              <div class="note-card-footer">
+                <span class="tag">Load Balancing</span>
+                <span class="tag">Routing</span>
+                <span class="tag">Scalability</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+          <a class="note-card" href="load-balancer design/build_your_own_load_balancer.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Build Your Own Load Balancer — A Design Session</div>
+              <p class="note-card-desc">Walk through designing a production load balancer — from health checking and connection tracking to weighted routing and the session-stickiness trade-offs operators actually face.</p>
+              <div class="note-card-footer">
+                <span class="tag">Build Session</span>
+                <span class="tag">Networking</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- ── NoSQL ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">NoSQL Databases</span>
+          <span class="topic-note-count">2 notes</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-card" href="no-sql design/nosql_db_systemdesign.html">
+            <div class="note-card-body">
+              <div class="note-card-title">NoSQL Databases — The Tradeoff, Not The Table</div>
+              <p class="note-card-desc">How to pick the right NoSQL store for your access patterns — comparing document, key-value, wide-column, and graph models against CAP theorem constraints and real system requirements.</p>
+              <div class="note-card-footer">
+                <span class="tag">NoSQL</span>
+                <span class="tag">CAP Theorem</span>
+                <span class="tag">Data Modeling</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+          <a class="note-card" href="no-sql design/design_your_own_nosql_store.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Design Your Own NoSQL Store — A Build Session</div>
+              <p class="note-card-desc">Design a NoSQL store from first principles — choosing the right storage engine, partition strategy, consistency model, and compaction approach for your target workload.</p>
+              <div class="note-card-footer">
+                <span class="tag">Build Session</span>
+                <span class="tag">Storage</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- ── SQL ── -->
+      <div class="topic-group">
+        <div class="topic-group-header">
+          <span class="topic-group-title">SQL Databases</span>
+          <span class="topic-note-count">2 notes</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-card" href="sql-db design/sql_db_system_design.html">
+            <div class="note-card-body">
+              <div class="note-card-title">SQL Database Internals — Correctness Under the Hood</div>
+              <p class="note-card-desc">Internals of SQL engines — covering B-tree indexes, WAL-based durability, MVCC for concurrency control, and the query planner decisions that separate fast queries from slow ones.</p>
+              <div class="note-card-footer">
+                <span class="tag">Internals</span>
+                <span class="tag">ACID</span>
+                <span class="tag">Storage</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+          <a class="note-card" href="sql-db design/build_your_own_sql_engine.html">
+            <div class="note-card-body">
+              <div class="note-card-title">Build Your Own SQL Engine — A Design Session</div>
+              <p class="note-card-desc">Design a SQL engine from scratch — parsing queries into plans, choosing index access paths, managing transactions with MVCC, and handling crash recovery through write-ahead logging.</p>
+              <div class="note-card-footer">
+                <span class="tag">Build Session</span>
+                <span class="tag">Query Planning</span>
+              </div>
+            </div>
+            <span class="note-card-arrow">→</span>
+          </a>
+
+        </div>
+      </div>
 
     </div>
 
-    <div class="empty-note" id="empty-note">
+    <div class="empty-note" id="empty-note" style="display:none;">
       <span class="prompt">$</span> No explorations yet.<br>
       <span class="prompt">$</span> Every design here is a chance to think like a leader.<br>
       <span class="prompt">$</span> Use your mind. Question the trade-offs. Sharpen the thought.
@@ -511,18 +659,11 @@
     if (saved) document.documentElement.setAttribute('data-theme', saved);
   })();
 
-  // ── Count live entries ──
+  // ── Count topics ──
   (function () {
-    const cards = document.querySelectorAll('#designs-list .design-card:not(.wip)');
-    const wip   = document.querySelectorAll('#designs-list .design-card.wip');
-    const total  = document.querySelectorAll('#designs-list .design-card');
+    const groups = document.querySelectorAll('#topic-groups .topic-group');
     const counter = document.getElementById('design-count');
-    const empty   = document.getElementById('empty-note');
-
-    if (total.length > 0) empty.style.display = 'none';
-
-    let label = cards.length === 1 ? '1 design' : `${cards.length} designs`;
-    if (wip.length > 0) label += `, ${wip.length} in progress`;
+    const label = groups.length === 1 ? '1 topic' : `${groups.length} topics`;
     counter.textContent = label;
   })();
 </script>

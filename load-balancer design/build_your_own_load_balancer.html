@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Build Your Own Load Balancer — A System Design Build Session</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  body.dark-theme .build-prompt{background:#1B2A2C;border-color:#2C4A4A;color:#CFE7E4;}
+  body.dark-theme .build-prompt b{color:#5FC2B8;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C9871F;}
+  .ledger-strip span:nth-child(2){background:#2E8B82;}
+  .ledger-strip span:nth-child(3){background:#C1543A;}
+  .ledger-strip span:nth-child(4){background:#7A63B8;}
+  .ledger-strip span:nth-child(5){background:#3480B0;}
+  .ledger-strip span:nth-child(6){background:#6B9A44;}
+  .ledger-strip span:nth-child(7){background:#C1547A;}
+  .ledger-strip span:nth-child(8){background:#B9971F;}
+  .ledger-strip span:nth-child(9){background:#279090;}
+  .ledger-strip span:nth-child(10){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.5rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:68ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.55rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .q-answer-inner ul{margin:8px 0 0;padding-left:20px;}
+  .q-answer-inner li{margin-bottom:4px;}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.9rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* BUILD PROMPT — the "stop and design it yourself" box */
+  .build-prompt{
+    margin:0 0 22px;padding:14px 18px;border-radius:6px;
+    background:#EAF3F2;border:1px solid #C3DEDB;
+    font-size:.94rem;color:#1E3A38;
+  }
+  .build-prompt b{color:#1F7A6E;}
+
+  /* API card */
+  .api-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#7A63B8);
+  }
+  .api-card .api-line{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;color:var(--seg,#7A63B8);
+    font-weight:600;margin-bottom:6px;
+  }
+  .api-card .api-desc{font-size:.88rem;color:var(--muted);}
+  .api-card .api-desc b{color:var(--text);}
+
+  /* LEADERSHIP / ROLE SECTION reused for "design review" voices */
+  .role-block{
+    border-left:3px solid var(--role,#999);
+    background:var(--panel);
+    padding:10px 14px;margin-bottom:8px;border-radius:4px;
+    border:1px solid var(--border);border-left-width:3px;border-left-color:var(--role,#999);
+  }
+  .role-tag{
+    display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:.68rem;
+    color:#fff;background:var(--role,#999);padding:1px 8px;border-radius:10px;
+    margin-bottom:6px;font-weight:600;letter-spacing:.3px;
+  }
+  .role-block p{margin:0;font-size:.9rem;color:#3A3934;}
+  .situation-ext{
+    font-size:.9rem;color:var(--muted);font-style:italic;
+    margin:0 0 14px;padding:10px 14px;background:var(--panel-2);
+    border-radius:4px;border:1px dashed var(--border);
+  }
+  .invisible-q{
+    margin-top:14px;padding:12px 16px;border-radius:4px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .invisible-q b{color:#8B6A1D;}
+  .learning{
+    margin-top:10px;padding:12px 16px;border-radius:4px;
+    background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.9rem;color:#2E4A3A;
+  }
+  .learning b{color:#2E8B62;}
+  body.dark-theme .learning{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .learning b{color:#5FC28E;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.9rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Build Your Own Load Balancer — a <em>design</em> session, not a reading session</h1>
+    <p class="sub">This is not "learn how load balancers work" — you already know that. This is: <b>sit down and design one, piece by piece</b> — functional requirements, components, low-level APIs, data model, DB sizing, algorithm internals, failure handling, scaling — with a thought-provoking question at every step. Attempt your own answer on paper or out loud <em>before</em> revealing. The reveal is a reference design, not "the" answer — your version can and should differ, as long as you can defend it.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>~2.5–3 hrs, self-paced</span>
+      <span>Format: design it yourself → reveal → compare</span>
+      <span>Goal: produce your own artifact, not memorize mine</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Requirements</a>
+    <a href="#s2" style="color:#2E8B82;">02 Scope &amp; Level</a>
+    <a href="#s3" style="color:#C1543A;">03 Components</a>
+    <a href="#s4" style="color:#7A63B8;">04 Control-Plane APIs</a>
+    <a href="#s5" style="color:#3480B0;">05 Data Model &amp; DB Sizing</a>
+    <a href="#s6" style="color:#6B9A44;">06 Algorithm Internals</a>
+    <a href="#s7" style="color:#C1547A;">07 Health Checker Design</a>
+    <a href="#s8" style="color:#B9971F;">08 Failure &amp; Draining Logic</a>
+    <a href="#s9" style="color:#279090;">09 Scaling Your LB</a>
+    <a href="#s10" style="color:#9A62D6;">10 End-to-End Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1 -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">step 01</span><h2>Functional &amp; non-functional requirements — before any design exists</h2></div>
+    <p class="segment-note">Every real design review starts here, and most rushed ones skip it. Before you draw a single box, you need to be able to say precisely what this load balancer must do, and under what numbers it must keep doing it.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> On paper, write your own functional requirements list (5–7 bullets) and non-functional targets (throughput, latency, availability) for a load balancer sitting in front of a mutual-fund order-service pool. Then reveal.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">What are the functional requirements — what must this load balancer actually be able to do? Try to list at least 6 before revealing.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A reasonable functional set:
+        <ul>
+          <li>Accept incoming client connections/requests and forward to a backend</li>
+          <li>Maintain a live pool of backend servers (add/remove dynamically)</li>
+          <li>Health-check backends and exclude unhealthy ones from selection</li>
+          <li>Select a backend using a configurable algorithm (round robin / least-connections / weighted)</li>
+          <li>Support graceful draining of a backend before removal</li>
+          <li>Expose a control-plane API to register/deregister backends and update config</li>
+          <li>Expose metrics (selection counts, error counts, latency) for observability</li>
+        </ul>
+        Notice none of this is "which algorithm" — that's a single line item inside a much bigger functional surface.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">What non-functional targets actually shape the design — not just "make it fast," but specific numbers you'd defend in a review?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">For a mid-sized FinTech order-flow pool, reasonable targets to state explicitly:
+        <ul>
+          <li><b>Throughput:</b> sustain 20k–50k rps per LB node at steady state, burst to 100k rps on event days (IPO/allotment)</li>
+          <li><b>Added latency:</b> LB overhead itself should stay under 2–3ms p99 (it's a hop, not a bottleneck)</li>
+          <li><b>Availability:</b> LB layer itself target 99.99% — it can't be less available than the backends it protects</li>
+          <li><b>Backend pool churn:</b> new backend visible to routing within 5–10 seconds of registration</li>
+          <li><b>Health detection:</b> unhealthy backend removed within 2–3 failed checks (few seconds), not minutes</li>
+        </ul>
+        Writing these down forces every later decision (algorithm, data structure, health-check interval) to be justified against a number, not a vibe.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Why does "consistency vs. availability" show up even in something as "simple" as a load balancer's backend list?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because the backend pool is shared, frequently-changing state. If every LB node must have a perfectly consistent view before routing a request, you've made the LB layer depend on coordination — exactly the bottleneck it's meant to prevent downstream. The realistic answer: favor <b>availability with eventual consistency</b> for the backend list (a few seconds of staleness is acceptable), while backend health status should lean more real-time since it directly affects correctness of routing decisions.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">What should you explicitly declare as <em>out of scope</em> for this build, and why does stating that matter as much as the in-scope list?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Reasonable out-of-scope declarations: full WAF/security filtering, API-gateway-style auth/transformation, multi-region global traffic management, and TLS certificate management complexity. Stating this matters because an interviewer or reviewer — and your own design — needs a boundary; without it, "build a load balancer" silently expands into "build a gateway, a CDN, and a global traffic manager," and none of those get designed properly because none of them got scoped in the first place.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">step 02</span><h2>Scope and level — what exactly are you building?</h2></div>
+    <p class="segment-note">This is the decision from the concepts document, but now you have to actually commit to one for <em>your</em> build, and justify it against the requirements you just wrote.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Decide — is your load balancer L4, L7, or both layered? Write one paragraph justifying the choice against your throughput and functional requirements above.</div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Given the functional requirement "select a backend using host/path awareness eventually," does that force you to build L7 from day one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Not necessarily. A defensible design: build the core as <b>L7 (HTTP-aware)</b> since the functional requirements already assume request-level decisions (health checks over HTTP, per-request algorithm selection), but keep the listener/proxy layer modular enough that a pure L4 passthrough mode could be added later for non-HTTP traffic. Committing to L7 now is reasonable <em>because</em> the stated functional requirements already need request-level visibility — the requirements should drive the level choice, not the other way around.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Should your load balancer terminate TLS itself, or pass it through? Decide, and state the one consequence you're accepting.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Reasonable design: <b>terminate TLS at the LB.</b> Consequence accepted: the LB becomes part of the security trust boundary — it now holds certificates/keys, and everything downstream trusts headers/identity the LB asserts, so backend network access must be locked down to LB-only (see the security segment in the main notes) or that trust becomes forgeable.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Will your design support sticky sessions from day one, or defer it? Justify against your functional requirements list.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Defer it, but design the selector interface so it <em>can</em> be added without a rewrite — e.g. the backend-selection function should accept an optional routing key (cookie/session id) from day one, even if the first shipped algorithm ignores it. This is a good example of scoping: you're not building stickiness now, but you're not designing yourself into a corner that makes it expensive later either.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">step 03</span><h2>Component breakdown — what are the actual moving pieces?</h2></div>
+    <p class="segment-note">Now the real design work starts: decompose the load balancer into components with clear, single responsibilities. This is the piece most self-taught designs get wrong — treating "load balancer" as one monolithic blob instead of a small system of cooperating parts.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Draw your own component diagram — boxes and arrows — before revealing. Aim for 5–7 components. Ask yourself: what does each one own, and what does it explicitly NOT own?</div>
+
+    <pre class="sketch">                          +-------------------+
+                          |   Control Plane    |  <- register/deregister backends,
+                          |   API (mgmt)        |     update weights, trigger drain
+                          +---------+---------+
+                                    |
+                                    v
+   Client                 +-------------------+        +------------------+
+   requests -----------> |     Listener /     |<------>|  Backend Registry |
+   (data plane)           |   Request Handler   |        |  (in-memory view) |
+                          +---------+---------+        +------------------+
+                                    |                              ^
+                                    v                              |
+                          +-------------------+        +------------------+
+                          |  Selector / LB     |------->|  Health Checker   |
+                          |  Algorithm Engine   |        |  (background loop) |
+                          +---------+---------+        +------------------+
+                                    |
+                                    v
+                          +-------------------+
+                          |   Backend Pool     |
+                          |   (actual servers)  |
+                          +-------------------+
+
+Cutting across all of the above: Metrics/Observability Exporter, Config Store (durable)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Why should the Health Checker be a separate component from the Selector, rather than the Selector just checking health inline on every request?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because checking health inline on the request's hot path would add latency to <em>every</em> request and couple request throughput to health-check cost. Health checking needs to run on its own background cadence (e.g., every 2–5 seconds), independently, and simply update a shared "current health view" that the Selector reads from — a cheap, non-blocking lookup, not a live check per request.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why does the Backend Registry need to be a distinct component from the Control Plane API, instead of the API directly holding the state?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Separation of concerns: the Control Plane API is the <b>write path</b> (accepts registration/deregistration/config changes, validates them), while the Registry is the <b>read-optimized in-memory structure</b> the Selector consults on every request. If they were the same component, every high-frequency read (selection) would compete with low-frequency but potentially slow writes (registration, validation, persistence) for the same lock/resource.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">What does the "Config Store (durable)" box actually need to persist, and why can't everything just live in memory?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">In-memory state (current health status, live connection counts) is fine to lose and rebuild on restart — it's transient by nature. But <b>configuration</b> — the backend list itself, weights, algorithm choice, routing rules — must survive an LB node restart or it silently reverts to defaults after every deploy/crash. That's the durable/config vs. live/derived split every component boundary in this diagram is quietly built around.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">If you had to merge two of these components into one to reduce operational complexity, which two would you merge — and what would you lose?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A defensible merge: Health Checker and Backend Registry, since the health checker's only job is updating the registry's health field — running them as one process removes an IPC/network hop. What you lose: you can no longer scale or restart health-checking independently of the registry (e.g., temporarily disabling health checks for a maintenance window without touching registry state becomes harder). This is the kind of trade-off worth being able to state out loud in a review, even if you don't ultimately choose it.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">step 04</span><h2>Low-level API design — the control plane, precisely</h2></div>
+    <p class="segment-note">"Build the APIs" is not a checkbox — it's where vague components become concrete contracts. Design the control-plane API surface: who calls it, with what payload, and what it guarantees.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Write out 5 API endpoints (method + path + one-line purpose) for your control plane before revealing. Think about who the caller is for each one — a deploying service? a human operator? an autoscaler?</div>
+
+    <div class="api-card"><div class="api-line">POST /v1/backends</div><div class="api-desc">Register a new backend. <b>Caller:</b> the service's own deploy pipeline or self-registration agent. <b>Body:</b> host, port, initial weight, pool/service id. <b>Returns:</b> backend_id. Does NOT immediately receive traffic — starts in a PENDING state until the first successful health check.</div></div>
+    <div class="api-card"><div class="api-line">DELETE /v1/backends/{backend_id}</div><div class="api-desc">Deregister a backend. <b>Caller:</b> deploy pipeline on scale-down. <b>Behavior:</b> does not immediately remove — transitions the backend to DRAINING first (see segment 8), actual removal happens once in-flight connections complete or a drain timeout elapses.</div></div>
+    <div class="api-card"><div class="api-line">PATCH /v1/backends/{backend_id}/weight</div><div class="api-desc">Update a backend's routing weight. <b>Caller:</b> an operator doing a canary rollout, or an autoscaler adjusting for instance size differences. <b>Body:</b> new integer weight.</div></div>
+    <div class="api-card"><div class="api-line">POST /v1/backends/{backend_id}/drain</div><div class="api-desc">Explicitly trigger draining without deregistering. <b>Caller:</b> deploy tooling, ahead of a rolling restart. Lets a backend be pulled from new-traffic eligibility while investigation happens, without losing its registration.</div></div>
+    <div class="api-card"><div class="api-line">GET /v1/pools/{pool_id}/backends</div><div class="api-desc">List current backend pool with live health/weight/state. <b>Caller:</b> observability dashboards, on-call engineers debugging routing.</div></div>
+    <div class="api-card"><div class="api-line">PUT /v1/pools/{pool_id}/policy</div><div class="api-desc">Update the pool's selection algorithm and health-check policy (interval, thresholds, deep vs shallow). <b>Caller:</b> a platform/SRE-owned config change, not per-service self-service — this one has wider blast radius.</div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Why does POST /v1/backends put a new backend into a PENDING state instead of ACTIVE immediately?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because registration only proves the backend <em>exists</em> in the registry — it says nothing about whether it's actually ready to serve (segment 3 in the main notes: discovery vs. readiness are different questions). Routing to it immediately risks sending real traffic to a backend that's still warming up or mid-deploy. PENDING → ACTIVE only after N consecutive successful health checks is the correct default.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Why is DELETE not immediate — why route it through DRAINING instead of removing the backend from the registry right away?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Immediate removal would cut off in-flight requests exactly like the ungraceful-deploy scenario from the leadership section. Making DELETE trigger a drain-then-remove sequence by default means callers get safe behavior even if they didn't explicitly think to call the drain endpoint first — the safe path is the default path, not an opt-in.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Why does PUT /v1/pools/{pool_id}/policy deserve a different authorization model (platform/SRE-owned) than POST /v1/backends (self-service)?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because registering your own backend affects only your service's slice of traffic, but changing the pool-wide algorithm or health-check thresholds affects <b>every</b> backend and every caller in that pool at once — the blast radius is fundamentally different. APIs should be scoped for authorization based on blast radius, not just on "does this team own the underlying service."</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">What idempotency property should POST /v1/backends have, and why does it matter for a control-plane API specifically?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Registering the same host:port twice should not create two entries — the API should treat (pool_id, host, port) as a natural key and return the existing backend_id on a duplicate call, rather than erroring or duplicating. This matters because deploy pipelines retry on failure by default; a non-idempotent registration API will eventually double-register a backend after a flaky network call, corrupting the pool.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">step 05</span><h2>Data model &amp; DB sizing — what state actually needs to persist, and how much?</h2></div>
+    <p class="segment-note">Important distinction: you are <b>not</b> sizing for request traffic (the LB doesn't store requests). You're sizing for <b>control-plane / config metadata</b> — the backend registry, health history, and policy config. This is usually a small, low-write dataset — knowing that, and being able to say why, is itself the signal of good judgment here.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Sketch your own schema (2–3 tables) for backends, pools, and health status. Then estimate: how many rows, how many writes/sec, and how much storage for a platform with 80+ services, ~10 backends per service on average?</div>
+
+    <pre class="sketch">TABLE backends
+  backend_id (PK), pool_id (FK), host, port, weight, state (PENDING/ACTIVE/DRAINING/REMOVED),
+  registered_at, last_health_check_at, consecutive_failures, consecutive_successes
+
+TABLE pools
+  pool_id (PK), name, algorithm (round_robin/least_conn/weighted), health_check_policy_id, created_at
+
+TABLE health_check_policy
+  policy_id (PK), interval_ms, timeout_ms, failure_threshold, success_threshold, check_type (tcp/http/deep)
+
+-- NOT stored here: per-request logs, request bodies, traffic data (that's the metrics/observability pipeline's job)</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Estimate row counts: 80+ microservices, ~10 backend instances each on average, one pool per service. How many rows in `backends` and `pools`?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>pools:</b> ~80–100 rows (one per service/pool). <b>backends:</b> ~800–1,000 active rows (80 services × ~10 instances), plus some churn overhead if you keep recently-REMOVED rows for audit (say 3x that for a rolling 30-day audit window = ~3,000 rows). This is a trivially small dataset by database standards — a few thousand rows, not millions. The sizing exercise itself teaches the lesson: <b>the LB's own metadata store is tiny; it's the traffic it routes that's large, and that traffic is never persisted here.</b></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Estimate write throughput to this store. Is it closer to 10 writes/sec, 1,000 writes/sec, or 100,000 writes/sec — and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Closer to <b>single digits to low tens of writes/sec platform-wide</b>, and even that's bursty (deploys, autoscaling events), not sustained. Backend registration/deregistration happens on deploy cadence (maybe a few times per minute across 80 services during business hours), not per-request. This is the key sizing insight: <b>the control-plane data store has request-independent, low write volume</b> — it should never be designed as if it needs to scale with traffic RPS, because health-status updates (the actual frequent writes) are usually kept in-memory/cache, not written straight to the durable DB on every check.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Given writes are this infrequent and the dataset this small, does this justify a distributed database, or is something simpler defensible?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A single well-replicated relational DB (e.g., Postgres with a couple of read replicas), or even an embedded config store synced via a control-plane service, is entirely defensible at this scale — reaching for a distributed database here would be solving a scale problem you don't have. The interesting design decision isn't the DB technology; it's making sure <b>each LB node caches this data in-memory</b> and only re-syncs periodically, so the data store's availability doesn't become a single point of failure on the data path (segment 9 territory).</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Where should live health-check results (updated every few seconds per backend) actually be stored — the durable DB, or somewhere else? Why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Live health results should stay in <b>each LB node's local in-memory state</b> (possibly shared via a fast cache like Redis if multiple LB nodes need a consistent view), not written to the durable config DB on every check. Writing health pings to a relational DB every 2–5 seconds per backend, across 800+ backends, would generate meaningful sustained write load for information that's inherently transient and doesn't need durability — if an LB node restarts, it just re-runs health checks and rebuilds the view in seconds.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">What's the actual takeaway about DB sizing for a load balancer, stated as one sentence you could say in an interview?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">"The load balancer's own persistent storage needs are small and low-write — because it's a routing and control-plane system, not a system of record for traffic — and the interesting sizing decision isn't the database's scale, it's correctly separating durable config (small, low-write, needs a real DB) from live/derived state (health, connection counts — in-memory, ephemeral, rebuilt on restart)."</div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">step 06</span><h2>Algorithm internals — pick one, and design it precisely</h2></div>
+    <p class="segment-note">"Weighted least connections" as a phrase is not a design. Here's where you actually specify the data structure and the exact steps the Selector runs on every request.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Pick weighted least-connections. Before revealing, write pseudocode for: (a) the data structure holding backend state, (b) the selection function run per request, (c) what updates on request-start and request-end.</div>
+
+    <pre class="sketch">struct BackendState {
+  backend_id, weight, active_connections, health_status
+}
+
+// In-memory, per LB node:
+backend_pool: Map&lt;backend_id, BackendState&gt;   // updated by Health Checker + connection tracking
+
+function select_backend(pool):
+  healthy = [b for b in pool if b.health_status == ACTIVE]
+  if healthy is empty: return OVERLOAD_OR_503
+  // score = active_connections / weight  (lower score = more headroom relative to capacity)
+  best = min(healthy, key = lambda b: b.active_connections / b.weight)
+  return best
+
+on_request_start(backend):
+  backend.active_connections += 1
+
+on_request_end(backend):
+  backend.active_connections -= 1</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">Why divide active_connections by weight instead of just comparing raw active_connections across backends?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because raw connection counts alone assume every backend has equal capacity. If S1 has weight 5 (bigger instance) and S2 has weight 1, S1 should fairly hold ~5x the connections of S2 before either becomes the better next choice. Dividing by weight normalizes "connections" into "connections per unit of declared capacity," so the comparison is fair across heterogeneous backends — this is exactly the weighted least-connections algorithm sketched in the concepts document, made concrete.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">This selection function runs on every single request. What data structure property does it need to be safe under concurrent access from many request threads at once?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It needs <b>thread-safe, low-contention updates</b> — active_connections is being incremented and decremented by many concurrent requests simultaneously. A naive global lock around the whole map would serialize every request through one lock, defeating the purpose. The realistic answer: use atomic counters per backend (lock-free increment/decrement) so only the rare full pool-membership change (backend added/removed) needs a heavier lock, not every single request.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">If `healthy` is empty (every backend failed health checks simultaneously), what should `select_backend` actually do — crash, return an error, or something else?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Return a controlled failure — a 503 with a clear "no healthy backends" signal — never crash the LB process itself. This ties directly to overload protection (main notes segment 10): the LB should have an explicit code path for "the whole pool is down," not treat it as an unhandled edge case that surfaces as a null-pointer exception or hang.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">Why should on_request_end always run, even when the request fails or the client disconnects early?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because if a failed or aborted request never decrements active_connections, that backend's counter <b>leaks upward permanently</b> — over time, every backend looks artificially "busier" than it really is, and the algorithm's fairness silently degrades. This is a classic resource-accounting bug: on_request_end belongs in a finally/cleanup path, not just the success path.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">step 07</span><h2>Health checker — design it as its own subsystem</h2></div>
+    <p class="segment-note">You already know health checks can lie (main notes segment 5). Now design the actual subsystem: what runs, on what schedule, and how it talks to the rest of your components.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Design the health checker's loop — what does it do every tick, what config does it need per backend, and how does a state transition (ACTIVE → UNHEALTHY) actually get applied?</div>
+
+    <pre class="sketch">every interval_ms (per pool's health_check_policy):
+  for backend in pool.backends:
+    result = run_check(backend, check_type, timeout_ms)   // TCP / HTTP / deep
+    if result == success:
+      backend.consecutive_successes += 1
+      backend.consecutive_failures = 0
+      if backend.state == UNHEALTHY and consecutive_successes >= success_threshold:
+        backend.state = ACTIVE   // re-admit
+    else:
+      backend.consecutive_failures += 1
+      backend.consecutive_successes = 0
+      if backend.state == ACTIVE and consecutive_failures >= failure_threshold:
+        backend.state = UNHEALTHY   // remove from routing eligibility</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Why use consecutive_failures/successes with thresholds, instead of flipping state on the very first failed or first successful check?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This is the flapping-prevention mechanism from the concepts document, made concrete. Flipping on one data point makes the pool membership hostage to a single transient network blip. Requiring N consecutive results before changing state trades a little detection latency for a lot of routing stability — the exact threshold values (e.g. 3 failures / 2 successes) should be tuned per pool based on how expensive a false removal vs. a missed detection is for that specific service.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Should the health checker run as part of each LB node, or as a separate, single centralized service?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Running it per LB node is more resilient (no single point of failure for health detection) but means N LB nodes are each independently hitting every backend — multiplying load on backends by N. A centralized health-check service avoids that multiplication but becomes its own single point of failure and adds a hop between "check result" and "LB's routing decision." A common middle ground: a small dedicated health-checking tier (2–3 instances, not 1, not N) that all LB nodes subscribe to for results.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">For the payment/order-service pool specifically, what check_type would you choose, and what's the one risk you're deliberately accepting?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A reasonable choice: a <b>lightweight HTTP check that exercises the critical dependency path but is cached/rate-limited on the backend side</b> (e.g., checks DB connectivity but reads a value cached for 1–2 seconds rather than issuing a fresh query every poll) — deeper than a pure TCP check, cheaper than an uncached deep check. Risk accepted: the cached value could theoretically mask a DB failure that happens within that 1–2 second cache window — a deliberate, bounded trade-off, not an unnoticed gap.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">step 08</span><h2>Failure &amp; draining logic — design the state machine, not just the happy path</h2></div>
+    <p class="segment-note">You now have PENDING, ACTIVE, UNHEALTHY, DRAINING, REMOVED scattered across earlier segments. Pull them into one explicit state machine — this is what an interviewer or a code reviewer will actually ask you to draw.</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> Draw the full backend lifecycle state machine — every state, and the exact trigger for every transition — before revealing.</div>
+
+    <pre class="sketch">        register()                 N consecutive
+           |                        successful checks
+           v                              |
+       PENDING  ------------------------> ACTIVE  <---------------+
+                                            |   \                  |
+                          N consecutive     |    \  drain()        | N consecutive
+                          failed checks     |     \  or DELETE     | successful checks
+                                            v      v                |
+                                        UNHEALTHY  DRAINING ---------+
+                                            |          |
+                                  drain()   |          | in-flight conns = 0
+                                  or DELETE |          | OR drain_timeout elapsed
+                                            v          v
+                                         REMOVED <-- REMOVED</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Can a backend go directly from UNHEALTHY back to ACTIVE, or must it always pass through some intermediate check?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It should require the same N-consecutive-successes threshold as PENDING → ACTIVE — a backend recovering from UNHEALTHY hasn't proven it's stable yet, just that one check passed. Treating "recovered" the same as "newly registered and proven" (both need the same success streak before re-admission) keeps the state machine consistent and prevents a flapping backend from being re-admitted on a single lucky check.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">What should happen if a backend is UNHEALTHY and someone calls drain() on it — does draining even mean anything for a backend that's already excluded from routing?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It still matters — an UNHEALTHY backend is excluded from <em>new</em> routing decisions, but if it still holds long-lived connections from before it went unhealthy (a WebSocket, a streaming session), drain() gives those a bounded time to complete before the backend is force-removed, rather than dropping them the instant health status flips. UNHEALTHY and DRAINING are answering different questions — "can it take new work" vs. "should its old work be cut off" — so both states can coexist meaningfully.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q30</span><span class="q-text">What happens if a DRAINING backend never reaches zero in-flight connections — a stuck long-lived connection that just never closes?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This is exactly why the state machine needs a <b>drain_timeout</b> as an alternate exit condition, not just "in-flight connections = 0." Without a timeout, a single misbehaving client could keep a backend stuck in DRAINING (and therefore stuck consuming capacity/holding infra) indefinitely. The timeout forces eventual REMOVED even if it means force-closing that one stuck connection — a deliberate, bounded trade-off between graceful and guaranteed.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Where does retry logic plug into this state machine — should the LB itself retry a failed request on a different backend, and if so, under what condition?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Retry should be a property configured <b>per pool/route</b>, not global (echoing the leadership scenario about platform-wide retry causing duplicate redemptions). A defensible default: retry is allowed only for requests explicitly marked idempotent (e.g., via an idempotency-key header the caller supplies), and only for a narrow set of failure types (connection refused, timeout before any response byte received) — never after a response has started streaming back, since that implies the backend already began processing.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">step 09</span><h2>Scaling your own load balancer layer</h2></div>
+    <p class="segment-note">Your LB is now a real system with its own state. The final design question: how does it scale out without becoming the very bottleneck it exists to prevent?</p>
+
+    <div class="build-prompt"><b>Build it yourself first:</b> If one LB node isn't enough, how do you run N of them? What do they share, what do they keep local, and how do they stay roughly in sync? Write your answer before revealing.</div>
+
+    <pre class="sketch">        Clients
+           |
+           v
+  +-----------------------------+
+  |  Entry (VIP / DNS / ECMP)    |   <- segment 2 of the concepts doc: LB's own availability problem
+  +-----------------------------+
+     |        |        |        |
+     v        v        v        v
+   LB1       LB2      LB3      LB4     <- each: own in-memory copy of registry + health view
+     \        |        |        /
+      \       |        |       /
+       +------+--------+------+
+              |
+              v
+       Config Store (durable, low-write)   <- source of truth, polled/pushed periodically
+       Health results: local per node OR shared cache (Redis) if strict consistency needed</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Should LB1 and LB2 coordinate to agree on exactly which backend to pick for every request, or is it fine if they make slightly different choices?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Fine — even desirable — for them to differ slightly. Forcing agreement means a synchronous coordination step on every request, turning the LB layer itself into a serialization point. Each node keeping its own in-memory view (refreshed every few seconds from the config store, and its own locally-run health checks) tolerates small windows of inconsistency in exchange for each node being fully independent and fast on the hot path — the same trade-off named explicitly in the concepts document's scaling segment.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q33</span><span class="q-text">A new backend is registered via the control-plane API. How long, realistically, before every LB node is routing to it — and is that delay a problem?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">If each LB node polls the config store every 5 seconds, worst case is just under one poll interval per node, so realistically within 5–10 seconds all nodes converge. Given the NFR target set in segment 1 ("new backend visible within 5–10 seconds"), this is acceptable — the design decision here is making sure that number was chosen <em>deliberately</em> against a stated requirement, not left as whatever the default polling interval happened to be.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">What's the failure mode if the Config Store itself goes down for 10 minutes? Does the whole LB layer go down with it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">No — and designing for this is the whole point of each LB node caching its own copy. If the config store is unreachable, each LB node should keep serving traffic using its <b>last-known-good in-memory state</b>, simply logging/alerting that it can't refresh, rather than failing closed. The config store's availability should degrade the platform's ability to <em>change</em> routing, not its ability to <em>continue</em> routing — that distinction is exactly what separates a resilient design from a fragile one.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">How would you know, with actual numbers, when it's time to add another LB node — what metric would trigger that decision?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Tie it back to the NFR from segment 1: if per-node throughput approaches the 20k–50k rps steady-state target, or if p99 added-latency creeps toward the 2–3ms ceiling under current load, that's the trigger — not a vague "it feels slow." Designing the non-functional requirements up front is exactly what turns "should we scale out" from a guess into a measurable, defensible decision.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">step 10</span><h2>End-to-end assembly — put your own design in one diagram</h2></div>
+    <p class="segment-note">Last step. No new concepts — just synthesis. This is what you'd draw on a whiteboard in the last five minutes of an interview to prove the pieces actually cohere into one system.</p>
+
+    <div class="build-prompt"><b>Build it yourself, one more time:</b> Without looking back at the earlier segments, draw the full request path AND the full control-plane path in one diagram, labeling every component from segment 3. Then compare against the reveal below.</div>
+
+    <pre class="sketch">DATA PLANE (per request):
+Client --TLS--> Listener --> Selector (reads in-memory Registry) --> chosen Backend
+                                  ^                        |
+                                  |                (on_request_start / on_request_end
+                          Health Checker              update active_connections)
+                        (background loop,
+                         updates Registry's
+                         health_status)
+
+CONTROL PLANE (config changes):
+Operator/Pipeline --> Control-Plane API --> validate --> write --> Config Store (durable)
+                                                                        |
+                                                            periodic poll/push
+                                                                        v
+                                                        each LB node's local Registry copy
+
+FAILURE PATHS baked in:
+- No healthy backend -> 503 (never crash)
+- Backend exceeds failure_threshold -> UNHEALTHY (excluded from Selector)
+- DELETE/scale-down -> DRAINING -> REMOVED (bounded by drain_timeout)
+- Config Store unreachable -> LB nodes keep serving on last-known-good cache</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">Looking at your own diagram: which single component, if it silently failed, would be hardest to detect — and does your design have a way to notice?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Usually the Health Checker itself — if it silently stops running (crashed goroutine, stuck deadlock), every backend keeps whatever health state it last had, potentially forever, with no error raised anywhere. The design needs a meta-check: the health checker's own liveness (e.g., "last successful check cycle completed at time T") should itself be an exported metric with alerting, or a broken health checker becomes invisible until backends that actually died are still being routed to.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q37</span><span class="q-text">If you had to cut this design down to an MVP buildable in two weeks, which three components would you keep, and which would you explicitly defer?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">A defensible MVP: Listener + Selector (simple weighted round robin, no dynamic weight updates yet) + Health Checker (shallow HTTP only). Deferred: the full Control-Plane API (start with static config file instead of live registration endpoints), DRAINING state machine (accept brief connection drops on removal initially), and the shared config store (single LB node only, no multi-node sync yet). Being able to name the MVP cut — and explain what risk each deferral accepts — is itself a senior-level signal.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q38</span><span class="q-text">Final check: does your design actually satisfy the non-functional requirements you wrote in segment 1? Go back and verify each one against a specific component.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This is deliberately the one question without a "reveal" answer written for you — the exercise only works if you trace it yourself: throughput target → which component could bottleneck it (usually the Selector's lock contention, addressed in segment 6); availability target → does the design tolerate Config Store and Health Checker failures gracefully (segment 9); backend-visibility latency → is the poll interval actually tuned to the number you committed to. A design that was never checked against its own stated requirements isn't finished — it's just drawn.</div></div></div>
+  </section>
+
+  <footer>
+    // final compression: requirements before components → components before APIs → APIs before data model →
+    a small, low-write DB for config, never for traffic → algorithms as precise data-structure operations, not phrases →
+    an explicit backend lifecycle state machine, not implicit states → LB nodes that tolerate staleness instead of
+    coordinating → and a design that gets checked back against the requirements it started from, not just drawn and left.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Build Your Own SQL Engine — a design session</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .build-first{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .build-first b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  body.dark-theme .api-card{background:var(--panel);}
+  body.dark-theme .no-answer{background:#1E1520;border-color:#3D2A44;color:#E7E3D8;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C9871F;}
+  .ledger-strip span:nth-child(2){background:#2E8B82;}
+  .ledger-strip span:nth-child(3){background:#C1543A;}
+  .ledger-strip span:nth-child(4){background:#7A63B8;}
+  .ledger-strip span:nth-child(5){background:#3480B0;}
+  .ledger-strip span:nth-child(6){background:#6B9A44;}
+  .ledger-strip span:nth-child(7){background:#C1547A;}
+  .ledger-strip span:nth-child(8){background:#B9971F;}
+  .ledger-strip span:nth-child(9){background:#279090;}
+  .ledger-strip span:nth-child(10){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.35rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:70ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  body.dark-theme nav{background:rgba(15,17,21,0.94);}
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:72ch;}
+  .segment-note code, p code, .q-answer-inner code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  /* BUILD-IT-YOURSELF-FIRST CALLOUT */
+  .build-first{
+    display:flex;gap:12px;align-items:flex-start;
+    margin:0 0 18px;padding:13px 16px;border-radius:6px;
+    background:#F4EFE0;border:1px solid #E3D6A8;
+    font-size:.92rem;color:#3A3934;
+  }
+  .build-first .bf-icon{
+    flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:700;
+    background:#C9871F;color:#fff;padding:3px 8px;border-radius:4px;letter-spacing:.4px;
+    margin-top:1px;white-space:nowrap;
+  }
+  .build-first b{color:#8B6A1D;}
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;white-space:pre;
+  }
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .q-answer-inner .why{
+    display:block;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);
+    color:var(--muted);font-size:.89rem;
+  }
+  .q-answer-inner .why b{color:#7A63B8;}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 22px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:30%;font-weight:600;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* API CARD */
+  .api-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;
+  }
+  .api-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .api-method{
+    font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:700;color:#fff;
+    padding:3px 8px;border-radius:4px;letter-spacing:.4px;
+  }
+  .api-method.get{background:#2E8B82;}
+  .api-method.post{background:#3480B0;}
+  .api-method.put{background:#B9971F;}
+  .api-method.delete{background:#C1543A;}
+  .api-method.internal{background:#7A63B8;}
+  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.88rem;color:var(--text);font-weight:600;}
+  .api-body{font-size:.88rem;color:#3A3934;}
+  body.dark-theme .api-body{color:#C7C2B4;}
+  .api-row{display:flex;gap:8px;margin-top:5px;font-size:.85rem;}
+  .api-row .k{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.4px;width:78px;flex-shrink:0;padding-top:2px;}
+  .api-row .v{color:#3A3934;flex:1;}
+  body.dark-theme .api-row .v{color:#C7C2B4;}
+  .api-row .v code{background:var(--panel-2);}
+
+  .no-answer{
+    margin-top:14px;padding:14px 16px;border-radius:6px;
+    background:#F3EAF6;border:1px solid #DEC7E6;
+    font-size:.92rem;color:#3A3934;
+  }
+  .no-answer b{color:#9A62D6;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.75rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+    .api-row{flex-direction:column;gap:2px;}
+    .api-row .k{width:auto;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Build Your Own <em>SQL Engine</em> — a design session</h1>
+    <p class="sub">Not an explainer — you already have that. This is a design review of a system that doesn't exist yet: a small MySQL/Oracle-scale SQL engine, sized for sitting quietly under a fintech platform like Optimus. Every segment opens with a callout telling you exactly what to draw, write, or decide. Attempt it — on paper, in your head, out loud — before you reveal. The reveal is a reference design to argue with, not a correct answer.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>Format: build → commit → reveal → argue</span>
+      <span>Grounding: 80+ microservices, NSDL / MOFSL / PolicyBazaar / LAMF traffic</span>
+      <span>Goal: your own design, stress-tested</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">00 Requirements</a>
+    <a href="#s2" style="color:#2E8B82;">01 Core Decision</a>
+    <a href="#s3" style="color:#C1543A;">02 Components</a>
+    <a href="#s4" style="color:#7A63B8;">03 API Design</a>
+    <a href="#s5" style="color:#3480B0;">04 Data Model & Sizing</a>
+    <a href="#s6" style="color:#6B9A44;">05 Core Algorithm</a>
+    <a href="#s7" style="color:#C1547A;">06 Lock Manager</a>
+    <a href="#s8" style="color:#B9971F;">07 Failure & State Machine</a>
+    <a href="#s9" style="color:#279090;">08 Scaling Itself</a>
+    <a href="#s10" style="color:#9A62D6;">09 Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1: REQUIREMENTS -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>Functional & non-functional requirements</h2></div>
+    <p class="segment-note">You're not building "a database." You're building the storage-and-query layer that will sit under one slice of Optimus — say, the demat holdings and order-status tables that NSDL sync, IPO allotment, and MF redemption all read and write. Requirements first, or every later decision is a guess.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Write your own <b>5–7 FR bullets</b> (what must this engine let a caller do — not how) and <b>NFR targets with real numbers</b>: writes/sec, p99 read latency, and where you sit on the consistency ↔ availability line for this workload. Then write one sentence on what you're scoping <b>OUT</b>, and why leaving it out is itself a decision. Don't reveal until you've written numbers, not adjectives.</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R1</span><span class="q-text">Reveal: a reference FR/NFR set for this workload</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Functional requirements</b>
+        <ul class="rapid-list" style="margin-top:8px;">
+          <li>Durable CRUD on typed relational rows via SQL, with foreign-key and check constraints enforced by the engine, not the caller.</li>
+          <li>Transactions spanning multiple statements with atomic commit/rollback — an IPO allotment debit and a demat credit must land together or not at all.</li>
+          <li>Secondary indexes with range-scan support (folio number, PAN, order-date range).</li>
+          <li>Point-in-time consistent reads for a single session (read-your-own-writes on the primary).</li>
+          <li>An append-only audit path for regulated tables (balances, allotments) independent of current-state tables.</li>
+          <li>An administrative surface to inspect running transactions, locks held, and replication lag.</li>
+        </ul>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Write throughput</div><div class="value">3,000 <span>tx/sec</span></div></div>
+          <div class="stat-card"><div class="label">Read p99</div><div class="value">15 <span>ms</span></div></div>
+          <div class="stat-card"><div class="label">Write p99</div><div class="value">40 <span>ms</span></div></div>
+          <div class="stat-card"><div class="label">CP or AP</div><div class="value">CP <span>on ledger tables</span></div></div>
+          <div class="stat-card"><div class="label">Durability</div><div class="value">fsync <span>before ack</span></div></div>
+        </div>
+        <div class="why"><b>Why these numbers, not others:</b> 3,000 tx/sec is sized to peak IPO-allotment-day burst across 80+ services hitting a shared holdings table, not steady-state load — designing for average load is the single most common NFR mistake. CP over AP on ledger tables isn't a stylistic preference; a demat/LAMF balance that's briefly unavailable is an incident, one that's silently wrong is a regulatory event. Those are different failure costs, and the NFR should say so explicitly, not leave it implied.</div>
+        <p style="margin-top:14px;"><b>Scope OUT:</b> multi-region active-active writes, and a general-purpose SQL dialect (no window functions, no stored procedures). <span class="why" style="border:none;padding:0;margin:4px 0 0;display:inline;"><b>Why it matters:</b> scoping out active-active writes early is what lets you pick a single-writer architecture in the very next segment with a clear conscience — if you leave that door open "for later," it quietly forces MVCC-with-conflict-resolution complexity into segment 2 that this workload doesn't need yet.</span></p>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 2: CORE DECISION -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Scope & the core design decision</h2></div>
+    <p class="segment-note">One or two decisions here shape every segment after this. Get them wrong and segments 3–9 are just elaborate ways of fighting your own architecture.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Commit, in writing, to: <b>(a) storage engine shape</b> — B+Tree page store vs LSM-tree — and <b>(b) concurrency control</b> — 2-phase locking vs MVCC. For each, write one sentence justifying it against your own segment-1 numbers, not against "what's popular."</div>
+    </div>
+
+    <table class="diff-table">
+      <tr><th>Option considered</th><th>Verdict for this workload</th></tr>
+      <tr><td>LSM-tree (RocksDB-style)</td><td>Rejected as primary — optimizes write throughput at the cost of read-amplification and compaction stalls; this workload is read-heavy (order status, holdings lookups) with moderate, not extreme, write volume.</td></tr>
+      <tr><td>B+Tree page store</td><td>Chosen. In-place updates, predictable read latency, mature range-scan behavior — matches a 3,000 tx/sec write target with a much larger read fan-out.</td></tr>
+      <tr><td>2-phase locking (2PL)</td><td>Rejected as sole mechanism — readers block writers, and a demat holdings table read by 80+ services would create lock contention that has nothing to do with correctness.</td></tr>
+      <tr><td>MVCC + row-level locking for writes</td><td>Chosen. Readers never block writers; writers still take row locks to serialize conflicting updates. Matches the CP-on-writes / high-read-fanout requirement from segment 1 directly.</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">D1</span><span class="q-text">You just chose MVCC. What does that decision cost you later, and where does that cost resurface in this document?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">MVCC means old row versions accumulate until nothing needs them — that cost resurfaces as a <b>garbage collection / vacuum</b> concern inside the storage internals (segment 5) and as a real risk in the failure-handling segment (segment 7): a long-running transaction that never commits pins old versions indefinitely, which is exactly the "stuck forever" case you'll be asked to design an exit for.
+      <span class="why"><b>Why flag it now:</b> a design decision that only shows its cost three segments later is precisely the kind of decision a staff-level review catches early — deciding MVCC without deciding its cleanup mechanism in the same breath is an incomplete decision, not a finished one.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 3: COMPONENTS -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Component breakdown</h2></div>
+    <p class="segment-note">Turn the two decisions above into boxes. The question that matters isn't "what components exist" — it's "which of these must never share a process or a failure domain with which others."</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Draw your own <b>5–7 box component diagram</b> for the engine (not the callers). Before revealing, answer: which component sits on the <b>hot path</b> (blocks the caller's transaction) and which sits on a <b>slow/durable path</b> (can lag without blocking anyone) — and why those two must be separate components, not just separate functions inside one.</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">C1</span><span class="q-text">Reveal: reference component diagram</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Client (Optimus microservice)
+      |
+      v
+[1] Query Parser/Planner  ---- hot path
+      |
+      v
+[2] Transaction Manager   ---- hot path (locks, MVCC snapshot)
+      |         \
+      v          v
+[3] Buffer Pool   [4] WAL Writer  ---- both hot path, both fast
+   (page cache)      (append-only, fsync)
+      |
+      v
+[5] Storage Engine (B+Tree pages on disk)
+      |
+      v
+[6] Checkpoint / Compaction Worker ---- slow path, background
+      |
+      v
+[7] Replication Streamer  ---- slow path, async to replicas</pre>
+        <div class="why"><b>Why the split matters:</b> [2]–[4] sit on the hot path — a caller's COMMIT literally waits on them, so they must be fast and simple. [6] and [7] can lag by seconds without breaking correctness for the caller, only for replicas or disk space. Putting checkpoint/compaction logic inside the transaction manager (a common shortcut) means a slow background compaction can stall live commits — the exact coupling you designed against in segment 1's latency NFR. Separate components isn't bureaucracy; it's a failure-domain boundary that keeps a background job from becoming a foreground outage.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 4: API DESIGN -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Low-level API design</h2></div>
+    <p class="segment-note">The engine's real interface isn't SQL text — it's the control-plane and data-plane operations that sit underneath it. Design those explicitly, not as prose.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Sketch your own <b>5–6 API endpoints</b> — method, path, purpose, caller, payload, idempotency. Before revealing, decide: should authorization be scoped by <b>who owns the data</b>, or by <b>blast radius of the operation</b>? Those aren't the same question — pick one and say why.</div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/tx/begin</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Open a transaction, take an MVCC read snapshot, return a tx handle.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Any Optimus microservice (order flow, allotment, redemption).</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v"><code>{isolation_level, timeout_ms}</code></span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">No — each call opens a new transaction by design.</span></div>
+      </div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/tx/{tx_id}/exec</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Execute one statement inside an open transaction; acquires row locks as needed.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Same service that opened the tx — never a different caller.</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v"><code>{sql, params}</code></span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">No — a repeated INSERT would duplicate a row. Caller must dedupe upstream.</span></div>
+      </div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method put">PUT</span><span class="api-path">/tx/{tx_id}/commit</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Flush WAL, fsync, release locks, make writes visible to future snapshots.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Owning microservice.</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v">none</span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">Yes — committing an already-committed tx_id returns the original result, doesn't re-apply.</span></div>
+      </div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method delete">DELETE</span><span class="api-path">/tx/{tx_id}</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Abort — roll back, release locks, discard the MVCC snapshot.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Owning microservice, or the Transaction Manager itself on timeout.</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v">none</span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">Yes — aborting twice is a no-op.</span></div>
+      </div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method internal">INTERNAL</span><span class="api-path">/admin/checkpoint/trigger</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Force a checkpoint — flush dirty buffer-pool pages, truncate WAL up to the checkpoint LSN.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Operator, or an autoscaler-style internal scheduler — never an app service.</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v">none</span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">Yes — a redundant checkpoint just does less work.</span></div>
+      </div>
+    </div>
+
+    <div class="api-card">
+      <div class="api-head"><span class="api-method get">GET</span><span class="api-path">/admin/locks</span></div>
+      <div class="api-body">
+        <div class="api-row"><span class="k">Purpose</span><span class="v">Introspect held locks, waiters, and current wait-for graph — the diagnostic surface for segment 6's deadlock detector.</span></div>
+        <div class="api-row"><span class="k">Caller</span><span class="v">Operator / on-call tooling only.</span></div>
+        <div class="api-row"><span class="k">Payload</span><span class="v">none</span></div>
+        <div class="api-row"><span class="k">Idempotent</span><span class="v">Yes — read-only.</span></div>
+      </div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">A1</span><span class="q-text">Should these endpoints be authorized by data ownership (which service owns this table) or by blast radius (what could this call break)?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Blast radius, layered on top of ownership.</b> Ownership answers "can this service touch this table" — necessary but not sufficient. <code>/admin/checkpoint/trigger</code> and <code>/admin/locks</code> aren't owned by any single service, yet a mis-scoped call to either can degrade every tenant on the engine at once. Scoping purely by ownership would let any authenticated caller hit an admin endpoint they technically "own" access to but have no business invoking under load.
+      <span class="why"><b>Why this is the harder question:</b> ownership-based authz is the default every team reaches for first because it maps to org boundaries. Blast-radius authz requires someone to have actually reasoned about what each endpoint can break — which is exactly the reasoning this document is trying to force you to do explicitly, once, rather than discover during an incident.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 5: DATA MODEL & SIZING -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Data model & sizing</h2></div>
+    <p class="segment-note">Not the tables your callers store — the engine's own internal catalog and control state. Get durable-vs-ephemeral wrong here and you'll debug a phantom "data loss" bug that's actually a design category error.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Sketch your own internal schema (catalog, page directory, lock table) and estimate row counts / write throughput / storage for an engine backing 80+ microservices. Then answer: is this actually a <b>big-data problem</b>, or a well-indexed-medium-data problem wearing a big-data costume?</div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Internal table</th><th>Durable or ephemeral</th><th>Rough scale</th></tr>
+      <tr><td>catalog.tables</td><td>durable (system pages)</td><td>~500 rows — one per logical table across 80+ services</td></tr>
+      <tr><td>catalog.indexes</td><td>durable (system pages)</td><td>~1,200 rows</td></tr>
+      <tr><td>page_directory</td><td>durable, memory-mapped</td><td>~40M pages at 8KB = ~320GB steady state</td></tr>
+      <tr><td>lock_table</td><td>ephemeral, in-memory only</td><td>peaks at ~15K held locks under IPO-day load</td></tr>
+      <tr><td>active_tx_table</td><td>ephemeral, in-memory only</td><td>peaks at ~2K concurrent transactions</td></tr>
+      <tr><td>wal_segments</td><td>durable, disk, rotated</td><td>~3,000 tx/sec × ~200 bytes avg ≈ 600KB/sec sustained</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">S1</span><span class="q-text">Why does conflating the lock table and the catalog — treating both as "engine metadata" — count as a design mistake, not just an implementation shortcut?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because they have opposite durability contracts. The <b>catalog</b> must survive a crash — losing it means the engine forgets its own schema. The <b>lock table</b> must <i>not</i> survive a crash as-is — replaying stale locks after a restart would deadlock the engine against transactions that no longer exist. Storing both the same way means either the catalog is under-protected or the lock table is over-protected; there's no shared storage policy that's correct for both.
+      <span class="why"><b>Why it matters at scale:</b> at 80+ services depending on this engine, a recovery path that accidentally restores stale locks doesn't cause one incident — it causes a platform-wide stall the moment the engine restarts, which is a far worse failure mode than the crash that triggered it.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">S2</span><span class="q-text">Gut-check: at ~320GB steady state and 3,000 tx/sec, is this a "big data" problem requiring a distributed storage layer?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>No — and treating it as one would be over-engineering.</b> 320GB fits comfortably on a single NVMe-backed instance with room to grow for years; 3,000 tx/sec is well within what a single well-tuned B+Tree engine with MVCC handles on modern hardware. The actual hard problems here are correctness under concurrency and failure recovery, not data volume — a distributed storage layer would trade a solved problem (fits on one box) for an unsolved one (distributed consensus) without a numbers-driven reason to.
+      <span class="why"><b>Why this question earns a segment of its own:</b> "should this be distributed" is usually answered by reflex (bigger systems feel more serious) rather than by the numbers already sitting in segment 1 and this segment — the discipline is refusing complexity the requirements don't justify.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 6: CORE ALGORITHM -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Core algorithm — the buffer pool</h2></div>
+    <p class="segment-note">Pick one mechanism and go deep: the buffer pool is the component every read and write actually touches, and it's where "the engine is slow" bugs usually live.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Write actual <b>pseudocode</b> — not prose — for the buffer pool's core structure and its <code>fetch_page(page_id)</code> operation. Cover: what happens when the pool is <b>full and every frame is pinned</b>, and how two threads fetching the same page concurrently don't both load it from disk.</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">P1</span><span class="q-text">Reveal: reference pseudocode</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">struct Frame:
+  page_id, dirty_bit, pin_count, latch, ref_bit
+
+BufferPool:
+  frames[N]                  // fixed-size array
+  page_table: map(page_id -> frame_index)  // guarded by pool_latch
+
+fetch_page(page_id):
+  pool_latch.lock()
+  if page_id in page_table:
+    f = frames[page_table[page_id]]
+    f.pin_count += 1
+    pool_latch.unlock()
+    return f                              // hit: no disk I/O
+
+  frame_index = find_victim()             // LRU-K / clock-sweep
+  if frame_index is None:
+    pool_latch.unlock()
+    raise POOL_EXHAUSTED                  // see reveal below
+
+  victim = frames[frame_index]
+  if victim.dirty_bit:
+    flush_to_disk(victim)                 // WAL must already cover this page
+  page_table.remove(victim.page_id)
+
+  frames[frame_index] = read_from_disk(page_id)
+  frames[frame_index].pin_count = 1
+  page_table[page_id] = frame_index
+  pool_latch.unlock()
+  return frames[frame_index]
+
+unpin_page(page_id, was_written):
+  f = frames[page_table[page_id]]
+  f.pin_count -= 1
+  if was_written: f.dirty_bit = true</pre>
+        <div class="why"><b>Concurrency:</b> the <code>pool_latch</code> around the page-table lookup and the frame-swap is what prevents two threads from both missing on the same page and issuing duplicate disk reads — the second thread's lookup, once it gets the latch, finds the first thread's in-flight fetch already reflected in <code>page_table</code>. Per-frame latches (not shown) then guard the page's actual bytes during read/write, independent of the pool-wide latch.</div>
+        <div class="why"><b>Pool exhausted (every frame pinned):</b> this isn't a hang — it's a signal. The transaction manager should reject the requesting transaction's next operation with a "retry with backoff" or abort it outright if it's held the pool hostage past a timeout, rather than blocking forever. A pool that can silently deadlock waiting for a free frame is a design bug, not bad luck — the fix belongs in segment 7's failure handling, not in tuning the pool size after the fact.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 7: SUPPORTING SUBSYSTEM -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Supporting subsystem — lock manager & deadlock detector</h2></div>
+    <p class="segment-note">MVCC handles reader/writer conflicts. It doesn't handle two writers each waiting on a row the other holds. Something has to notice that and break the tie.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Design the detector's loop precisely — what data structure it walks, how often, and what it does the instant it finds a cycle. Then decide: should deadlock detection run <b>centralized</b> (one detector for the whole engine) or <b>per-shard/distributed</b> — and what does each cost?</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L1</span><span class="q-text">Reveal: the detection loop</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">every 100ms:
+  graph = build_wait_for_graph(lock_table)
+  // edge tx_A -> tx_B means "tx_A is waiting on a lock tx_B holds"
+
+  cycle = detect_cycle(graph)             // DFS with recursion-stack marking
+  if cycle exists:
+    victim = pick_victim(cycle)           // lowest work-done, or youngest tx
+    abort(victim)                          // releases its locks immediately
+    notify(victim, reason="deadlock")     // caller retries at the API layer</pre>
+        <div class="why"><b>Why 100ms, not instant:</b> checking on every lock acquisition would make every single lock grab pay the cost of a graph walk. Polling on an interval trades a small, bounded detection delay for near-zero overhead on the hot path — and the interval should be tuned against segment 1's write-latency NFR, not chosen arbitrarily.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">L2</span><span class="q-text">Centralized detector vs one detector per shard — what's the actual trade-off, not just "centralized is simpler"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Centralized</b> sees every cross-shard wait edge and catches deadlocks a per-shard detector structurally cannot — but it becomes a single component every transaction's lock state must be visible to, which is a coordination bottleneck at exactly the scale where you'd want to shard in the first place. <b>Per-shard</b> detectors scale cleanly but are blind to a deadlock that spans two shards — which, given segment 1 scoped this engine to a single-writer, single-instance shape, currently can't happen. So for <i>this</i> design, centralized wins by default; the moment segment 8's scaling discussion introduces multiple write shards, this decision has to be revisited, not assumed to still hold.
+      <span class="why"><b>Why call this out explicitly:</b> a decision that's correct for today's scope silently becoming wrong after a later scaling decision is one of the most common ways "it worked in the design doc" diverges from "it works in production" — the fix is flagging the dependency here, not rediscovering it later.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 8: FAILURE HANDLING & STATE MACHINE -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Failure handling & the transaction state machine</h2></div>
+    <p class="segment-note">Every state mentioned so far — begin, exec, commit, abort, pool-exhausted, deadlock-victim — belongs to one state machine. Draw it before you look.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Draw the full transaction state machine yourself, including the crash-recovery states. Then answer: which state, if the engine crashes while a transaction sits in it, risks the transaction being <b>stuck forever</b> — and what guarantees it eventually exits?</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">F1</span><span class="q-text">Reveal: reference state machine</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">        begin
+          |
+          v
+      [ACTIVE] <----------------+
+       /   |   \                |
+  exec/ deadlock  timeout       | retry (idempotent
+     |    victim    expiry      |  at caller, new tx_id)
+     v      |         |         |
+[ACTIVE] [ABORTING] [ABORTING]  |
+     |       |          |       |
+  commit     v          v       |
+     |   [ABORTED] -----+-------+
+     v
+[COMMITTING] --crash-- [RECOVERING] --WAL replay--> [COMMITTED] or [ABORTED]
+     |
+     v
+[COMMITTED] --------------------> [TERMINATED] (locks released, snapshot retired)</pre>
+        <div class="why"><b>The stuck-forever risk:</b> [COMMITTING] — the window after the caller is told "commit accepted" but before WAL fsync is confirmed and locks are released. A crash here must resolve deterministically on restart, which is exactly what <code>RECOVERING</code> does: replay the WAL, and any transaction whose commit record made it to disk is <code>COMMITTED</code>, anything that didn't is <code>ABORTED</code> — there is no third outcome, and no state that requires a human decision to exit. That "no ambiguous outcome" property is the actual point of a WAL, not durability in the abstract.</div>
+        <div class="why"><b>Retry/idempotency plug-in point:</b> retries happen at the <b>caller</b>, with a fresh <code>tx_id</code>, after an <code>ABORTED</code> or timeout — never inside the engine reusing the same tx_id, because a tx_id's fate (committed or aborted) must stay permanently decided once <code>RECOVERING</code> resolves it.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 9: SCALING ITSELF -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Scaling this component itself</h2></div>
+    <p class="segment-note">Not the 80+ services calling it — this engine. How do multiple instances of your own SQL engine stay roughly in sync without the coordination itself becoming the bottleneck.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Decide how a second instance of this engine (a read replica, or a second write shard) stays consistent with the first. Then write a concrete metric — tied to your segment-1 NFRs — that would tell you it's time to add one.</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">SC1</span><span class="q-text">Reveal: reference scaling approach</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Single writer, WAL-shipped async read replicas — the WAL segments produced in segment 3's replication streamer are the sync mechanism, replayed on each replica in order. No consensus protocol, no multi-writer conflict resolution, because segment 1 explicitly scoped multi-region active-active writes <i>out</i>. Read replicas absorb the read-heavy fan-out (holdings lookups, order-status polling from 80+ services) without touching the single writer's lock table at all.
+      <div class="why"><b>The scale-out trigger metric:</b> replica replay lag crossing <b>200ms sustained for 5 minutes</b> — chosen because segment 1's read p99 target was 15ms; a replica lagging past 200ms means read-your-writes callers routed to it will observe stale data often enough to matter, well before the replica looks "overloaded" by CPU or disk metrics alone.</div>
+        <div class="why"><b>Why this avoids a coordination bottleneck:</b> replicas are purely downstream consumers of a log — adding a fourth or fifth replica doesn't require the writer to know or coordinate with any of them individually, it just has more WAL subscribers. The bottleneck this design deliberately avoids creating is a scale-out mechanism that makes the writer's hot path aware of how many replicas exist.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 10: ASSEMBLY -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>End-to-end assembly</h2></div>
+    <p class="segment-note">One diagram, from memory, both paths at once.</p>
+
+    <div class="build-first">
+      <span class="bf-icon">BUILD FIRST</span>
+      <div>Draw the whole engine from memory — the <b>hot/data path</b> (a transaction from begin to commit) and the <b>control/config path</b> (checkpoint, replication, deadlock detection, admin) in a single diagram. Don't peek at segments 1–9 while you do it.</div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">E1</span><span class="q-text">Reveal: reference assembly</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">                     HOT / DATA PATH
+Client -> Parser -> Tx Manager -> Buffer Pool -> WAL Writer -> ack
+                        |              |
+                    Lock Table     Storage Engine (B+Tree pages)
+                        |
+                 Deadlock Detector (100ms loop)
+
+                     CONTROL / CONFIG PATH
+Operator -> Admin API -> Checkpoint Worker -> flush dirty pages, truncate WAL
+                       -> Replication Streamer -> WAL segments -> Read Replicas
+                       -> /admin/locks, /admin/checkpoint/trigger (introspection)</pre>
+      </div></div></div>
+
+    <div class="no-answer">
+      <b>No answer key on this one:</b> trace your own hand-drawn diagram back against the FR/NFR list you wrote in segment 1. Find the one requirement your diagram doesn't actually satisfy yet — every real design has at least one, and the ones that ship broken are the ones where nobody went looking for it before a customer did.
+    </div>
+  </section>
+
+  <footer>
+    // final compression: a small SQL engine's whole job is to make "begin, do several things,
+    commit" feel atomic, durable, and cheap to a caller who has no idea what's happening underneath —
+    a buffer pool trading memory for disk I/O, a WAL trading a sequential write for a durability
+    guarantee, MVCC trading storage for lock-free reads, and a state machine engineered so that
+    "crashed mid-commit" is a bug the engine already knows how to answer, not an open question.
+    The design isn't done when it works — it's done when you can point to which requirement,
+    in your own segment-1 list, made each of those trades non-negotiable.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

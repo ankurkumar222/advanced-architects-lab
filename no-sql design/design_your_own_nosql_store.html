@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design Your Own NoSQL Store — A Build Session</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme .role-block p{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .situation-ext{color:var(--muted);}
+  body.dark-theme .invisible-q{background:#26240F;border-color:#4A431E;color:#E7E3D8;}
+  body.dark-theme .invisible-q b{color:#E8B84F;}
+  body.dark-theme .q-tag{color:#0F1115;}
+  body.dark-theme .api-meta{color:#A9A497;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C9871F;}
+  .ledger-strip span:nth-child(2){background:#2E8B82;}
+  .ledger-strip span:nth-child(3){background:#C1543A;}
+  .ledger-strip span:nth-child(4){background:#7A63B8;}
+  .ledger-strip span:nth-child(5){background:#3480B0;}
+  .ledger-strip span:nth-child(6){background:#6B9A44;}
+  .ledger-strip span:nth-child(7){background:#C1547A;}
+  .ledger-strip span:nth-child(8){background:#B9971F;}
+  .ledger-strip span:nth-child(9){background:#279090;}
+  .ledger-strip span:nth-child(10){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.4rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:70ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+
+  /* BUILD-IT-YOURSELF CALLOUT — new component */
+  .build-first{
+    background:var(--panel-2);border:2px dashed var(--seg,#C9871F);
+    border-radius:6px;padding:14px 18px;margin:0 0 22px;
+    font-size:.93rem;
+  }
+  .build-first .bf-label{
+    font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:700;
+    letter-spacing:.6px;text-transform:uppercase;color:var(--seg,#C9871F);
+    display:flex;align-items:center;gap:8px;
+  }
+  .build-first .bf-label::before{content:"✎";font-size:.95rem;}
+  .build-first p{margin:8px 0 0;color:var(--text);}
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .q-answer-inner .why{
+    display:block;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);
+    color:var(--muted);font-size:.9rem;
+  }
+  .q-answer-inner .why b{color:#8B6A1D;}
+
+  .rapid-list{list-style:none;padding:0;margin:0;counter-reset:rf;}
+  .rapid-list li{
+    counter-increment:rf;padding:12px 0 12px 40px;
+    border-bottom:1px solid var(--border);position:relative;font-size:.96rem;
+  }
+  .rapid-list li::before{
+    content:counter(rf);position:absolute;left:0;top:12px;
+    font-family:'IBM Plex Mono',monospace;color:var(--seg,#C9871F);
+    font-size:.8rem;width:24px;text-align:right;font-weight:600;
+  }
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* API CARD — new component */
+  .api-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#3480B0);
+  }
+  .api-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .api-method{
+    font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:700;color:#fff;
+    padding:2px 9px;border-radius:3px;letter-spacing:.4px;flex-shrink:0;
+  }
+  .api-method.get{background:#2E8B82;}
+  .api-method.post{background:#C1543A;}
+  .api-method.put{background:#7A63B8;}
+  .api-method.internal{background:#4A5FBF;}
+  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.92rem;color:var(--text);font-weight:600;}
+  .api-purpose{font-size:.9rem;color:var(--text);margin:0 0 8px;}
+  .api-meta{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:6px 14px;font-size:.82rem;color:var(--muted);
+    font-family:'IBM Plex Mono',monospace;
+    border-top:1px dashed var(--border);padding-top:8px;
+  }
+  .api-meta b{color:var(--seg,#3480B0);font-family:'IBM Plex Sans',sans-serif;font-weight:600;}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.75rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Design Your Own NoSQL Store — <em>build it, don't read it</em></h1>
+    <p class="sub">This is not a "how NoSQL works" explainer — you already have that. This is a design session: you build a distributed key-value / wide-column store yourself, piece by piece, in front of your own mutual fund / IPO / demat context. At every step, decide first — the reveal is a reference design to compare against, not "the" answer.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>~3–4 hrs, self-paced</span>
+      <span>Format: build → commit → reveal → compare</span>
+      <span>Goal: your own defensible design, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Requirements</a>
+    <a href="#s2" style="color:#2E8B82;">02 Core Decision</a>
+    <a href="#s3" style="color:#C1543A;">03 Components</a>
+    <a href="#s4" style="color:#7A63B8;">04 API Design</a>
+    <a href="#s5" style="color:#3480B0;">05 Data & Sizing</a>
+    <a href="#s6" style="color:#6B9A44;">06 Core Algorithm</a>
+    <a href="#s7" style="color:#C1547A;">07 Anti-Entropy</a>
+    <a href="#s8" style="color:#B9971F;">08 Failure States</a>
+    <a href="#s9" style="color:#279090;">09 Scaling Itself</a>
+    <a href="#s10" style="color:#9A62D6;">10 Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1 : AMBER -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">step 01</span><h2>Functional &amp; non-functional requirements</h2></div>
+    <p class="segment-note">Before you design a single component, you have to be able to say — in numbers, not adjectives — what this store is for and what it costs to be wrong about.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Write your own 5–7 bullet FR list for a NoSQL store you'd build to sit under your MF ledger / IPO allotment / demat data. Then commit to three NFR numbers: sustained write throughput, p99 read latency, and where you land on the consistency/availability line. Finally, write one sentence on what you're deliberately scoping OUT and why that exclusion matters as much as anything you included.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">What's the single opening sentence your FR list should start with — the one that pins down exactly what this store is for?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Something like: <b>"A partition-tolerant, horizontally-scalable store for high-write-volume, key-addressable financial event data, where a single record's latest state must always be reconstructable even if a node holding it disappears."</b><span class="why"><b>Why this framing:</b> it commits to three things immediately — write-heavy, key-addressable (not relational), and durability-over-features — which rules out a large class of "nice to have" requirements before you even list them.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">Reveal: a reference FR list for this store, grounded in your platform.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <ol class="rapid-list">
+          <li>Accept a write for any key without requiring a schema migration.</li>
+          <li>Guarantee a write, once acknowledged, survives the loss of any single node.</li>
+          <li>Serve point reads by key with a bounded, predictable latency envelope.</li>
+          <li>Serve ordered range reads within one partition (e.g. one customer's transactions by time) without a full scan.</li>
+          <li>Support at least one secondary lookup path (e.g. by ISIN or email) with an explicitly stated staleness bound.</li>
+          <li>Allow the cluster to grow or shrink without a maintenance-window write pause.</li>
+          <li>Expose, per-write, a caller-chosen consistency level rather than one fixed global setting.</li>
+        </ol>
+        <span class="why"><b>Why bullet 7 matters most:</b> it's the one FR that prevents every future team from silently inheriting the wrong consistency guarantee for their data — which is exactly the incident pattern that shows up in mature systems.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Reveal: NFR targets, with real numbers and the reasoning behind each one.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Sustained writes</div><div class="value">15K/s <span>steady-state</span></div></div>
+          <div class="stat-card"><div class="label">Burst writes</div><div class="value">80K/s <span>NFO / IPO open</span></div></div>
+          <div class="stat-card"><div class="label">Read p99</div><div class="value">15ms <span>point read</span></div></div>
+          <div class="stat-card"><div class="label">Write p99</div><div class="value">40ms <span>quorum ack</span></div></div>
+          <div class="stat-card"><div class="label">Availability target</div><div class="value">99.95% <span>writes accepted</span></div></div>
+          <div class="stat-card"><div class="label">Durability</div><div class="value">RF=3 <span>cross-AZ</span></div></div>
+        </div>
+        <span class="why"><b>Why the burst number matters more than the steady-state one:</b> a store sized only for average load is precisely the store that falls over on the one day — an NFO open, an allotment run — where the business actually needs it most. NFR numbers that ignore your worst known day aren't targets, they're wishes.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">What should you explicitly scope OUT, and why does saying no here matter more than usual for this kind of system?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Scope out: <b>ad-hoc multi-key ACID transactions across partitions, a general-purpose query language, and strict global ordering across unrelated keys.</b><span class="why"><b>Why:</b> each of those three, if included, forces a coordination mechanism (distributed locking, a query planner, a global sequencer) that fights every partitioning and replication decision you're about to make in segment 2. A NoSQL store that tries to be "SQL but distributed" usually ends up being neither fast nor simple — scoping these out up front is what keeps the rest of this design honest.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : TEAL -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">step 02</span><h2>Scope &amp; the core design decision</h2></div>
+    <p class="segment-note">Two decisions here shape every segment that follows: how data is split across nodes, and how each split survives a node dying. Get these wrong and nothing downstream can save you.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Commit, in writing, to: (a) hash-based or range-based partitioning, and (b) leader-based or leaderless quorum replication. Justify each choice directly against your own NFR numbers from segment 1 — not against what's "modern."</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">Given your FR list (point reads by key, range reads within one partition, burst writes on hot keys) — hash or range partitioning, and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Consistent hashing with virtual nodes</b> for the partition key (e.g. customer_id or scheme_id), with data <b>clustered/sorted</b> by a secondary key (e.g. timestamp) within each partition.<span class="why"><b>Why:</b> pure hash partitioning gives you even spread and defuses the NFO-day hotspot from FR3/NFR-burst, while clustering within the partition still gives you the ordered range read from FR4 — you get both properties by applying them at two different levels of the key, not by picking one partitioning strategy and hoping it does both jobs.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">Leader-based or leaderless quorum replication — and what does that choice cost you against your 99.95% write-availability target?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Leaderless, quorum-based replication</b> (any of the N replicas for a partition can coordinate a write; success requires W acks).<span class="why"><b>Why:</b> leader-based replication makes a leader-election pause a direct hit against your write-availability NFR every time a leader dies. Leaderless removes that single point of write unavailability at the cost of pushing conflict handling onto quorum math and read repair — a cost you're explicitly willing to take on, per FR2 and FR7, because durability-under-node-loss was stated as non-negotiable.</span></div></div></div>
+
+    <table class="diff-table">
+      <tr><th>Leader-based replication</th><th>Leaderless quorum replication (chosen)</th></tr>
+      <tr><td>Simple consistency story — one authoritative writer per partition</td><td>No single point of write unavailability — any replica can coordinate</td></tr>
+      <tr><td>Failover pause during leader election directly costs write availability</td><td>Correctness now depends on quorum math (W+R&gt;N) and conflict resolution</td></tr>
+      <tr><td>Easy to reason about "the current value" — it's whatever the leader has</td><td>"Current value" is a function of which replicas you queried and when</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">You picked leaderless. What single number, set at write-time, do you now have to expose as a first-class caller-facing decision — and why does that connect straight back to FR7?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The <b>consistency level per call</b> — effectively, the caller's chosen W (write quorum) and R (read quorum) against your fixed replication factor N.<span class="why"><b>Why:</b> FR7 explicitly required per-call consistency rather than one global setting. Leaderless replication is the only topology of the two where that requirement is even structurally possible — a leader-based system's consistency story is baked into the topology itself, not exposed as a per-call dial.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : CORAL -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">step 03</span><h2>Component breakdown</h2></div>
+    <p class="segment-note">Draw the boxes before you reveal them. Every box you draw should exist because something would break if it were merged into a neighboring box.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Draw your own 5–7 box component diagram for this store. For each box, be ready to say one sentence about what breaks if you merged it into the box next to it.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Why can't the coordinator's hot-path routing logic live inside the same component as the storage engine's durable write path?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because they have <b>opposite performance and failure profiles</b>: the coordinator must decide "which replicas, what quorum, route now" in microseconds and must be stateless enough to fail over instantly, while the storage engine must guarantee a fsync-durable write even if that takes longer under load. Merging them means a slow disk on one node now blocks routing decisions for every key that node happens to coordinate — a local disk problem becomes a cluster-wide routing problem.</div></div></div>
+
+    <pre class="sketch">        +------------------+
+Client->|   Coordinator     |--- routes by consistent-hash ring
+        +------------------+
+              |         |
+              v         v
+     +----------------+  +----------------+
+     | Storage Engine  |  | Storage Engine  |   (one per node: WAL -> memtable -> SSTable)
+     |   (Node A)       |  |   (Node B)       |
+     +----------------+  +----------------+
+              ^                    ^
+              |                    |
+     +------------------+  +------------------+
+     | Replication /     |  | Hinted Handoff    |   buffers writes for a temporarily-down replica
+     | Quorum Manager    |  +------------------+
+     +------------------+
+              ^
+              |
+     +------------------+   +------------------+
+     | Membership /      |   | Anti-Entropy /    |
+     | Gossip            |   | Repair Manager     |
+     +------------------+   +------------------+</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why does Hinted Handoff need to be its own component rather than a feature bolted onto Replication / Quorum Manager?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because it has a fundamentally different lifecycle: Replication/Quorum Manager runs <b>synchronously, in the write's critical path</b>; Hinted Handoff runs <b>asynchronously, potentially for hours</b>, buffering writes meant for a down replica until it returns. Coupling them means a slow or full hint buffer can back-pressure onto live writes it has nothing to do with.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">Why does Membership/Gossip have to be a separate component from the Coordinator, even though the Coordinator needs to know cluster state to route anything?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because Gossip's job is to <b>converge eventually</b> across the whole cluster, while the Coordinator needs a <b>fast, local, possibly-slightly-stale read</b> of that state to route a single request in microseconds. If routing had to wait for gossip convergence on every call, you'd trade routing latency for membership freshness — the Coordinator instead reads a locally-cached view that Gossip updates in the background.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : VIOLET -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">step 04</span><h2>Low-level API design</h2></div>
+    <p class="segment-note">An API surface is where blast radius gets decided. A data-plane call and a control-plane call that "happen to use the same port" are not the same API, no matter how similar they look.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Write your own 5–6 endpoints as method + path + one-line purpose + caller + payload notes. Before revealing, decide: should any of these be reachable by an app service directly, or only by another cluster node / an operator? Scope authorization by blast radius, not by ownership.</p>
+    </div>
+
+    <div class="api-card">
+      <div class="api-line"><span class="api-method put">PUT</span><span class="api-path">/kv/{partition_key}</span></div>
+      <p class="api-purpose">Write a value under a key, at caller-chosen consistency level.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> app service</span>
+        <span><b>Payload</b> value, consistency_level (ONE/QUORUM/ALL), client_timestamp</span>
+        <span><b>Idempotency</b> last-write-wins by (timestamp, node_id) tiebreak — safe to retry</span>
+      </div>
+    </div>
+    <div class="api-card">
+      <div class="api-line"><span class="api-method get">GET</span><span class="api-path">/kv/{partition_key}</span></div>
+      <p class="api-purpose">Read a value at caller-chosen consistency level.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> app service</span>
+        <span><b>Payload</b> consistency_level</span>
+        <span><b>Idempotency</b> naturally idempotent — read has no side effect on the primary write path</span>
+      </div>
+    </div>
+    <div class="api-card">
+      <div class="api-line"><span class="api-method internal">POST</span><span class="api-path">/internal/replicate/{partition_key}</span></div>
+      <p class="api-purpose">Coordinator pushes a write to a specific replica node.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> coordinator node only</span>
+        <span><b>Payload</b> value, vector_clock/timestamp, coordinator_id</span>
+        <span><b>Idempotency</b> replica applies by timestamp comparison — duplicate delivery is a no-op</span>
+      </div>
+    </div>
+    <div class="api-card">
+      <div class="api-line"><span class="api-method internal">POST</span><span class="api-path">/internal/hinted-handoff/deliver</span></div>
+      <p class="api-purpose">Deliver buffered writes to a replica that just rejoined.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> the node that was holding the hints, on peer-rejoin detection</span>
+        <span><b>Payload</b> batch of (key, value, timestamp) hints, hint_age</span>
+        <span><b>Idempotency</b> same last-write-wins rule applies — stale hints lose to newer direct writes</span>
+      </div>
+    </div>
+    <div class="api-card">
+      <div class="api-line"><span class="api-method internal">POST</span><span class="api-path">/internal/repair/merkle-diff</span></div>
+      <p class="api-purpose">Exchange Merkle tree summaries with a peer replica to find drift.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> Anti-Entropy/Repair Manager, on its own schedule</span>
+        <span><b>Payload</b> tree hash summary for a key range</span>
+        <span><b>Idempotency</b> comparison-only; no state mutation until a follow-up sync call</span>
+      </div>
+    </div>
+    <div class="api-card">
+      <div class="api-line"><span class="api-method get">GET</span><span class="api-path">/admin/ring</span></div>
+      <p class="api-purpose">Inspect current partition-to-node ownership map.</p>
+      <div class="api-meta">
+        <span><b>Caller</b> operator / on-call engineer only</span>
+        <span><b>Payload</b> none (read-only)</span>
+        <span><b>Idempotency</b> read-only, always safe</span>
+      </div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Why should authorization for these APIs be scoped by blast radius rather than simply "who owns this service"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because two APIs can be "owned" by the same team and still have wildly different blast radii — <b>PUT /kv/{key}</b> can only ever corrupt one key, while a leaked credential for <b>/internal/replicate</b> could let a caller impersonate a coordinator and write inconsistent data cluster-wide. Ownership tells you who to page; blast radius tells you how tightly to lock the door — and those are frequently different answers for APIs sitting right next to each other in the same service.</div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Why does the PUT endpoint accept a client_timestamp instead of always using server-received time?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because last-write-wins conflict resolution in a leaderless system needs a timestamp that reflects <b>when the write was decided</b>, not when it happened to arrive at whichever replica processed it — server-received time would make conflict resolution dependent on network jitter and routing luck rather than actual write order.<span class="why"><b>Why this is a real risk, not a theoretical one:</b> if two concurrent writes to the same key take different network paths, server-received time could resolve the conflict backwards from what the caller intended — client_timestamp (with a documented clock-skew tolerance) keeps that decision anchored to intent.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : BLUE -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">step 05</span><h2>Data model &amp; sizing</h2></div>
+    <p class="segment-note">Numbers force honesty. A schema that looks elegant on a whiteboard can be a very different animal once you multiply it by 80+ microservices' worth of write volume.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Sketch your own schema for one concrete table (e.g. MF ledger entries) and estimate row count, sustained write throughput, and 1-year storage size. Separate, explicitly, what's durable config (must survive restarts, changes rarely) from ephemeral/in-memory derived state (can be rebuilt, changes constantly) — and write one sentence on why conflating the two is a design mistake.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Reveal: a reference schema sketch and sizing estimate for one table.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Table: mf_ledger_entries
+Partition key:   customer_id (hashed)
+Clustering key:  txn_timestamp DESC
+Columns:         txn_id, scheme_id, units, nav, amount, status, vector_clock
+
+Row size (est.):        ~250 bytes/row
+Rows/customer/year:     ~60 (avg active investor)
+Active customers:       ~4M
+Rows/year:               240M
+Storage/year (RF=3):     240M x 250B x 3  ~ 180 GB
+Sustained write rate:    ~15K rows/sec platform-wide (matches NFR from segment 1)</pre>
+        <span class="why"><b>Why the clustering key is txn_timestamp DESC, not just timestamp:</b> the dominant read pattern is "most recent transactions first" for a customer's statement view — sorting descending at the storage layer means that query is a sequential prefix scan, not a full-partition scan followed by an application-side sort.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">In this schema, what's durable config vs. ephemeral/in-memory derived state — and why would conflating them be a mistake?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Durable config:</b> the ring/partition map, replication factor, schema/column definitions. <b>Ephemeral/derived state:</b> the memtable contents, the read cache, gossip's locally-cached membership view — all rebuildable from the WAL or from peers.<span class="why"><b>Why conflating them is a mistake:</b> if you replicate ephemeral state (like a read cache) with the same durability guarantees as durable config, you're paying real replication cost to protect data that was never supposed to need protecting — it should have been rebuilt cheaply from source instead. The inverse mistake — treating durable config as rebuildable — is worse: lose the ring topology without a durable backup, and you don't know which node owns which data anymore.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">The gut-check: is this actually a "big data" problem, or could a single well-tuned relational instance have handled it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">At 15K writes/sec sustained with 180GB/year growth, a single powerful relational instance with read replicas could plausibly handle this — the honest answer is: <b>the burst number (80K/sec on NFO day) and the multi-region durability requirement are what actually force the distributed design</b>, not the steady-state volume.<span class="why"><b>Why this question matters even after you've built the whole design:</b> it's the question a sharp director asks at the review — "did we need this complexity, or did we default to it because it's the modern answer?" Being able to point at the specific number that justified it is the difference between an engineering decision and a trend follow.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : GREEN -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">step 06</span><h2>Core algorithm — ring lookup &amp; quorum write path</h2></div>
+    <p class="segment-note">One mechanism, in real pseudocode, not prose. This is the piece an interviewer will actually make you write on a whiteboard.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Write pseudocode for (a) the consistent-hash ring lookup — the main data structure — and (b) the coordinator's quorum write path — the per-operation logic. Cover thread-safety for concurrent writes to the same key, and explicitly answer: what happens when the coordinator cannot reach enough replicas to satisfy W?</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Reveal: ring lookup pseudocode — the main data structure.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">struct Ring:
+    sorted_positions: list&lt;(hash_value, virtual_node_id, physical_node)&gt;
+
+function get_replicas(key, N):
+    h = hash(key)
+    idx = binary_search_first_position_gte(ring.sorted_positions, h)
+    replicas = []
+    physical_seen = set()
+    while len(replicas) &lt; N:
+        (pos, vnode, node) = ring.sorted_positions[idx]
+        if node not in physical_seen:
+            replicas.append(node)
+            physical_seen.add(node)
+        idx = (idx + 1) mod len(ring.sorted_positions)
+    return replicas</pre>
+        <span class="why"><b>Why virtual nodes and physical_seen dedup both matter:</b> virtual nodes spread each physical node's ownership across many ring positions, smoothing load; the physical_seen check prevents two virtual nodes belonging to the <em>same</em> physical machine from both counting toward your N — otherwise a "replicated" write could silently have fewer real physical copies than N implies.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Reveal: coordinator's quorum write path pseudocode, including the "can't reach W replicas" edge case.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">function coordinate_write(key, value, W, N):
+    replicas = get_replicas(key, N)
+    write_ts = current_client_timestamp()
+    acked = 0
+    hinted = []
+
+    for node in replicas:                     # fan out concurrently, not sequentially
+        try:
+            send_replicate(node, key, value, write_ts, timeout=WRITE_TIMEOUT)
+            acked += 1
+        except Timeout or NodeDown:
+            hinted.append(node)                # buffer via hinted handoff, don't block
+
+    if acked &gt;= W:
+        return SUCCESS
+    else:
+        # sloppy quorum: write to next available healthy node in the ring
+        # instead of the "correct" but unreachable one, plus a hint for the real owner
+        fallback_node = next_healthy_node_not_in(replicas)
+        send_replicate(fallback_node, key, value, write_ts)
+        acked += 1
+        if acked &gt;= W:
+            return SUCCESS
+        else:
+            return FAIL_INSUFFICIENT_QUORUM   # client must decide: retry, or accept the write is not guaranteed</pre>
+        <span class="why"><b>Why fan out concurrently, not sequentially:</b> sequential replication would multiply write latency by N; concurrent fan-out means write latency is bounded by the slowest of the first W replicas to respond, not the sum of all N.<span class="why"><b>Why sloppy quorum exists at all:</b> without it, a single temporarily-down replica in a small ring could make writes to its owned keys fail outright even though the cluster has plenty of healthy capacity elsewhere — sloppy quorum trades strict ownership for availability, exactly the tradeoff FR2/NFR-availability asked for.</span></span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Two writes to the same key arrive at the coordinator within a few milliseconds of each other. How does your pseudocode above guarantee thread-safety without a global lock?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">It doesn't need a lock, because each write is independently routed to the same N replicas and each <b>replica</b> resolves the conflict locally by comparing incoming timestamp against its currently stored value — last-write-wins, applied per-replica, per-key, on arrival.<span class="why"><b>Why this avoids the coordination bottleneck a global lock would introduce:</b> a lock would force every write to the same key through a single serialization point — exactly the kind of hotspot segment 3's component split was designed to avoid. Pushing conflict resolution to the replica, at apply-time, means concurrent writes to the same key are handled in parallel across replicas and simply converge to the same final answer via the same deterministic rule everywhere.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : PINK -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">step 07</span><h2>Supporting subsystem — anti-entropy &amp; repair</h2></div>
+    <p class="segment-note">Quorum writes tolerate a temporarily-down replica, but replicas that stayed down longer than a hint's TTL, or that missed writes some other way, need a background process to catch back up. This is that process.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Design the anti-entropy repair loop's logic precisely — when does it run, what does it compare, what does it do with a diff. Then decide: should repair scheduling be centralized (one coordinator service tells nodes when to repair) or distributed (each node schedules its own repairs against its peers)? Justify your choice.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Reveal: the repair loop's logic, step by step.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">every REPAIR_INTERVAL (e.g. 24h), per partition range, per node:
+    for each peer replica of this range:
+        local_tree  = build_merkle_tree(local_range_data)
+        peer_tree   = request_merkle_tree(peer, range)
+        diff_leaves = compare_trees(local_tree, peer_tree)   # only mismatched sub-ranges
+        for leaf in diff_leaves:
+            local_data  = read_range(leaf.range)
+            peer_data   = request_range(peer, leaf.range)
+            merged      = resolve_by_timestamp(local_data, peer_data)  # same LWW rule as writes
+            apply_missing_or_newer(local, merged)
+            stream_missing_or_newer(peer, merged)</pre>
+        <span class="why"><b>Why compare tree hashes before comparing any actual data:</b> full record-by-record comparison across a large partition range is prohibitively expensive in bandwidth. Comparing small hash summaries first, and only drilling into the specific sub-ranges that differ, turns an O(all data) operation into something close to O(actual drift) — most of the tree usually matches and gets skipped entirely.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Centralized repair scheduling or distributed — and what's the actual tradeoff?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Distributed</b> — each node schedules its own repairs against its peer replicas, staggered to avoid overlapping load.<span class="why"><b>Why:</b> a centralized repair coordinator becomes exactly the kind of single point of failure this whole design has been avoiding since segment 2 — if it goes down, repair silently stops cluster-wide with no local fallback. Distributed scheduling costs you a bit of coordination complexity (staggering to avoid every node repairing at once and saturating the network) but means no single component's failure can silently disable the entire cluster's self-healing.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">Why does repair use the exact same last-write-wins rule as the live write path, instead of its own conflict logic?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because using a <b>different</b> conflict rule for repair than for live writes would mean the "corrected" state after repair could disagree with what a live quorum read would have returned for the same conflicting writes — two different subsystems producing two different answers to the same question. Reusing one deterministic rule everywhere is what makes "eventually consistent" mean something concrete: eventually, every path converges to the identical answer, not just <em>an</em> answer.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : OLIVE -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">step 08</span><h2>Failure handling &amp; the node state machine</h2></div>
+    <p class="segment-note">Every state mentioned so far — healthy, unreachable, catching up — belongs to one state machine. Draw it before you reveal it; a state machine you can't draw is one you haven't actually designed.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Draw the full node state machine yourself, pulling in every state implied by earlier segments (healthy, suspected/unreachable, down, rejoining/replaying hints, draining/decommissioning). Then find the "stuck forever" risk: is there any state your diagram allows a node to enter and never leave without external intervention? Fix it with a timeout.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">Reveal: the reference state machine.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">            gossip missed heartbeats
+HEALTHY  ------------------------->  SUSPECTED
+   ^                                     |  \
+   |            heartbeat resumes        |   \ SUSPECT_TIMEOUT elapses
+   +-------------------------------------+    v
+                                            DOWN
+                                              |
+                                   node process restarts / rejoins
+                                              v
+                                        REJOINING
+                                     (replaying hinted handoff,
+                                      catching up via repair)
+                                              |
+                                   caught up within threshold
+                                              v
+                                          HEALTHY
+
+  any state --(operator triggers decommission)--> DRAINING --(data streamed off)--> REMOVED</pre>
+        <span class="why"><b>Why SUSPECTED is a separate state from DOWN, not the same thing:</b> a single missed heartbeat is often a transient network blip, not a real failure. Treating it as DOWN immediately would trigger unnecessary hinted handoff and repair traffic for every minor GC pause or network hiccup — SUSPECTED is a probation period that lets the node prove it's still alive before the cluster pays the cost of treating it as gone.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">Where's the "stuck forever" risk in this state machine, and what guarantees an eventual exit?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Two places: <b>SUSPECTED</b> could theoretically sit forever without a bound, and <b>REJOINING</b> could hang forever if hint replay or repair never actually finishes catching the node up.<span class="why"><b>The fix:</b> SUSPECTED has an explicit SUSPECT_TIMEOUT that forces a transition to DOWN, guaranteeing the cluster always eventually treats an unresponsive node as gone rather than leaving it in limbo indefinitely. REJOINING has an analogous catch-up deadline — if a node can't finish replaying hints and repairing within a bounded window, it's demoted back to DOWN rather than serving reads from a partially-caught-up state indefinitely, which would silently violate your consistency guarantees.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">Where does retry/idempotency from the client's side plug into this state machine?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">At the coordinator's <b>FAIL_INSUFFICIENT_QUORUM</b> outcome from segment 6 — if a write returns that failure because replicas were SUSPECTED or DOWN at the time, the client's retry is safe to send again <em>because</em> every write carries the same client_timestamp and last-write-wins semantics from segment 4. A retried write either lands as the first successful attempt, or loses harmlessly to whichever attempt's timestamp actually won — retries are safe precisely because the conflict-resolution rule was made deterministic back in segment 6, not because of anything new in the state machine itself.</div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : CYAN -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">step 09</span><h2>Scaling the store itself</h2></div>
+    <p class="segment-note">Not the backend system this store protects or serves — this store, as a system in its own right. How does it keep many instances of itself roughly in sync without becoming its own bottleneck?</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Explain how gossip-based membership stays cheap as node count grows, and where it stops being cheap. Then write one concrete metric — tied to your segment-1 NFRs — that would tell you it's time to add nodes to this cluster.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q25</span><span class="q-text">Gossip is O(1) messages per node per round, gossiping to a few random peers. Why does convergence time still grow as the cluster grows, and where does that become a real problem?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because convergence time for a rumor to reach every node scales roughly <b>logarithmically</b> with cluster size (each round roughly doubles the informed population) — cheap per-node, but the total time to full convergence still grows as the cluster grows, and it becomes a real problem once membership-change events (a node joining, dying, or being suspected) start happening faster than the cluster can converge on the previous change.<span class="why"><b>Why this eventually caps how large one cluster should get:</b> past a few hundred to low thousands of nodes, membership churn can outpace convergence, and the cluster spends more time disagreeing about its own topology than serving requests — the practical fix is usually sharding into multiple independently-gossiping clusters rather than growing one cluster indefinitely.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">Reveal: a concrete "time to scale out" metric, tied explicitly back to a segment-1 NFR.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner"><b>Sustained write p99 exceeding the 40ms NFR target for more than 10 minutes, driven by quorum-wait time rather than network latency.</b><span class="why"><b>Why quorum-wait specifically, not just raw p99:</b> a write p99 breach caused by network latency to a specific region is a routing/infra problem, not a capacity problem — scaling out wouldn't fix it. A breach caused by replicas themselves taking longer to ack under load is a genuine sign each node is doing more work than it should, which is exactly what adding nodes (and rebalancing partitions across them) is meant to relieve. The metric has to isolate cause, not just symptom, or you'll scale out for the wrong reason.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q27</span><span class="q-text">When you do add nodes, why is the rebalancing operation itself a risk to the same write-latency NFR you're trying to protect?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">Because rebalancing means <b>streaming partition data to the new node's virtual positions</b> while production traffic keeps flowing — that streaming competes for the same disk and network I/O the live write and repair paths need, temporarily worsening the exact latency metric that triggered the scale-out decision.<span class="why"><b>Why this has to be planned, not automatic:</b> rebalancing throughput should be rate-limited below whatever headroom currently exists, the same way segment 6's write path avoided a global lock — trading a longer rebalance window for a smaller live-traffic impact, rather than rebalancing as fast as possible and risking the exact latency spike you were trying to fix.</span></div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : PURPLE -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">step 10</span><h2>End-to-end assembly</h2></div>
+    <p class="segment-note">Last exercise. No reveal will tell you if your own design actually holds together — only your own segment-1 requirements can do that.</p>
+
+    <div class="build-first"><div class="bf-label">Build it yourself first</div>
+      <p>Draw the whole system from memory, in one diagram — both the hot/data path (client write and read, through the coordinator, to replicas, to disk) and the control/config path (gossip membership, ring updates, repair scheduling) together, showing where they touch and where they're deliberately kept apart.</p>
+    </div>
+
+    <pre class="sketch">HOT / DATA PATH                          CONTROL / CONFIG PATH
+Client
+  |  PUT/GET /kv/{key}                     Gossip <---> Gossip <---> Gossip
+  v                                          (every node, background, eventual)
+Coordinator --ring lookup-->                    |
+  |          (reads locally-cached           locally-cached ring/membership view
+  |           ring view, doesn't wait             |
+  |           on gossip convergence)              v
+  v                                          Coordinator's routing table
+Replicate to N replicas (fan out)
+  |  |  |
+  v  v  v
+Storage Engine (WAL -> memtable -> SSTable)  <-- Anti-Entropy/Repair (background, per-node schedule)
+  |
+  v
+Hinted Handoff (if a replica was unreachable) --replays into--> Storage Engine on rejoin</pre>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Where do the hot path and control path deliberately NOT talk to each other synchronously, and why was that a design choice rather than an oversight?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">The Coordinator never blocks a live request on Gossip convergence — it always routes off a <b>locally-cached</b> view of cluster membership, even though that view might be a few gossip-rounds stale.<span class="why"><b>Why this was a deliberate choice:</b> it directly implements the segment-1 decision to favor write availability over perfect real-time consistency of cluster metadata — a slightly stale ring view causes at worst a sloppy-quorum fallback (segment 6), which was already designed to handle exactly this case. Making the hot path wait for control-path convergence would trade a rare, already-handled edge case for a routine tax on every single request.</span></div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q29</span><span class="q-text">No answer key for this one: trace your own end-to-end diagram back against your own segment-1 FR and NFR list. Where's the gap?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">This one is genuinely yours to find — but the shape of the exercise is: pick each FR and NFR line from segment 1 one at a time, and point to the exact component and mechanism in your diagram that satisfies it. If you land on any requirement where you can't point to a specific box — a secondary-index staleness bound with no component actually enforcing it, an availability target with no fallback path that actually kicks in — that's not a failure of this session. <b>That gap is the most valuable thing this exercise produces</b>: a specific, named hole in your own design, found by you, before a staff engineer or a production incident finds it for you.</div></div></div>
+  </section>
+
+  <footer>
+    // final compression: partitioning decides where a key lives → replication decides how it survives a node dying →
+    the write path decides how many replicas must ack before "success" is honest → the API surface decides who is
+    allowed to touch which blast radius → the storage engine and quorum math decide your actual latency and staleness
+    shape under load → anti-entropy is what makes "eventually consistent" a specific, converging promise instead of
+    a shrug → and the state machine's timeouts are what stop any of the above from getting stuck forever. None of
+    these decisions are free — the whole exercise was choosing, deliberately, which cost you were willing to pay.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

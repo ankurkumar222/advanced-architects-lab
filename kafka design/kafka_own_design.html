@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design Your Own Kafka — A Build Session</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5; --panel:#FFFFFF; --panel-2:#F2F0E8;
+    --border:#DEDACC; --text:#242420; --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115; --panel:#161A20; --panel-2:#1C2027;
+    --border:#2A2E37; --text:#E7E3D8; --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;transition:background .25s ease,color .25s ease;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  @media(max-width:600px){.theme-toggle{top:auto;bottom:18px;right:18px;}}
+
+  .ledger-strip{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-bottom:28px;border:1px solid var(--border);}
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C9871F;} .ledger-strip span:nth-child(2){background:#2E8B82;}
+  .ledger-strip span:nth-child(3){background:#C1543A;} .ledger-strip span:nth-child(4){background:#7A63B8;}
+  .ledger-strip span:nth-child(5){background:#3480B0;} .ledger-strip span:nth-child(6){background:#6B9A44;}
+  .ledger-strip span:nth-child(7){background:#C1547A;} .ledger-strip span:nth-child(8){background:#B9971F;}
+  .ledger-strip span:nth-child(9){background:#279090;} .ledger-strip span:nth-child(10){background:#9A62D6;}
+  .ledger-strip span:nth-child(11){background:#4A5FBF;} .ledger-strip span:nth-child(12){background:#C9871F;}
+  .ledger-strip span:nth-child(13){background:#2E8B82;} .ledger-strip span:nth-child(14){background:#C1543A;}
+  .ledger-strip span:nth-child(15){background:#7A63B8;} .ledger-strip span:nth-child(16){background:#3480B0;}
+  .ledger-strip span:nth-child(17){background:#6B9A44;} .ledger-strip span:nth-child(18){background:#C1547A;}
+  .ledger-strip span:nth-child(19){background:#B9971F;} .ledger-strip span:nth-child(20){background:#279090;}
+
+  header h1{font-family:'Fraunces',serif;font-weight:600;font-size:2.4rem;letter-spacing:-.5px;margin:0 0 6px;}
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 20px;max-width:70ch;}
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:30px;
+  }
+  .meta-bar b{color:#2E8B82;}
+  .how-to{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
+    padding:16px 18px;margin-bottom:36px;font-size:.9rem;color:var(--text);
+  }
+  .how-to b{color:#C1543A;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 14px;z-index:10;
+  }
+  body.dark-theme nav{background:rgba(15,17,21,0.94);}
+  nav a{font-family:'IBM Plex Mono',monospace;font-size:.7rem;text-decoration:none;padding:4px 8px;border-radius:4px;font-weight:600;}
+
+  section.segment{margin-bottom:60px;scroll-margin-top:70px;border-left:3px solid var(--seg,#2E8B82);padding-left:22px;}
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;background:var(--panel-2);
+    border:1px solid var(--border);padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;}
+  .segment-note{color:var(--muted);font-size:.92rem;margin:8px 0 18px;max-width:70ch;}
+  .segment-note code,p code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);padding:1px 6px;
+    border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  /* BUILD-IT-YOURSELF CALLOUT */
+  .build-box{
+    background:var(--panel);border:1.5px dashed var(--seg,#2E8B82);border-radius:6px;
+    padding:14px 18px;margin-bottom:20px;position:relative;
+  }
+  .build-box .build-label{
+    font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--seg,#2E8B82);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;
+  }
+  .build-box p{margin:0;font-size:.93rem;color:var(--text);}
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--seg,#2E8B82);
+    padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 20px;
+  }
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+
+  .q-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.03);}
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;flex-shrink:0;margin-top:3px;font-weight:600;}
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0;white-space:nowrap;border:1px solid var(--border);padding:3px 9px;border-radius:20px;margin-top:1px;}
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .q-answer-inner .why{
+    margin-top:12px;padding:10px 14px;border-radius:4px;background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.88rem;color:#2E4A3A;
+  }
+  .q-answer-inner .why b{color:#2E8B62;}
+  body.dark-theme .q-answer-inner .why{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .q-answer-inner .why b{color:#5FC28E;}
+
+  /* API CARD */
+  .api-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;padding:14px 16px;}
+  .api-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .api-method{font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:700;color:#fff;padding:2px 9px;border-radius:3px;background:var(--seg,#2E8B82);}
+  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.9rem;color:var(--text);}
+  .api-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.85rem;}
+  .api-grid dt{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding-top:2px;}
+  .api-grid dd{margin:0;color:var(--text);}
+  .api-grid dd code{font-family:'IBM Plex Mono',monospace;background:var(--panel-2);padding:1px 5px;border-radius:3px;font-size:.85em;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 22px;}
+  .stat-card{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;}
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;margin-top:4px;}
+  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .diff-table,.topic-table{width:100%;border-collapse:collapse;font-size:.88rem;margin:10px 0 20px;}
+  .diff-table th,.topic-table th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;}
+  .diff-table td,.topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:32%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+  .topic-table td{font-family:'IBM Plex Mono',monospace;font-size:.8rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .error-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);}
+  .error-card .err-name{font-weight:600;font-size:.94rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.87rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  .final-q{
+    margin-top:24px;padding:18px 20px;border-radius:6px;background:var(--panel);
+    border:2px solid var(--seg,#4A5FBF);font-size:.98rem;
+  }
+  .final-q b{color:var(--seg,#4A5FBF);}
+
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
+  @media(max-width:600px){header h1{font-size:1.8rem;} .q-answer-inner{padding-left:18px;} section.segment{padding-left:14px;}}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Design your <em>own</em> Kafka</h1>
+    <p class="sub">Not an explainer — a build session. You design a distributed, partitioned, replicated log system from a blank page, one decision at a time, for your own wealth/mutual-fund platform's scale. Every segment starts with a callout telling you exactly what to draw or decide before you're allowed to look at the reference design.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>requirements → decisions → components → APIs → data → internals → subsystem → failure → scaling → assembly</span>
+    </div>
+    <div class="how-to"><b>How to use this:</b> Every segment opens with a dashed "build it yourself first" box. Stop there — write, sketch, or say your answer out loud before clicking reveal. The reveal is a reference design from a staff-engineer design review, not "the" answer. If your design differs but you can defend the tradeoff, you're doing this right.</div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Requirements</a>
+    <a href="#s2" style="color:#2E8B82;">02 Core Decision</a>
+    <a href="#s3" style="color:#C1543A;">03 Components</a>
+    <a href="#s4" style="color:#7A63B8;">04 APIs</a>
+    <a href="#s5" style="color:#3480B0;">05 Data & Sizing</a>
+    <a href="#s6" style="color:#6B9A44;">06 Core Algorithm</a>
+    <a href="#s7" style="color:#C1547A;">07 Subsystem</a>
+    <a href="#s8" style="color:#B9971F;">08 Failure & States</a>
+    <a href="#s9" style="color:#279090;">09 Scaling Itself</a>
+    <a href="#s10" style="color:#9A62D6;">10 Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1 -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">step 01</span><h2>Functional & non-functional requirements</h2></div>
+    <p class="segment-note">You're not designing "a Kafka." You're designing the log system that sits under mutual fund order flow, IPO allotment, NSDL demat sync, and MOFSL/PolicyBazaar integrations across 80+ microservices. Requirements first — everything downstream will be judged against these numbers.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Write your own FR list (5–7 bullets) and NFR targets with real numbers — throughput, p99 latency, your consistency/availability trade-off — for this log system inside your domain. Then write one line on what you're explicitly scoping OUT, and why leaving it out is itself a design decision.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R1</span><span class="q-text">Reference: what would a staff engineer write for FRs and NFRs here?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Functional requirements</b>
+        <ul>
+          <li>Producers (order-service, nsdl-adapter, mofsl-webhook, nav-ingest) append records to named, partitioned topics.</li>
+          <li>Records within a partition are delivered to consumers in the exact order they were appended.</li>
+          <li>Multiple independent consumer groups (settlement, reporting, audit, notification) read the same topic at their own pace, without affecting each other.</li>
+          <li>A consumer can resume from its last committed position after a crash or restart — no manual replay coordination needed.</li>
+          <li>A new consumer, onboarded months later, can replay history within the retention window.</li>
+          <li>Topic and partition metadata (who's leader, what's the replica set) is discoverable by every client without a single point of failure.</li>
+          <li>Writes are acknowledged only once durably replicated to a configurable quorum — not just written to one disk.</li>
+        </ul>
+        <b>Non-functional targets</b>
+        <ul>
+          <li>Throughput: sustain 3.5k msgs/sec peak (your NAV cutoff window), steady-state 400–600/sec, headroom to 3x for surge.</li>
+          <li>Latency: p99 produce-to-durable-ack under 50ms; p99 end-to-end (produce to consumer read) under 500ms for real-time flows.</li>
+          <li>Durability &gt; availability for order/settlement topics: a partition with no in-sync replica should refuse writes rather than silently accept and risk loss.</li>
+          <li>Availability &gt; strict durability for low-stakes topics (e.g. UI click events): favor uptime, tolerate rare loss.</li>
+        </ul>
+        <div class="why"><b>Why this matters:</b> Kafka itself doesn't have one durability/availability setting — it's per-topic (<code>acks</code>, <code>min.insync.replicas</code>). Writing this out first forces you to notice that "the system" doesn't have one NFR profile; your <em>topics</em> do. That single realization drives almost every later decision.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R2</span><span class="q-text">What should you explicitly scope OUT — and why does that matter as much as what's in scope?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Scope out: <b>stream processing / joins / windowed aggregation</b> (that's a layer built <em>on</em> this system, e.g. Kafka Streams/Flink — not the log itself), <b>schema enforcement</b> (that's a registry sitting beside the broker, not inside it), and <b>exactly-once cross-topic transactions</b> (a significant added protocol on top of the base replication model).
+        <div class="why"><b>Why this matters:</b> Every one of those is a legitimate, common ask — and every one of them, if you try to build it into segment 1, will silently bend your component boundaries in segment 3 before you've even validated the core log works. Scoping out isn't laziness — it's protecting the shape of the core design from feature creep disguised as a requirement.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">step 02</span><h2>Scope & the core design decision</h2></div>
+    <p class="segment-note">One or two decisions here will shape every segment after this. Get them wrong and you'll be fighting your own architecture by segment 6.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Commit, in writing, to: (1) your ordering guarantee scope — global or per-partition-key? (2) your delivery semantics — at-least-once, at-most-once, or exactly-once, and where the cost of that choice lands. Justify both against your own segment-1 numbers before revealing.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">Reference decision — ordering scope and delivery semantics.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Ordering:</b> per-partition-key ordering only. No global order across a topic. Order for a given folio/account is guaranteed by routing every event for that key to the same partition.
+        <b style="display:block;margin-top:8px;">Delivery:</b> at-least-once by default, everywhere. Exactly-once only for the narrow slice that truly can't tolerate a duplicate (settlement writes) — implemented as idempotent writes at the consumer, not as a broker-wide guarantee.
+        <div class="why"><b>Why this matters:</b> Global ordering requires a single writer for the whole topic, which caps your throughput at one partition's worth of I/O — directly violating your segment-1 throughput target. And broker-wide exactly-once (transactional producers + read-committed consumers everywhere) triples your write-path latency for topics that never needed it, like UI click events. Committing to "per-key order, at-least-once by default" isn't a compromise — it's the decision that makes segment-1's 3.5k msgs/sec and sub-50ms ack even possible.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R4</span><span class="q-text">If a future team demands exactly-once end-to-end for a new topic, what do you tell them?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        You don't change the broker's default guarantee for everyone. You offer it as an opt-in mode per topic: idempotent producer (sequence numbers dedupe retries) plus a transactional write path for that specific producer-consumer pair. It costs that topic latency and throughput — a cost the rest of the platform shouldn't pay for a need it doesn't have.
+        <div class="why"><b>Why this matters:</b> The moment you make one team's requirement the platform default, every future topic inherits a cost it never asked for. Per-topic opt-in keeps the platform's baseline fast and lets the rare expensive requirement pay for itself.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">step 03</span><h2>Component breakdown</h2></div>
+    <p class="segment-note">Draw your own boxes before you see the reference. The interesting question isn't what the components are — it's why some of them are <em>not allowed</em> to be the same component.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Sketch 5–7 boxes for your system. Then answer: why can't the hot-path append logic live in the same component as the durable replication/sync path? Write your reasoning before revealing.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R5</span><span class="q-text">Reference component diagram.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">+------------------+     +---------------------+
+| Producer Client  |---->| Broker: Partition    |
+| (order-service,  |     | Leader (append path) |
+|  nsdl-adapter...) |     +----------+-----------+
++------------------+                |
+                                     v
+                        +------------------------+
+                        | Replication Manager     |
+                        | (ISR sync to followers)  |
+                        +------------+-------------+
+                                     |
+                     +---------------+---------------+
+                     v                                 v
+          +--------------------+          +--------------------+
+          | Follower Broker A  |          | Follower Broker B  |
+          +--------------------+          +--------------------+
+
++------------------+     +---------------------+     +----------------------+
+| Consumer Client  |<----| Broker: Fetch Path   |<----| Log Segment Storage  |
+| (settlement-svc)  |     | (read from log)      |     | (append-only files)  |
++------------------+     +---------------------+     +----------------------+
+
++---------------------------+     +----------------------------+
+| Controller / Metadata     |<--->| Consumer Group Coordinator |
+| Quorum (KRaft-style)      |     | (rebalance, offset store)  |
++---------------------------+     +----------------------------+</pre>
+        7 boxes: <b>append path</b>, <b>replication manager</b>, <b>fetch/read path</b>, <b>log segment storage</b>, <b>controller/metadata quorum</b>, <b>consumer group coordinator</b>, and the <b>client libraries</b> (producer/consumer) that talk to all of the above.
+        <div class="why"><b>Why the append path and replication manager can't be one component:</b> the append path's only job is "write this record to my local log as fast as possible and hand back an offset" — it's a single-writer, sequential-disk-write hot path measured in microseconds. The replication manager's job is "coordinate with N other machines over the network and wait for acknowledgment" — a fundamentally different latency class (milliseconds, subject to network partitions). Fusing them means every local append blocks on network I/O, which caps your throughput at your slowest follower's network latency — exactly what segment 1's sub-50ms target can't survive. Separating them lets the leader append locally, return fast, and let replication catch up asynchronously up to the acks contract.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">step 04</span><h2>Low-level API design</h2></div>
+    <p class="segment-note">Concrete endpoints, not prose. For each: who actually calls it — a service, an operator, an autoscaler? — and what happens if it's called twice.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Write 5–6 API cards of your own: method/path, purpose, caller, payload, idempotency behavior. Then decide: should authorization be scoped by team ownership, or by blast radius? Write your answer before revealing.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Reference API cards — data plane and control plane.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">Produce(topic, partition_key, payload, acks)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Append a record to a partition, chosen by hashing partition_key.</dd>
+            <dt>Caller</dt><dd>Any producer service — order-service, nsdl-adapter, nav-ingest-job.</dd>
+            <dt>Payload</dt><dd><code>{topic, key, value, headers, acks: 0|1|all}</code></dd>
+            <dt>Idempotency</dt><dd>Producer attaches a sequence number per (producer_id, partition); broker dedupes retries with the same sequence — safe to retry blindly.</dd>
+          </dl>
+        </div>
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">Fetch(topic, partition, offset, max_bytes)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Long-poll read of records starting at offset.</dd>
+            <dt>Caller</dt><dd>Consumer client library (inside settlement-svc, reporting-pipeline, etc).</dd>
+            <dt>Payload</dt><dd><code>{topic, partition, fetch_offset, max_wait_ms}</code></dd>
+            <dt>Idempotency</dt><dd>Naturally idempotent — a read at a fixed offset always returns the same bytes.</dd>
+          </dl>
+        </div>
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">OffsetCommit(group_id, topic, partition, offset)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Persist "this group has processed up to offset" so a restart resumes correctly.</dd>
+            <dt>Caller</dt><dd>Consumer client library, on its own commit cadence (not per-record).</dd>
+            <dt>Payload</dt><dd><code>{group_id, topic, partition, offset, metadata}</code></dd>
+            <dt>Idempotency</dt><dd>Naturally idempotent — committing the same offset twice is a no-op.</dd>
+          </dl>
+        </div>
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">JoinGroup / SyncGroup(group_id, member_id)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Register/re-register a consumer instance in a group and receive its partition assignment.</dd>
+            <dt>Caller</dt><dd>Consumer client library, on startup or after a heartbeat timeout.</dd>
+            <dt>Payload</dt><dd><code>{group_id, member_id, subscribed_topics, session_timeout_ms}</code></dd>
+            <dt>Idempotency</dt><dd>Not idempotent by nature — repeated calls can trigger repeated rebalances, which is exactly why session/heartbeat tuning matters (segment 7).</dd>
+          </dl>
+        </div>
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">CreateTopic(name, partitions, replication_factor, config)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Control-plane call to register a new topic and allocate partitions across brokers.</dd>
+            <dt>Caller</dt><dd>A human operator or a CI/CD provisioning pipeline — never an application service directly.</dd>
+            <dt>Payload</dt><dd><code>{name, partitions, replication_factor, retention_ms, min_insync_replicas}</code></dd>
+            <dt>Idempotency</dt><dd>Not idempotent — calling twice with different partition counts must be rejected, not merged, or you silently break key-ordering guarantees for existing data.</dd>
+          </dl>
+        </div>
+
+        <div class="api-card">
+          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">DescribeCluster() / Metadata(topics)</span></div>
+          <dl class="api-grid">
+            <dt>Purpose</dt><dd>Discover current leader/replica assignment for topics — every client library calls this before Produce/Fetch and caches it.</dd>
+            <dt>Caller</dt><dd>Producer and consumer clients, plus operator tooling and monitoring.</dd>
+            <dt>Payload</dt><dd><code>{topics: [...]}</code></dd>
+            <dt>Idempotency</dt><dd>Pure read — trivially idempotent.</dd>
+          </dl>
+        </div>
+
+        <div class="why"><b>Why blast radius, not ownership:</b> "Who owns this API" tells you who to page. "What's the blast radius if this call is misused" tells you how to scope the token. <code>Produce</code> scoped by ownership means any order-service credential can produce to any topic that team's key happens to also have — but scoped by blast radius, a settlement-topic write credential is deliberately narrower than a low-stakes-topic write credential, because a bad write to <code>mf.order.events</code> costs far more than a bad write to a UI-click topic. <code>CreateTopic</code> and <code>DescribeCluster</code> are asymmetric for the same reason: read access is cheap to grant broadly; the ability to reshape partition layout is not.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">step 05</span><h2>Data model & sizing</h2></div>
+    <p class="segment-note">Sketch your own schema and estimate real numbers for your platform's scale before revealing.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Sketch what's actually stored on disk per partition, and estimate: how many topics, partitions, and bytes/day across your 80+ microservices? Then answer the gut-check: is this actually a "big data" storage problem, or not? Decide what's durable config vs. ephemeral in-memory derived state, and why mixing them up would be a mistake.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R7</span><span class="q-text">Reference data model and sizing.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>On disk, per partition:</b> a sequence of immutable log segment files (e.g. 1GB each), each with a paired sparse offset index (offset → byte position) and a timestamp index. Segments roll over by size or time; old segments are deleted or compacted per the topic's retention policy.
+        <pre class="sketch">partition-3/
+  00000000000000000000.log      <- segment (records, append-only)
+  00000000000000000000.index    <- offset -> byte-position lookup
+  00000000000000000000.timeindex
+  00000000000045210000.log      <- next segment after rollover
+  ...</pre>
+        <b>Sizing (illustrative, across the wealth platform):</b>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Topics</div><div class="value">~40 <span>active</span></div></div>
+          <div class="stat-card"><div class="label">Total partitions</div><div class="value">~420 <span>cluster-wide</span></div></div>
+          <div class="stat-card"><div class="label">Peak write rate</div><div class="value">3.5k <span>msgs/sec</span></div></div>
+          <div class="stat-card"><div class="label">Avg record size</div><div class="value">~800 <span>bytes</span></div></div>
+          <div class="stat-card"><div class="label">Daily volume</div><div class="value">~190 <span>GB/day pre-replication</span></div></div>
+          <div class="stat-card"><div class="label">Replicated footprint</div><div class="value">~570 <span>GB/day (RF=3)</span></div></div>
+        </div>
+        <b>Durable vs. ephemeral:</b> log segments, indexes, and committed offsets are durable — written to disk, replicated, survive a restart. Broker-side metadata caches (which broker thinks it's leader for which partition, right now), consumer group in-memory assignment state, and ISR membership snapshots are derived/ephemeral — rebuilt from the controller/quorum on restart, never treated as a source of truth.
+        <div class="why"><b>Why conflating them is a mistake:</b> if you accidentally treat an in-memory ISR snapshot as durable truth, a broker restart can "forget" a valid replica was in sync and either falsely exclude it (unnecessary re-catch-up) or falsely trust a stale one (data loss risk). The controller/quorum is the only durable source of who's really in sync — everything else is a fast, disposable cache of that fact.</div>
+        <div class="why"><b>The big-data gut check:</b> ~570 GB/day sounds large, but at 7-day retention that's ~4TB steady-state per replicated topic set — comfortably single-digit-node storage, not a big-data problem. The actual hard part isn't <em>volume</em>, it's <em>throughput + ordering + durability under concurrent access</em> — a systems problem, not a "shard it across 200 nodes" problem. Don't let the word "Kafka" trick you into over-building for scale you don't have yet.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">step 06</span><h2>Core algorithm: the append + ISR replication protocol</h2></div>
+    <p class="segment-note">Pick one mechanism and get concrete. This is the single piece of logic your entire durability story depends on.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Write actual pseudocode — not prose — for: (1) the leader's append operation, (2) how a follower catches up and joins the ISR, (3) how the leader decides when to ack a producer. Then answer: what happens if the ISR shrinks to zero in-sync replicas mid-write?</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R8</span><span class="q-text">Reference pseudocode — append path, ISR tracking, ack decision.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">// Leader-side state per partition
+struct PartitionState {
+  log: AppendOnlyLog          // local durable segment writer
+  isr: Set&lt;ReplicaId&gt;         // currently in-sync replicas, includes self
+  high_watermark: Offset      // highest offset acked by ALL of isr
+  pending_acks: Map&lt;Offset, List&lt;Waiter&gt;&gt;
+  lock: SingleWriterLock       // one append at a time, this partition only
+}
+
+// 1. Append (hot path — must stay fast)
+function append(record, acks_mode):
+  lock.acquire()
+  offset = log.write(record)       // sequential disk write, local only
+  lock.release()
+
+  if acks_mode == 0:
+    return ack_immediately()        // fire and forget
+  elif acks_mode == 1:
+    return ack_immediately()        // leader-local durability only
+  else: // acks == "all"
+    pending_acks[offset].add(current_waiter)
+    return wait_until(offset &lt;= high_watermark)   // blocks until ISR catches up
+
+// 2. Follower replication loop (async, off the hot path)
+function follower_replicate_loop(follower):
+  while true:
+    fetch_offset = follower.last_replicated_offset + 1
+    records = leader.log.read_from(fetch_offset)
+    follower.log.write(records)
+    follower.last_replicated_offset += len(records)
+    leader.update_follower_progress(follower.id, follower.last_replicated_offset)
+
+// 3. High watermark advance + ISR membership (leader-side, periodic)
+function recompute_high_watermark_and_isr():
+  for replica in isr:
+    if replica.lag_ms() &gt; replica.lag.threshold_ms:
+      isr.remove(replica)          // fell behind -> out of ISR, catch-up continues separately
+  high_watermark = min(replica.last_replicated_offset for replica in isr)
+  release_waiters_up_to(high_watermark)   // unblocks pending acks==all producers</pre>
+        <div class="why"><b>Why the append and the ISR recompute are separate functions, not one:</b> the append path needs to stay a single fast local write with a lock held for microseconds. If ISR bookkeeping (network round-trip checks, lag calculation) happened inside that same lock, every append would serialize behind the slowest follower's heartbeat — reintroducing the exact coupling segment 3 said to avoid.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R9</span><span class="q-text">The ISR shrinks to zero in-sync replicas (leader included, hypothetically) mid-write. What happens?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        With <code>min.insync.replicas</code> set (e.g. 2) and <code>acks=all</code>, the leader must <b>refuse the write</b> and return a "not enough replicas" error the moment ISR count drops below the configured minimum — it does not silently downgrade to a weaker guarantee. The producer is responsible for retry/backoff until ISR recovers.
+        <div class="why"><b>Why this matters:</b> the alternative — quietly accepting the write with fewer in-sync copies than promised — is how "the broker said it was durable" becomes "the broker lied," which is the single worst thing a log-as-source-of-truth can do for a settlement pipeline. Refusing to write is a worse user experience in the moment and a strictly better guarantee for the business. This is the concrete mechanism behind segment 1's "durability over availability" NFR for order/settlement topics.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">step 07</span><h2>Supporting subsystem: the consumer group coordinator</h2></div>
+    <p class="segment-note">Every distributed log needs something deciding "who reads what" as consumers join, leave, and crash. Design its loop precisely.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Design the coordinator's heartbeat/timeout/rebalance loop as precisely as you can — when does it trigger, what does it do. Then decide: should this coordinator be one centralized process per group, or a distributed protocol among the consumers themselves? Justify before revealing.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R10</span><span class="q-text">Reference: coordinator loop and the centralized-vs-distributed call.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">// Runs on one broker elected as coordinator for this group_id
+function coordinator_loop(group):
+  loop every heartbeat_check_interval:
+    for member in group.members:
+      if now() - member.last_heartbeat &gt; member.session_timeout_ms:
+        group.members.remove(member)
+        trigger_rebalance(group)          // member presumed dead
+
+  on receive JoinGroup(member_id):
+    group.members.add(member_id)
+    trigger_rebalance(group)              // new member -> reassign
+
+  on receive Heartbeat(member_id):
+    group.members[member_id].last_heartbeat = now()
+
+function trigger_rebalance(group):
+  group.state = REBALANCING
+  partitions = all_partitions(group.subscribed_topics)
+  assignment = partition_assignor(partitions, group.members)  // e.g. sticky/round-robin
+  broadcast_assignment(assignment)
+  group.state = STABLE</pre>
+        <b>Centralized, per group.</b> One broker acts as coordinator for a given <code>group_id</code> (chosen deterministically, e.g. by hashing the group ID to a partition of an internal topic) — not a fully distributed consensus protocol among consumers themselves.
+        <div class="why"><b>Why centralized wins here:</b> a distributed protocol among consumer instances (each independently deciding partition ownership via gossip or voting) trades one coordinator bottleneck for a harder problem — network-partition-tolerant distributed consensus, for a decision that's made infrequently (only on join/leave/crash) and needs to be fast to converge, not fast to sustain high QPS. A single coordinator broker handles this fine because rebalances are rare events, not steady-state traffic — the coordinator never sits on the hot data path. The real risk isn't the centralization, it's a <em>rebalance storm</em> (too many join/leave events too close together) — which is a tuning problem (session timeout, static membership), not an architecture problem.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">step 08</span><h2>Failure handling & state machine</h2></div>
+    <p class="segment-note">Pull every state you've mentioned so far — partition, replica, consumer group — into one diagram you draw yourself.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Draw the state machine: partition states, replica states, consumer group states, and the transitions between them. Then find the "stuck forever" risk — is there any state your design could enter and never leave without a timeout forcing an exit? Write your answer before revealing.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R11</span><span class="q-text">Reference state machine.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">PARTITION (per broker's view of a partition)
+  [Offline] --controller assigns--> [Becoming-Leader] --logs recovered--> [Leader]
+  [Offline] --controller assigns--> [Follower] --catches up--> [In-Sync Follower]
+  [Leader]/[Follower] --broker unreachable--> [Offline] --> controller re-elects
+
+REPLICA (per follower, from leader's view)
+  [Catching-Up] --lag below threshold--> [In-Sync (ISR member)]
+  [In-Sync] --lag exceeds threshold--> [Catching-Up] --removed from ISR--
+  [Catching-Up] --replica never catches up (timeout)--> [Considered Dead]
+
+CONSUMER GROUP
+  [Stable] --member join/leave/crash--> [Rebalancing]
+  [Rebalancing] --new assignment broadcast + acked--> [Stable]
+  [Rebalancing] --rebalance timeout exceeded--> [Rebalancing] (retry, with backoff)</pre>
+        <b>The "stuck forever" risk:</b> without a hard ceiling, <code>[Rebalancing]</code> can theoretically loop if members keep joining/leaving faster than assignment can stabilize (a rebalance storm), and <code>[Becoming-Leader]</code> can stall if log recovery hangs on a corrupted segment.
+        <div class="why"><b>Why every state needs a timeout-forced exit:</b> a distributed system state machine that only transitions on "success" events (join succeeded, catch-up succeeded, recovery succeeded) has no way out of a state where the success event never comes. The fix in both cases is the same shape: a bounded timeout that forces a transition regardless of outcome — <code>[Becoming-Leader]</code> times out into "mark partition unavailable, alert operator" rather than hanging forever, and <code>[Rebalancing]</code> uses exponential backoff plus a max-rebalance-attempts ceiling that eventually kicks a flapping member out of the group entirely rather than blocking the whole group's progress indefinitely. Retry and idempotency plug in exactly here: every one of these forced exits is safe only because the operations being retried (fetch, produce with sequence numbers, offset commit) are idempotent — a forced retry after a timeout never double-applies an effect.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">step 09</span><h2>Scaling this component itself</h2></div>
+    <p class="segment-note">Not the systems this log serves — this log system. How do more brokers and a bigger controller stay coordinated without becoming the bottleneck.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Decide: as broker count grows, what keeps controller/metadata decisions from becoming a coordination bottleneck? Then write one concrete metric, tied back to your segment-1 NFRs, that would tell you "it's time to scale out."</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R12</span><span class="q-text">Reference: keeping the controller/metadata layer from becoming the bottleneck.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Two moves: (1) the controller itself runs as a small quorum (3 or 5 nodes, Raft-style — this is what KRaft replaced ZooKeeper with) rather than one node, so it's fault-tolerant without being "everyone votes on everything." (2) metadata changes are <b>batched and propagated asynchronously</b> to brokers as an event log of their own (a metadata topic), not synchronously pushed on every single change — brokers pull/cache metadata and only re-fetch on a version bump, so a metadata update doesn't mean N broker-to-controller round trips per partition change.
+        <div class="why"><b>Why this matters:</b> the naive design — every broker synchronously confirms every metadata change with the controller — turns partition count into a coordination cost multiplier: 420 partitions means 420x the chatter on every leadership change. Treating metadata itself as a log that brokers tail asynchronously converts an O(n) synchronous coordination problem into an O(1) "check my cached version" read, which is exactly the same trick the data plane uses (append-only log + independent readers) applied to the control plane.</div>
+        <b style="display:block;margin-top:10px;">Scale-out trigger metric:</b> sustained <b>under-replicated partition count &gt; 0 for more than 2 minutes</b>, or <b>controller request queue depth</b> trending upward across 3 consecutive monitoring windows — both are leading indicators that current broker/controller capacity can't keep up with metadata or replication churn, well before producer-side latency (your segment-1 p99 target) actually breaches.
+        <div class="why"><b>Why this metric and not raw CPU/disk:</b> CPU and disk usage on a healthy cluster can look fine right up until the moment replication falls behind — under-replicated partitions is the metric that's actually causally close to your durability guarantee breaking, so it gives you lead time instead of a lagging confirmation that something already went wrong.</div>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">step 10</span><h2>End-to-end assembly</h2></div>
+    <p class="segment-note">Draw the whole thing from memory — both the hot/data path and the control/config path in one diagram.</p>
+
+    <div class="build-box">
+      <div class="build-label">✎ build it yourself first</div>
+      <p>Draw your complete system from memory: producer → broker → replication → consumer group → offset commit, and separately, the control-plane path: topic creation → controller → metadata propagation → client discovery. Do this before looking at the reference.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R13</span><span class="q-text">Reference: full assembly, both paths.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">DATA / HOT PATH
+order-service --Produce(key=folio_id)--> Leader Broker (partition N)
+   --local append (fast)--> ack per acks-mode
+   --async replicate--> Follower Brokers --update ISR/high-watermark--
+
+settlement-svc --Fetch(offset)--> Leader/Follower Broker --read log segment-->
+   --process record--> OffsetCommit(group, partition, offset) --stored durably--
+
+CONTROL / CONFIG PATH
+operator/CI --CreateTopic(name, partitions, RF)--> Controller Quorum
+   --allocate partitions across brokers--> write to internal metadata log
+   --brokers tail metadata log--> update local cache (leader/replica assignment)
+
+producer/consumer client --DescribeCluster/Metadata()--> any broker
+   --returns cached leader/replica info--> client routes Produce/Fetch directly to leader</pre>
+        Both paths share one idea: <b>the log pattern isn't just the product — it's the internal implementation strategy.</b> Data replication is a log. Metadata propagation is a log. Even consumer group state changes are logged. Once you see that, "distributed log system" stops being a special-purpose messaging tool and starts being a general pattern for keeping many independent readers eventually consistent with one append-only source of truth — which is also, not coincidentally, the exact thing your segment-1 requirements asked for.
+      </div></div></div>
+
+    <div class="final-q">
+      <b>Final question — no answer key.</b> Trace your own design, end to end, back against your own segment-1 FR/NFR list. Where's the gap? Is there a requirement you wrote on day one that your segment-6 algorithm or segment-8 state machine quietly doesn't actually satisfy? Find it yourself — that gap is worth more than anything in this document.
+    </div>
+  </section>
+
+  <footer>
+    // the whole system, compressed: append-only, partitioned, replicated logs for data → the same pattern for metadata →
+    consumers track their own position → durability is a per-topic contract, not a platform-wide promise →
+    every "stuck" state needs a timeout-forced exit → and the log pattern, once you see it, is the implementation strategy, not just the product.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body; const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  btn.innerHTML = body.classList.contains('dark-theme') ? '☀&nbsp; Light mode' : '☾&nbsp; Dark mode';
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open'); answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open'); answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>

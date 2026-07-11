@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Build Your Own: Distributed Tracing System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5;
+    --panel:#FFFFFF;
+    --panel-2:#F2F0E8;
+    --border:#DEDACC;
+    --text:#242420;
+    --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115;
+    --panel:#161A20;
+    --panel-2:#1C2027;
+    --border:#2A2E37;
+    --text:#E7E3D8;
+    --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;
+    display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);
+    color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  body.dark-theme .q-answer-inner{color:#C7C2B4;}
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  body.dark-theme .no-answer{color:var(--muted);}
+  body.dark-theme .api-meta{color:#9A968A;}
+  @media(max-width:600px){
+    .theme-toggle{top:auto;bottom:18px;right:18px;}
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+
+  .ledger-strip{
+    display:flex;height:10px;border-radius:3px;overflow:hidden;
+    margin-bottom:28px;border:1px solid var(--border);
+  }
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1),.ledger-strip span:nth-child(11){background:#C9871F;}
+  .ledger-strip span:nth-child(2),.ledger-strip span:nth-child(12){background:#2E8B82;}
+  .ledger-strip span:nth-child(3),.ledger-strip span:nth-child(13){background:#C1543A;}
+  .ledger-strip span:nth-child(4),.ledger-strip span:nth-child(14){background:#7A63B8;}
+  .ledger-strip span:nth-child(5),.ledger-strip span:nth-child(15){background:#3480B0;}
+  .ledger-strip span:nth-child(6),.ledger-strip span:nth-child(16){background:#6B9A44;}
+  .ledger-strip span:nth-child(7),.ledger-strip span:nth-child(17){background:#C1547A;}
+  .ledger-strip span:nth-child(8),.ledger-strip span:nth-child(18){background:#B9971F;}
+  .ledger-strip span:nth-child(9),.ledger-strip span:nth-child(19){background:#279090;}
+  .ledger-strip span:nth-child(10),.ledger-strip span:nth-child(20){background:#9A62D6;}
+
+  header h1{
+    font-family:'Fraunces',serif;font-weight:600;
+    font-size:2.4rem;letter-spacing:-0.5px;margin:0 0 6px;color:var(--text);
+  }
+  header h1 em{color:#C9871F;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 28px;max-width:70ch;}
+
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;
+    font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+    padding:12px 0;margin-bottom:36px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:8px 16px;z-index:10;
+  }
+  nav a{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;
+    text-decoration:none;padding:4px 8px;border-radius:4px;
+    border:1px solid transparent;font-weight:600;
+  }
+
+  section.segment{
+    margin-bottom:56px;scroll-margin-top:70px;
+    border-left:3px solid var(--seg,#2E8B82);padding-left:22px;
+  }
+  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .segment-offset{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;
+    background:var(--panel-2);border:1px solid var(--border);
+    padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;color:var(--text);}
+  .segment-note{color:var(--muted);font-size:.93rem;margin:8px 0 20px;max-width:70ch;}
+  .segment-note code, p code, .api-meta code{
+    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);
+    padding:1px 6px;border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
+  }
+
+  /* BUILD-IT-YOURSELF CALLOUT — new component */
+  .build-callout{
+    background:var(--panel-2);border:1px dashed var(--seg,#C9871F);
+    border-radius:6px;padding:13px 16px;margin:0 0 20px;
+  }
+  .build-callout .bc-label{
+    font-family:'IBM Plex Mono',monospace;font-size:.68rem;font-weight:700;
+    text-transform:uppercase;letter-spacing:.6px;color:var(--seg,#C9871F);
+    display:block;margin-bottom:5px;
+  }
+  .build-callout p{margin:0;font-size:.92rem;color:var(--text);}
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);
+    border-left:3px solid var(--seg,#2E8B82);padding:14px 16px;
+    font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:0 0 22px;
+  }
+
+  .q-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-radius:6px;margin-bottom:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  }
+  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
+  .q-tag{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;
+    background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;
+    flex-shrink:0;margin-top:3px;font-weight:600;
+  }
+  .q-text{font-size:1rem;color:var(--text);flex:1;}
+  .q-toggle{
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    flex-shrink:0;white-space:nowrap;border:1px solid var(--border);
+    padding:3px 9px;border-radius:20px;margin-top:1px;
+  }
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
+  .q-answer-inner b{color:var(--seg,#C9871F);}
+  .q-answer-inner .why{
+    display:block;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);
+    font-style:italic;color:var(--muted);
+  }
+  .q-answer-inner .why b{color:var(--seg,#C9871F);font-style:normal;}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 26px;}
+  .stat-card{
+    background:var(--panel);border:1px solid var(--border);
+    border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;
+  }
+  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;color:var(--text);margin-top:4px;}
+  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
+
+  .topic-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:24px;}
+  .topic-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);
+    padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;
+  }
+  .topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.82rem;}
+  .topic-table td:first-child{color:var(--seg,#2E8B82);}
+
+  .diff-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:10px 0 4px;}
+  .diff-table th{
+    text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);
+    padding:8px 12px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;
+  }
+  .diff-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .diff-table td:first-child{color:#C1543A;width:36%;}
+  .diff-table td:last-child{color:var(--seg,#2E8B82);}
+
+  .error-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);
+  }
+  .error-card .err-name{font-weight:600;color:var(--text);font-size:.96rem;margin-bottom:4px;}
+  .error-card .err-fix{color:var(--muted);font-size:.88rem;}
+  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+
+  /* API CARD — new component */
+  .api-card{
+    background:var(--panel);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;margin-bottom:10px;
+  }
+  .api-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+  .api-method{
+    font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:700;color:#fff;
+    padding:2px 9px;border-radius:3px;letter-spacing:.4px;
+  }
+  .api-method.get{background:#3480B0;}
+  .api-method.post{background:#2E8B82;}
+  .api-method.delete{background:#C1543A;}
+  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.88rem;color:var(--text);font-weight:600;}
+  .api-purpose{font-size:.9rem;color:var(--text);margin:0 0 8px;}
+  .api-meta{font-size:.83rem;color:var(--muted);margin:3px 0;}
+  .api-meta b{color:var(--seg,#3480B0);font-family:'IBM Plex Mono',monospace;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px;}
+
+  /* NO-ANSWER-KEY BOX */
+  .no-answer{
+    margin-top:16px;padding:14px 18px;border-radius:6px;
+    background:var(--panel-2);border:1px dashed var(--muted);
+    font-size:.94rem;color:var(--text);font-style:italic;
+  }
+  .no-answer b{font-style:normal;color:var(--seg,#4A5FBF);}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;
+  }
+
+  @media(max-width:600px){
+    header h1{font-size:1.8rem;}
+    .q-answer-inner{padding-left:18px;}
+    section.segment{padding-left:14px;}
+  }
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Build Your Own: <em>Distributed Tracing System</em></h1>
+    <p class="sub">Not an explainer — you already have that. This is a design session: you build the system piece by piece, commit to a decision before every reveal, and compare against a reference design afterward. The reveal is a design-review comment, not an answer key. Do the "build it yourself first" box before you touch the reveal — that's the entire point.</p>
+    <div class="meta-bar">
+      <span><b>10 segments</b></span>
+      <span>~3–4 hrs, self-paced, bring paper</span>
+      <span>Format: build → commit → reveal → compare</span>
+      <span>Goal: design judgment, not recall</span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#s1" style="color:#C9871F;">01 Requirements</a>
+    <a href="#s2" style="color:#2E8B82;">02 Core Decision</a>
+    <a href="#s3" style="color:#C1543A;">03 Components</a>
+    <a href="#s4" style="color:#7A63B8;">04 API Design</a>
+    <a href="#s5" style="color:#3480B0;">05 Data & Sizing</a>
+    <a href="#s6" style="color:#6B9A44;">06 Core Algorithm</a>
+    <a href="#s7" style="color:#C1547A;">07 Tiering Subsystem</a>
+    <a href="#s8" style="color:#B9971F;">08 Failure & State Machine</a>
+    <a href="#s9" style="color:#279090;">09 Scaling Itself</a>
+    <a href="#s10" style="color:#9A62D6;">10 Assembly</a>
+  </nav>
+
+  <!-- SEGMENT 1 : REQUIREMENTS -->
+  <section class="segment" id="s1" style="--seg:#C9871F">
+    <div class="segment-head"><span class="segment-offset">offset 00</span><h2>Functional & non-functional requirements</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>On paper: write your own 5–7 FR bullets, then NFR targets with real numbers — throughput (spans/sec), added latency to the caller, query latency, retention window, and your consistency/availability trade-off — for a tracing system sitting in front of MF order flow, IPO allotment, NSDL demat, MOFSL, PolicyBazaar, and LAMF. Then write one line on what you're deliberately scoping <em>out</em>, and why.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q1</span><span class="q-text">Reveal a reference FR list — how close did yours land?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        FR1: A service can attach trace context to a request and have spans accepted without blocking the request.<br>
+        FR2: Given a trace_id, return the full span tree within the retention window.<br>
+        FR3: Every span carries structured status (OK / ERROR / TIMEOUT) plus a bounded set of key-value tags.<br>
+        FR4: Sampling policy is configurable per service/tier, not one global rate.<br>
+        FR5: Trace context survives async boundaries (queue/broker) via explicit propagation, not assumption.<br>
+        FR6: Error traces and traces above a latency threshold are guaranteed to survive sampling, not left to chance.<br>
+        FR7: Query access is exposed as an API to internal tools, not raw storage access.
+        <span class="why"><b>Why this shape:</b> every FR here maps to a concrete downstream design decision later in this session (FR6 forces tail sampling in segment 2; FR5 forces explicit context-link handling in segment 8). An FR that doesn't constrain a later decision is usually filler.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q2</span><span class="q-text">What should you explicitly scope out, and why does that line matter as much as the FR list?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Scope out: 100% full-fidelity capture of every span (cost-prohibitive at this scale by construction — segment 5 will show why); cross-vendor trace federation; and rebuilding log aggregation inside the tracing system.
+        <span class="why"><b>Why it matters:</b> an unscoped system quietly grows toward "let's also capture everything, forever, and search it like logs" — at which point you've rebuilt a second, worse logging platform on top of a data model that was never designed for full-text search. The scope line is what stops a tracing system from mission-creeping into something it structurally can't do well.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q3</span><span class="q-text">Reveal reference NFR targets — did you put real numbers, or vague words like "fast" and "reliable"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Ingest throughput: 50k–100k spans/sec sustained, 3x burst. Added latency to the caller: &lt;5ms p99 — must be fire-and-forget. Single-trace query latency: &lt;500ms p95. Hot retention: 24–72h. Cold/compliance retention: 90 days minimum for regulated flows (allotment, redemption, disbursal). Consistency: eventual is fine for trace assembly (spans arrive out of order); durability of an <em>accepted</em> span is the real non-negotiable. Availability: the ingest path must degrade by dropping spans, never by slowing or blocking the caller.
+        <span class="why"><b>Why this framing:</b> the single NFR that shapes everything else is the last one — tracing must never become the reason the real system is slow or down. Every later trade-off (tail sampling's memory cost, backpressure policy, agent design) gets judged against that one sentence.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 2 : CORE DECISION -->
+  <section class="segment" id="s2" style="--seg:#2E8B82">
+    <div class="segment-head"><span class="segment-offset">offset 01</span><h2>Scope & the core design decision</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Commit: head sampling or tail sampling. Write 2–3 sentences you'd defend in a design review, justified specifically against your FR6 (error/slow traces must survive) from segment 1 — not against sampling in the abstract.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Which one guarantees you never lose an error trace to random chance — and what does that guarantee cost you architecturally?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Tail sampling.</b> The decision happens after you've seen the outcome, so error and slow traces can be kept deterministically instead of hoping a random head-sample coin flip caught them.
+        <span class="why"><b>The cost:</b> the collector must now buffer every span of every in-flight trace until it's judged complete, which makes the collector <em>stateful</em> and memory-bound — a structural cost head sampling never pays, because head sampling decides at request-start and immediately forgets whatever it didn't select. This single choice is why segments 3, 6, 7, and 9 all end up dealing with buffering, memory pressure, and instance-affinity — it isn't a side detail, it's the decision's direct shadow.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q5</span><span class="q-text">If FR6 is truly non-negotiable, is head sampling still viable for any part of this system?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Only as a <b>cost-control layer underneath tail sampling</b>, never as the sole mechanism — e.g. coarsely head-filtering known-low-value background traffic before it ever reaches the tail-sampling buffer.
+        <span class="why"><b>Why not pure head sampling:</b> a decision made before the outcome exists cannot, by construction, condition on that outcome. Pure head sampling and "guarantee errors survive" are logically incompatible — no amount of tuning the head-sample rate fixes that, it only changes the odds.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q6</span><span class="q-text">What's the real price of choosing tail sampling, measured against your segment-1 NFRs specifically?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Buffering must stay entirely off the path the caller waits on (or the &lt;5ms NFR breaks immediately). Memory pressure per instance now scales with in-flight trace volume, not just span volume. And "when is a trace complete" becomes a real design problem — too eager and you cut off a slow trace before its signal arrives; too patient and buffers grow unbounded.
+        <span class="why"><b>Why say this out loud in a review:</b> tail sampling is usually the right call for a system with an FR6-shaped requirement, but pretending it's free is how a design review gets ambushed later by a memory incident nobody budgeted for.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 3 : COMPONENTS -->
+  <section class="segment" id="s3" style="--seg:#C1543A">
+    <div class="segment-head"><span class="segment-offset">offset 02</span><h2>Component breakdown</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Draw your own 5–7 box diagram, arrows and all. Before you reveal: write one sentence on why the hot-path decision logic (the sampler) can't live in the same component as the durable-write path (storage).</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q7</span><span class="q-text">Reveal the reference component diagram — how many boxes matched?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Instrumented Service (SDK)
+   | spans, async, non-blocking
+   v
+Local Agent / Sidecar          -- batches, local retry, backpressure
+   |
+   v
+Ingestion Gateway               -- auth, validation, rate-limit (stateless)
+   |
+   v
+Trace Assembler / Sampler       -- buffers per trace_id, tail decision (stateful)
+   |                    \
+   v                     v
+Hot Storage           Cold / Archive Storage  <- async tiering (segment 7)
+   |
+   v
+Query Service / API
+   |
+   v
+Dashboards / Alerting / on-call tooling</pre>
+        <span class="why"><b>Why this exact shape:</b> every box exists because of a decision made earlier — the assembler exists because of segment 2's tail-sampling choice; the agent exists because of the &lt;5ms caller-latency NFR; the split between hot and cold storage exists because of segment 1's retention numbers. A component diagram that isn't traceable back to a requirement is usually just habit.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q8</span><span class="q-text">Why can't the trace assembler and the hot-storage writer live in the same component?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        They have opposite failure and scaling profiles. The assembler needs <b>in-memory state</b> (buffered spans, per-trace, waiting on a decision) and a latency-sensitive decision loop. The storage writer needs <b>durability</b> and scales cleanly by write volume once the decision is already made.
+        <span class="why"><b>What coupling them would actually break:</b> a storage slowdown would backpressure the assembler's memory buffer directly, turning a durability problem into a memory-exhaustion problem. And a stuck decision loop (a sampler bug) would block writes for traces that had nothing to do with it. Separating them means each can degrade independently without dragging the other down.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q9</span><span class="q-text">Why does the local agent/sidecar exist — why can't the SDK call the ingestion gateway directly?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Because tracing must never become a source of latency or failure for the <em>real</em> request. The agent absorbs batching, local retry, and backpressure so the SDK's call is a local, fire-and-forget write — not a network call whose failure the business request has to survive.
+        <span class="why"><b>Why this isn't over-engineering:</b> without the agent, a slow or unavailable ingestion gateway directly threatens every traced service's own availability — the exact violation of the segment-1 NFR that tracing exists to observe, not cause.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 4 : API DESIGN -->
+  <section class="segment" id="s4" style="--seg:#7A63B8">
+    <div class="segment-head"><span class="segment-offset">offset 03</span><h2>Low-level API design</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Design your own 5–6 endpoints as a table: method, path, purpose, caller (be specific — a service? an operator? an autoscaler?), payload, idempotency behavior. Then decide: should the ingest endpoint and the policy-update endpoint share the same auth scope?</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q10</span><span class="q-text">Reveal the reference API surface — check your caller column especially.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/v1/spans/ingest</span></div>
+          <p class="api-purpose">Accept a batch of spans from an agent.</p>
+          <p class="api-meta"><b>caller</b> local agent / sidecar — never the SDK directly</p>
+          <p class="api-meta"><b>payload</b> array of {trace_id, span_id, parent_span_id, service, start, end, status, tags[]}</p>
+          <p class="api-meta"><b>idempotency</b> yes — dedup on span_id; re-ingesting an identical span is a no-op</p>
+        </div>
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method get">GET</span><span class="api-path">/v1/traces/{trace_id}</span></div>
+          <p class="api-purpose">Fetch the full assembled span tree for a trace.</p>
+          <p class="api-meta"><b>caller</b> dashboards, on-call tooling, an engineer's browser via the UI</p>
+          <p class="api-meta"><b>payload</b> none — path param only</p>
+          <p class="api-meta"><b>idempotency</b> n/a — read-only</p>
+        </div>
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/v1/sampling-policy</span></div>
+          <p class="api-purpose">Update sampling rules (per-service rates, guaranteed-keep rules for errors/slow traces).</p>
+          <p class="api-meta"><b>caller</b> a human operator or a reviewed config-management pipeline — deliberately <em>not</em> an autoscaler</p>
+          <p class="api-meta"><b>payload</b> {policy_id, rules[]}</p>
+          <p class="api-meta"><b>idempotency</b> yes — policy_id makes reapplying safe</p>
+        </div>
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/v1/agent/heartbeat</span></div>
+          <p class="api-purpose">Agent reports its buffer depth, drop count, last-flush time.</p>
+          <p class="api-meta"><b>caller</b> the local agent itself, on a timer</p>
+          <p class="api-meta"><b>payload</b> {agent_id, buffer_depth, dropped_count, last_flush_ts}</p>
+          <p class="api-meta"><b>idempotency</b> n/a — each heartbeat is a fresh observation, not a mutation</p>
+        </div>
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method post">POST</span><span class="api-path">/v1/retention-policy</span></div>
+          <p class="api-purpose">Set hot/cold retention windows, with per-flow overrides for regulated flows.</p>
+          <p class="api-meta"><b>caller</b> a platform or compliance operator, reviewed change</p>
+          <p class="api-meta"><b>payload</b> {flow_tag, hot_days, cold_days}</p>
+          <p class="api-meta"><b>idempotency</b> yes</p>
+        </div>
+
+        <div class="api-card">
+          <div class="api-head"><span class="api-method delete">DELETE</span><span class="api-path">/v1/traces/{trace_id}</span></div>
+          <p class="api-purpose">Manual purge of a specific trace — e.g. a compliance/PII scrub request.</p>
+          <p class="api-meta"><b>caller</b> a compliance operator only — never a service</p>
+          <p class="api-meta"><b>payload</b> {reason_code} — required, not optional</p>
+          <p class="api-meta"><b>idempotency</b> yes — deleting an already-deleted trace returns a no-op success</p>
+        </div>
+
+        <span class="why"><b>Why the caller column matters more than it looks:</b> three of these six endpoints are deliberately gated to a human/reviewed caller, not a service or autoscaler — sampling policy, retention policy, and trace purge. That's not caution for its own sake; it's the answer to Q11.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q11</span><span class="q-text">Should the ingest endpoint and the sampling-policy endpoint share the same auth scope? Scope by ownership, or by blast radius?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>No — and this is a blast-radius question, not an ownership question.</b> Ingest should be scoped narrowly to "can write spans for a given service identity" — high-volume, low-blast-radius-per-call, since a bad ingest call corrupts at most one trace. Sampling-policy and retention-policy need a small, audited operator scope, because <b>one bad policy push can silently blind the entire tracing pipeline for every service at once.</b>
+        <span class="why"><b>Why "blast radius" beats "ownership" as the scoping question:</b> ownership-based thinking asks "who owns this API" and often lands both endpoints under the same "tracing team" scope. Blast-radius thinking asks "what's the worst outcome of a single misused credential" — and that answer is wildly different for these two endpoints even though the same team owns both.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 5 : DATA & SIZING -->
+  <section class="segment" id="s5" style="--seg:#3480B0">
+    <div class="segment-head"><span class="segment-offset">offset 04</span><h2>Data model & sizing</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Sketch your own span schema. Then estimate: at 80+ microservices, roughly how many spans/sec pre-sampling, how many persisted post-sampling, and how much hot storage per day? Do the arithmetic before revealing — don't guess a round number.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Pre-sample volume</div><div class="value">~100k <span>spans/sec</span></div></div>
+      <div class="stat-card"><div class="label">Effective keep rate</div><div class="value">~8% <span>head + tail-on-error/slow</span></div></div>
+      <div class="stat-card"><div class="label">Persisted volume</div><div class="value">~8k <span>spans/sec</span></div></div>
+      <div class="stat-card"><div class="label">Hot storage / day</div><div class="value">~300 <span>GB, pre-compression</span></div></div>
+    </div>
+
+    <table class="topic-table">
+      <tr><th>Field class</th><th>Examples</th><th>Durability need</th><th>Consistency need</th></tr>
+      <tr><td>Durable config</td><td>sampling policy, retention policy, service registry</td><td>must survive crash</td><td>strongly consistent across instances</td></tr>
+      <tr><td>Ephemeral derived state</td><td>in-flight trace buffers in the assembler</td><td>fine to lose on crash</td><td>local to one instance only</td></tr>
+      <tr><td>Persisted span data</td><td>hot-storage span rows, cold-archive trace blobs</td><td>durable once written</td><td>eventual — spans can assemble out of order</td></tr>
+    </table>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">At 80+ services and ~20 spans/trace, is this actually a big-data problem — or does it just feel like one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Do the math before assuming yes. ~5k requests/sec platform-wide × ~20 spans/trace ≈ 100k spans/sec pre-sampling. After an effective ~8% keep rate (head sample + guaranteed error/slow retention), you're persisting roughly 8k spans/sec, each maybe 300–500 bytes — call it ~3–4 MB/sec sustained, ~250–350 GB/day before compression.
+        <span class="why"><b>Why this is not a big-data problem:</b> that's a standard time-series / wide-column storage workload, well within what one reasonably-sized cluster handles — not a "we need a custom distributed database" problem. The mistake is sizing for 100% capture of <em>unsampled</em> volume instead of sizing for what actually gets persisted after sampling. Skipping this arithmetic is how teams over-provision storage by an order of magnitude before writing a line of code.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q13</span><span class="q-text">Why is conflating "durable config" with "ephemeral derived state" a design mistake specifically for this system?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Because they need opposite operational treatment. Policy data is small, low-write, and must be strongly consistent across every instance — a stale policy on one instance means inconsistent decisions for spans of the same trace_id that happen to land differently. In-flight trace buffers are the opposite: large, high-churn, and fine to lose per-instance on crash (worst case: a handful of traces skip tail sampling once).
+        <span class="why"><b>What conflating them costs you:</b> store both the same way and you either over-pay for durability on data that doesn't need it (replicating megabytes of in-flight span buffers), or under-protect the one piece of state that genuinely can't afford to be lost (policy). The right instinct is to ask "what does losing this cost me" separately for every piece of state, not to pick one storage strategy for the whole system.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 6 : CORE ALGORITHM -->
+  <section class="segment" id="s6" style="--seg:#6B9A44">
+    <div class="segment-head"><span class="segment-offset">offset 05</span><h2>Core algorithm — the tail-sampling decision engine</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Write actual pseudocode — not prose — for: (1) the buffer data structure holding in-flight trace spans, (2) the per-span-arrival logic, (3) the decision-trigger logic when a trace is judged complete. Then answer on paper: what happens when the buffer is full and a span for a brand-new trace arrives?</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q14</span><span class="q-text">Reveal the reference pseudocode — check your concurrency guard and your buffer-full path specifically.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+<pre class="sketch">struct TraceBuffer:
+  trace_id, spans: list&lt;Span&gt;, first_seen: ts, root_seen: bool, decided: bool
+
+buffer_map: ConcurrentMap&lt;trace_id, TraceBuffer&gt;   # sharded by hash(trace_id)
+
+on_span_arrival(span):
+  buf = buffer_map.get_or_create(span.trace_id)     # atomic
+  lock(buf):
+    buf.spans.append(span)
+    if span.parent_span_id is null: buf.root_seen = true
+
+  if buf.root_seen and span.parent_span_id is null and span.end_ts is set:
+    trigger_decision(buf)
+  elif now() - buf.first_seen > MAX_TRACE_WINDOW:
+    trigger_decision(buf)                            # forced, incomplete trace
+
+trigger_decision(buf):
+  lock(buf):
+    if buf.decided: return                            # idempotent guard
+    buf.decided = true
+    keep = evaluate_policy(buf.spans)                 # error? p95+? priority? random%?
+    if keep: persist_async(buf.spans)
+    buffer_map.remove(buf.trace_id)                   # free memory either way
+
+on_buffer_full(new_trace_id):
+  evict_oldest_incomplete_trace()   # forces an early decision — chosen default
+  # explicit alternative: reject_new_span(), incrementing a dropped_backpressure counter
+  # never: drop silently with no counter at all</pre>
+        <span class="why"><b>Why the guard and the memory-free step are both non-negotiable:</b> without <code>buf.decided</code>, the root-arrival path and the timeout-sweep path can race on the same trace and double-persist or double-apply policy — corrupting the "one coherent decision per trace" guarantee tail sampling exists to provide. And freeing the buffer immediately at decision time, regardless of keep/drop, is what keeps the assembler's memory bound only to <em>undecided</em> traces — anything else is waste sitting in the exact resource this whole design is trying to protect.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q15</span><span class="q-text">What's the actually-correct behavior when the buffer is full and a new trace's span arrives?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        There's no free answer here — you have to pick one and make it observable. Silently dropping without a counter is the worst option, because it turns a capacity problem into an invisible data-quality problem nobody can diagnose later.
+        <span class="why"><b>Why forcing an early decision beats outright rejection:</b> a slightly-early, partial-trace decision degrades gracefully — if the error/slow tag has already arrived, that signal is still captured even on a forced decision. Rejecting new spans outright instead creates a hole specifically in the newest traces, which is usually the worse failure mode for an on-call engineer debugging something that just happened.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 7 : SUPPORTING SUBSYSTEM -->
+  <section class="segment" id="s7" style="--seg:#C1547A">
+    <div class="segment-head"><span class="segment-offset">offset 06</span><h2>Supporting subsystem — hot → cold storage tiering</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Design the tiering loop precisely: what triggers a trace moving from hot to cold storage, and what triggers a permanent purge? Then decide: one central coordinator running this for the whole platform, or every storage node running its own local loop?</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">Reveal the reference tiering loop — did you make retention per-flow, or one global constant?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+<pre class="sketch">every TIERING_INTERVAL (e.g. 15 min), per storage shard, independently:
+
+  for trace in shard.traces_older_than(HOT_WINDOW):
+    cold_days = retention_policy[trace.flow_tag].cold_days   # e.g. LAMF=90d, default=7d
+    move_to_cold(trace)
+    mark_purge_after(trace, cold_days)
+
+  for trace in shard.traces_past_purge_date():
+    hard_delete(trace)
+    emit_audit_log(trace_id, reason="retention_expired")</pre>
+        <span class="why"><b>Why per-flow, not global:</b> retention is a compliance decision, not an infrastructure default — LAMF disbursal and IPO allotment carry real regulatory retention exposure that a blanket "delete after 7 days" would silently violate. A flow-tag lookup means the loop enforces what compliance actually decided, not what the loop's original author guessed was reasonable.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q17</span><span class="q-text">Centralized single coordinator, or every storage node running its own local loop — which fits, and why?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Distributed, per-node local loops.</b> Tiering decisions are purely local — "does this shard have data past its own retention window" needs no cross-node coordination or global ordering at all.
+        <span class="why"><b>Why centralizing here would be a mistake:</b> a central coordinator would just be a single point of failure and a scaling bottleneck for a job that's embarrassingly parallel by nature. Contrast this with sampling-policy distribution (segment 9), which genuinely does need centralized, consistent replication, because a stale policy split across instances actively corrupts decisions — tiering has no equivalent correctness risk from running independently per shard.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 8 : FAILURE & STATE MACHINE -->
+  <section class="segment" id="s8" style="--seg:#B9971F">
+    <div class="segment-head"><span class="segment-offset">offset 07</span><h2>Failure handling & the state machine</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Draw the state machine covering every state mentioned in segments 1–7. Mark which state is most at risk of "stuck forever" — and what specifically guarantees it always exits.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q18</span><span class="q-text">Reveal the reference state machine — did you include a forced-exit guarantee on every state, or just the obvious one?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+<pre class="sketch">RECEIVED_AT_AGENT -> BATCHED -> INGESTED_AT_GATEWAY -> BUFFERED
+   -> DECIDED(keep) -> PERSISTED(hot) -> TIERED(cold) -> PURGED
+   -> DECIDED(drop) -> [discarded, buffer freed]
+
+Every state has a bounded max-time-in-state.
+BUFFERED specifically: forced exit via MAX_TRACE_WINDOW (segment 6),
+even if the root span never closes.</pre>
+        <span class="why"><b>Why every state needs this, not just BUFFERED:</b> it's the obvious one to protect because it's stateful and memory-bound, but INGESTED_AT_GATEWAY and TIERED can stall too (a downstream queue backing up, a stuck tiering job) — a state machine is only as safe as its least-protected state, so the discipline has to be applied uniformly, not just where the failure mode is most visible.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q19</span><span class="q-text">Which state is most at risk of "stuck forever," and what exactly guarantees it exits?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>BUFFERED.</b> A trace whose root span is delayed, lost, or never sent — a common real failure, since the originating request itself may time out before its own span closes — would otherwise sit in the assembler's memory indefinitely, waiting for a root-close event that never arrives.
+        <span class="why"><b>Why MAX_TRACE_WINDOW is the only real answer:</b> it's the one guarantee that doesn't depend on the failure resolving itself. Every state in a distributed system that can wait on an external event needs exactly this shape of guarantee — "exit after N seconds no matter what" — or a single stuck upstream becomes a slow, silent, unbounded memory leak that's invisible until it isn't.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Where does idempotency actually plug into this state machine, concretely — not just "everywhere"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        At every transition that can be retried after a failure without the caller knowing whether it already happened: span ingestion (agent retry on a network blip — dedup on span_id), the DECIDED transition (the <code>buf.decided</code> guard), and the hot-to-cold tier move (a retried partial move must not double-write or leave a trace in two places).
+        <span class="why"><b>Why "everywhere" is too vague to be useful:</b> naming the specific transitions forces you to check each one has an actual guard, rather than asserting idempotency as a general property of the system. A transition without a concrete dedup key or guard is a transition that <em>will</em> corrupt state under retry — in a distributed pipeline that's the normal operating condition, not a rare edge case.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 9 : SCALING ITSELF -->
+  <section class="segment" id="s9" style="--seg:#279090">
+    <div class="segment-head"><span class="segment-offset">offset 08</span><h2>Scaling this component itself</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>How do multiple instances of your own assembler/sampler stay in sync without a central coordination bottleneck? Write one concrete metric — tied to a segment-1 NFR — that tells you it's time to scale out.</p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="label">Routing key</div><div class="value">hash <span>(trace_id)</span></div></div>
+      <div class="stat-card"><div class="label">Scale-out signal</div><div class="value">70% <span>buffer utilization</span></div></div>
+      <div class="stat-card"><div class="label">Secondary signal</div><div class="value">&gt;0 <span>backpressure evictions/sec</span></div></div>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q21</span><span class="q-text">Why must every span of the same trace_id reach the same assembler instance, and how do you guarantee that without a central lookup?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Because the tail-sampling decision needs <em>all</em> of a trace's spans buffered in one place — if span A lands on instance 1 and span B on instance 2, neither instance alone has enough information to decide correctly.
+        <span class="why"><b>Why consistent hashing, not a lookup table:</b> routing by <code>hash(trace_id) mod N</code> at the ingestion gateway guarantees this with zero coordination overhead per request. The real cost only shows up when N changes — a naive rehash on scale-out would instantly split in-flight traces across old and new instance assignments, so scale-out needs a controlled rebalance, not an instant reshuffle.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q22</span><span class="q-text">What's the concrete "time to scale out" metric, and how does it trace back to a segment-1 NFR?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        Assembler buffer memory utilization sustained above ~70% for several minutes, or the backpressure-eviction rate (segment 6's <code>on_buffer_full</code> path) going above zero and staying there.
+        <span class="why"><b>Why this maps to the &lt;5ms NFR specifically:</b> once buffer pressure forces the assembler to do extra work per span — forced evictions, early decisions — that latency budget is the first thing to slip, well before the more obvious CPU or raw throughput metrics move. Scaling on CPU alone would catch the problem too late for a system whose actual constraint is memory-bound state, not compute.</span>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q23</span><span class="q-text">Does scaling out the assembler mean scaling the policy store the same way?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>No</b> — and treating them the same is the mistake.
+        <span class="why"><b>Why they need different scaling models:</b> the policy store is small, low-write, and needs strong consistency across every instance (segment 5) — it scales by replication. The assembler scales by partitioning trace_id space across more instances. Conflate the two and a routine policy update ends up needing the same careful, staged rollout as a full instance-count change, when it should be a fast, simple, consistently-replicated push.</span>
+      </div></div></div>
+  </section>
+
+  <!-- SEGMENT 10 : ASSEMBLY -->
+  <section class="segment" id="s10" style="--seg:#9A62D6">
+    <div class="segment-head"><span class="segment-offset">offset 09</span><h2>End-to-end assembly</h2></div>
+    <div class="build-callout">
+      <span class="bc-label">build it yourself first</span>
+      <p>Draw the whole thing from memory — both the hot/data path (span → … → query) and the control/config path (policy push → … → assembler) in one diagram. Don't look back at earlier segments while you do it.</p>
+    </div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q24</span><span class="q-text">Reveal the reference end-to-end diagram — count how many arrows you missed.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+<pre class="sketch">HOT / DATA PATH
+SDK -> Agent -> Ingestion Gateway -> Assembler(hash(trace_id) routed)
+     -> [DECIDED keep] -> Hot Storage -> (tiering loop) -> Cold Storage -> Purge
+     -> [DECIDED drop] -> discarded
+Hot Storage -> Query Service -> Dashboards / on-call tooling
+
+CONTROL / CONFIG PATH
+Operator -> POST /sampling-policy  \
+Operator -> POST /retention-policy  >-- Policy Store (replicated, strongly consistent)
+                                    /
+Policy Store -> pushed/pulled by -> every Assembler instance
+Agent -> POST /agent/heartbeat -> Platform Monitoring -> scale-out signal (segment 9)</pre>
+        <span class="why"><b>Why these two paths are drawn separately but must both appear:</b> the hot path is judged by the &lt;5ms and throughput NFRs; the control path is judged by consistency and blast-radius (segment 4/11's authorization reasoning). A design that only ever draws the hot path is a design that's never actually reasoned about how a bad policy push gets safely rolled out — which is usually where the real incidents happen.</span>
+      </div></div></div>
+
+    <div class="no-answer">
+      <b>No answer key for this one:</b> trace your own design back against your segment-1 NFRs, one at a time. Specifically — does your design actually hold the &lt;5ms caller-latency NFR when the assembler buffer is full and forcing early decisions, or did you only design for the happy path where buffers never fill? If you can't answer that in one breath, that's not a gap in this document — that's your next design review.
+    </div>
+  </section>
+
+  <footer>
+    // final compression: sampling decision point (head vs tail) is the one choice everything else inherits from →
+    stateful assembler exists because tail sampling needs full-trace visibility before deciding → routing by
+    trace_id keeps that state coherent across instances without central coordination → every state that can wait
+    on an external event needs a forced-exit guarantee, or it leaks memory silently → and the honest test of the
+    whole design isn't whether it works on the happy path — it's whether it still holds its NFRs when the buffer
+    is full.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body;
+  const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  if(body.classList.contains('dark-theme')){
+    btn.innerHTML = '☀&nbsp; Light mode';
+  } else {
+    btn.innerHTML = '☾&nbsp; Dark mode';
+  }
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open');
+    answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open');
+    answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
