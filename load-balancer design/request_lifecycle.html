@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One Request, Eight Checkpoints — The Request Lifecycle</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#0A0E14;
+  --surface:#121826;
+  --surface-2:#171F30;
+  --border:#232B3D;
+  --text:#E8EDF4;
+  --muted:#8B96A8;
+  --amber:#FF9F1C;
+  --amber-dim:#8a5c1f;
+  --teal:#2EC4B6;
+  --teal-dim:#1a7168;
+  --red:#FF6B6B;
+  --red-dim:#7a2c2c;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter', sans-serif;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+
+::selection{ background:var(--amber); color:#0A0E14; }
+
+h1,h2,h3{ font-family:'Space Grotesk', sans-serif; font-weight:600; letter-spacing:-0.01em; }
+
+code, .mono{ font-family:'JetBrains Mono', monospace; }
+
+.wrap{ max-width:920px; margin:0 auto; padding:0 24px; }
+
+/* ---------- HERO ---------- */
+.hero{
+  position:relative;
+  padding:100px 24px 80px;
+  text-align:center;
+  overflow:hidden;
+  border-bottom:1px solid var(--border);
+}
+.hero-eyebrow{
+  font-family:'JetBrains Mono', monospace;
+  font-size:13px;
+  color:var(--teal);
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  margin-bottom:18px;
+}
+.hero h1{
+  font-size:clamp(32px, 6vw, 58px);
+  line-height:1.08;
+  margin-bottom:20px;
+}
+.hero h1 span{ color:var(--amber); }
+.hero p{
+  color:var(--muted);
+  font-size:18px;
+  max-width:560px;
+  margin:0 auto;
+}
+
+.hero-track{ margin:56px auto 0; max-width:680px; }
+.hero-track svg{ width:100%; height:auto; display:block; }
+.packet-dot{
+  fill:var(--amber);
+  filter:drop-shadow(0 0 8px rgba(255,159,28,0.7));
+  animation: travel 7s linear infinite;
+  offset-rotate: 0deg;
+}
+@keyframes travel{
+  0%{ offset-distance: 0%; }
+  100%{ offset-distance: 100%; }
+}
+.track-path{ fill:none; stroke:var(--border); stroke-width:2; stroke-dasharray:4 6; }
+.track-node{ fill:var(--surface-2); stroke:var(--border); stroke-width:1.5; }
+.track-node.waf{ stroke:var(--red); }
+.track-label{ font-family:'JetBrains Mono', monospace; font-size:9.5px; fill:var(--muted); }
+
+/* ---------- SECTION GENERIC ---------- */
+section{ padding:64px 0; }
+section.divider{ border-top:1px solid var(--border); }
+.section-head{ margin-bottom:32px; }
+.section-eyebrow{
+  font-family:'JetBrains Mono', monospace;
+  font-size:12px;
+  color:var(--teal);
+  text-transform:uppercase;
+  letter-spacing:0.1em;
+  margin-bottom:10px;
+}
+.section-eyebrow.warn{ color:var(--red); }
+.section-head h2{ font-size:clamp(24px,4vw,34px); }
+.lede{ color:var(--muted); font-size:16px; max-width:640px; margin-top:12px; }
+
+/* ---------- PARCEL INTRO ---------- */
+.intro-box{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:3px solid var(--amber);
+  border-radius:4px;
+  padding:24px 28px;
+  color:var(--text);
+  font-size:16px;
+}
+.intro-box strong{ color:var(--amber); }
+
+/* ---------- JOURNEY / ACCORDION (shared by hops + FAQ) ---------- */
+.journey{ position:relative; }
+.journey::before{
+  content:"";
+  position:absolute;
+  left:27px;
+  top:8px;
+  bottom:8px;
+  width:2px;
+  background:linear-gradient(var(--teal), var(--amber));
+  opacity:0.35;
+}
+.journey.no-line::before{ display:none; }
+.journey.no-line .hop{ padding-left:0; }
+.hop{ position:relative; padding-left:70px; margin-bottom:14px; }
+.hop-num{
+  position:absolute; left:0; top:0;
+  width:56px; height:56px; border-radius:50%;
+  background:var(--surface-2); border:2px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono', monospace; font-size:13px;
+  color:var(--teal); font-weight:600; z-index:2;
+}
+.hop-num.waf{ color:var(--red); border-color:var(--red-dim); }
+.hop-card{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; overflow:hidden; transition:border-color 0.2s ease;
+}
+.hop-card:hover{ border-color:var(--amber-dim); }
+.hop-toggle{
+  width:100%; background:none; border:none; color:var(--text);
+  text-align:left; padding:18px 20px; cursor:pointer;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.hop-title{ display:flex; flex-direction:column; gap:4px; }
+.hop-name{ font-family:'Space Grotesk', sans-serif; font-size:17px; font-weight:600; }
+.hop-tag{ font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--muted); }
+.hop-chevron{ font-family:'JetBrains Mono', monospace; color:var(--amber); font-size:18px; transition:transform 0.25s ease; flex-shrink:0; }
+.hop-card.open .hop-chevron{ transform:rotate(45deg); }
+.hop-body{ max-height:0; overflow:hidden; transition:max-height 0.35s ease; border-top:1px solid transparent; }
+.hop-card.open .hop-body{ border-top:1px solid var(--border); }
+.hop-inner{ padding:20px; display:flex; flex-direction:column; gap:16px; }
+.question-pill{
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(255,159,28,0.1); border:1px solid var(--amber-dim); color:var(--amber);
+  font-family:'JetBrains Mono', monospace; font-size:13px; padding:8px 14px; border-radius:6px; width:fit-content;
+}
+.question-pill.danger{ background:rgba(255,107,107,0.1); border-color:var(--red-dim); color:var(--red); }
+.hop-desc{ color:var(--text); font-size:15px; }
+.hop-example{
+  background:#080B11; border:1px solid var(--border); border-radius:6px;
+  padding:14px 16px; font-family:'JetBrains Mono', monospace; font-size:13px;
+  color:var(--teal); white-space:pre; overflow-x:auto;
+}
+.hop-note{ color:var(--muted); font-size:13px; font-style:italic; border-left:2px solid var(--border); padding-left:12px; }
+
+/* ---------- TABLE ---------- */
+.decision-table{
+  width:100%; border-collapse:collapse; font-size:14px;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden;
+}
+.decision-table th{
+  text-align:left; background:var(--surface-2); color:var(--teal);
+  font-family:'JetBrains Mono', monospace; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; padding:12px 16px;
+}
+.decision-table td{ padding:14px 16px; border-top:1px solid var(--border); vertical-align:top; }
+.decision-table tr:hover td{ background:rgba(46,196,182,0.04); }
+.layer-cell{ font-weight:600; color:var(--amber); white-space:nowrap; }
+
+/* ---------- HOSPITAL ANALOGY ---------- */
+.analogy-grid{ display:grid; grid-template-columns:1fr auto 1fr; gap:10px 16px; align-items:center; }
+.analogy-row{ display:contents; }
+.analogy-cell{ background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:12px 16px; font-size:14px; }
+.analogy-cell.tech{ color:var(--teal); }
+.analogy-cell.real{ color:var(--amber); text-align:right; }
+.arrow{ color:var(--muted); font-family:'JetBrains Mono', monospace; }
+
+/* ---------- MAXIM CALLOUT ---------- */
+.maxim{
+  text-align:center; font-family:'Space Grotesk', sans-serif; font-weight:600;
+  font-size:clamp(18px,3vw,24px); padding:32px 24px; margin:28px 0;
+  background:linear-gradient(180deg, rgba(46,196,182,0.06), rgba(255,159,28,0.06));
+  border:1px solid var(--border); border-radius:10px;
+}
+.maxim .t1{ color:var(--teal); }
+.maxim .t2{ color:var(--amber); }
+
+/* ---------- COMPARE COLUMNS (LB vs Gateway) ---------- */
+.compare{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.compare-col{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:22px; }
+.compare-col.lb{ border-top:3px solid var(--teal); }
+.compare-col.gw{ border-top:3px solid var(--amber); }
+.compare-col h3{ font-size:17px; margin-bottom:14px; }
+.compare-col.lb h3{ color:var(--teal); }
+.compare-col.gw h3{ color:var(--amber); }
+.compare-col ul{ list-style:none; display:flex; flex-direction:column; gap:10px; }
+.compare-col li{ font-size:14px; color:var(--text); padding-left:18px; position:relative; }
+.compare-col li::before{ content:"→"; position:absolute; left:0; color:var(--muted); }
+@media (max-width:640px){ .compare{ grid-template-columns:1fr; } }
+
+/* ---------- DIAGRAM BLOCKS (monospace, color-coded) ---------- */
+.diagram-block{
+  background:#080B11; border:1px solid var(--border); border-radius:8px;
+  padding:22px 24px; font-family:'JetBrains Mono', monospace; font-size:13.5px;
+  line-height:1.85; overflow-x:auto; white-space:pre;
+}
+.diagram-block .c-client{ color:var(--text); font-weight:600; }
+.diagram-block .c-q{ color:var(--amber); }
+.diagram-block .c-mid{ color:var(--teal); }
+.diagram-block .c-end{ color:#B98CFF; }
+.diagram-block .c-muted{ color:var(--muted); }
+.diagram-caption{ text-align:center; color:var(--muted); font-size:13px; margin-top:12px; font-family:'JetBrains Mono', monospace; }
+
+/* ---------- DECISION TREE ---------- */
+.tree{ display:flex; flex-direction:column; align-items:center; gap:0; }
+.tree-root{
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:14px 24px; font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:15px;
+}
+.tree-stem{ width:2px; height:28px; background:var(--border); }
+.tree-branches{ display:flex; gap:20px; justify-content:center; flex-wrap:wrap; width:100%; }
+.tree-branch{ display:flex; flex-direction:column; align-items:center; flex:1; min-width:170px; }
+.branch-q{ font-family:'JetBrains Mono', monospace; font-size:12.5px; color:var(--muted); margin-bottom:6px; text-align:center; }
+.branch-card{
+  width:100%; text-align:center; border-radius:8px; padding:16px 14px;
+  font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:15px; border:1px solid;
+}
+.branch-card.l4{ background:rgba(46,196,182,0.08); border-color:var(--teal-dim); color:var(--teal); }
+.branch-card.l7{ background:rgba(255,159,28,0.08); border-color:var(--amber-dim); color:var(--amber); }
+.branch-card.both{ background:linear-gradient(135deg, rgba(46,196,182,0.1), rgba(255,159,28,0.1)); border-color:var(--border); color:var(--text); }
+.branch-sub{ color:var(--muted); font-size:12px; font-family:'Inter',sans-serif; font-weight:400; margin-top:6px; }
+
+/* ---------- RULE / CODE LIST ---------- */
+.rule-line{ display:block; }
+.rule-line .kw{ color:#B98CFF; }
+.rule-line .val{ color:var(--amber); }
+.rule-line .arrow-out{ color:var(--teal); }
+
+/* ---------- CALLOUT SHORT ANSWER ---------- */
+.short-answer{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:20px 24px; display:flex; gap:16px; align-items:flex-start;
+}
+.short-answer .badge{
+  flex-shrink:0; width:32px; height:32px; border-radius:50%; background:rgba(255,159,28,0.15);
+  color:var(--amber); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:600;
+}
+.short-answer p{ font-size:15px; }
+.short-answer strong{ color:var(--amber); }
+
+/* ---------- RECALL ---------- */
+.flash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+.flash-card{ perspective:1000px; height:130px; cursor:pointer; }
+.flash-inner{ position:relative; width:100%; height:100%; transition:transform 0.5s; transform-style:preserve-3d; }
+.flash-card.flipped .flash-inner{ transform:rotateY(180deg); }
+.flash-face{ position:absolute; inset:0; backface-visibility:hidden; border-radius:8px; border:1px solid var(--border); display:flex; align-items:center; justify-content:center; padding:16px; text-align:center; font-size:14px; }
+.flash-front{ background:var(--surface); color:var(--text); font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; }
+.flash-back{ background:var(--surface-2); color:var(--amber); font-family:'JetBrains Mono', monospace; font-size:13px; transform:rotateY(180deg); border-color:var(--amber-dim); }
+.hint{ text-align:center; color:var(--muted); font-size:13px; margin-top:14px; font-family:'JetBrains Mono', monospace; }
+
+footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size:13px; font-family:'JetBrains Mono', monospace; border-top:1px solid var(--border); margin-top:40px; }
+
+@media (max-width:640px){
+  .analogy-grid{ grid-template-columns:1fr; }
+  .analogy-cell.real{ text-align:left; }
+  .arrow{ display:none; }
+  .diagram-block{ font-size:11.5px; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-eyebrow">system design · request lifecycle</div>
+  <h1>One request.<br>Eight checkpoints.<br><span>One question each.</span></h1>
+  <p>Nobody in the path decides everything. Every layer answers exactly one narrow question, then hands the request to the next layer. That's the whole trick behind systems that scale.</p>
+
+  <div class="hero-track">
+    <svg viewBox="0 0 680 90">
+      <path class="track-path" d="M 20 45 H 660"/>
+      <circle class="track-node" cx="20" cy="45" r="7"/>
+      <circle class="track-node" cx="112" cy="45" r="7"/>
+      <circle class="track-node waf" cx="204" cy="45" r="7"/>
+      <circle class="track-node" cx="296" cy="45" r="7"/>
+      <circle class="track-node" cx="388" cy="45" r="7"/>
+      <circle class="track-node" cx="480" cy="45" r="7"/>
+      <circle class="track-node" cx="572" cy="45" r="7"/>
+      <circle class="track-node" cx="660" cy="45" r="7"/>
+      <text class="track-label" x="20" y="70" text-anchor="middle">DNS</text>
+      <text class="track-label" x="112" y="70" text-anchor="middle">ENTRY</text>
+      <text class="track-label" x="204" y="70" text-anchor="middle" fill="#FF6B6B">WAF</text>
+      <text class="track-label" x="296" y="70" text-anchor="middle">L4 LB</text>
+      <text class="track-label" x="388" y="70" text-anchor="middle">L7 LB</text>
+      <text class="track-label" x="480" y="70" text-anchor="middle">GATEWAY</text>
+      <text class="track-label" x="572" y="70" text-anchor="middle">K8S</text>
+      <text class="track-label" x="660" y="70" text-anchor="middle">POD</text>
+      <circle class="packet-dot" r="6" style="offset-path: path('M 20 45 H 660');"/>
+    </svg>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">the mental model</div>
+      <h2>Think of it as a parcel, not a request</h2>
+    </div>
+    <div class="intro-box">
+      A parcel moving through customs doesn't get fully inspected at one desk. Each checkpoint checks <strong>one thing</strong> — passport, ticket, baggage, gate — and passes it on. A web request works the same way. DNS never looks at HTTP. The Layer 4 balancer never looks at a URL path. The Gateway never picks the pod. <strong>No component tries to do the next one's job</strong> — and that's exactly what lets each layer scale, fail, and get replaced independently.
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">the journey · tap to expand</div>
+      <h2>Follow <code class="mono">https://api.shop.com/orders/123</code> hop by hop</h2>
+      <p class="lede">Each stop below is a real machine or service. Click one to see exactly what question it asks — and nothing more. The <span style="color:var(--red)">WAF</span> is the new bouncer at the door.</p>
+    </div>
+    <div class="journey" id="journey"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">cheat sheet</div>
+      <h2>Every layer, one line each</h2>
+    </div>
+    <table class="decision-table"><thead><tr><th>Layer</th><th>Decision it makes — and nothing more</th></tr></thead><tbody id="table-body"></tbody></table>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">the easiest way to remember it</div>
+      <h2>It's a hospital visit</h2>
+    </div>
+    <div class="analogy-grid" id="analogy"></div>
+  </section>
+
+  <!-- ================= NEW: LB vs GATEWAY ================= -->
+  <section class="divider">
+    <div class="section-head">
+      <div class="section-eyebrow">the question everyone asks</div>
+      <h2>If the API Gateway does everything, what's left for the Load Balancer?</h2>
+      <p class="lede">They operate at two completely different altitudes. The LB never sees "business." The Gateway never sees "raw connection."</p>
+    </div>
+
+    <div class="maxim">
+      <span class="t1">Load Balancer decides WHO gets the connection.</span><br>
+      <span class="t2">API Gateway decides WHAT happens to the request.</span>
+    </div>
+
+    <div class="compare">
+      <div class="compare-col lb">
+        <h3>Load Balancer — still doing this</h3>
+        <ul>
+          <li>Spreads raw connections across every healthy Gateway instance</li>
+          <li>Terminates / offloads TLS at scale</li>
+          <li>Health-checks Gateway instances, pulls dead ones out</li>
+          <li>Absorbs L3/L4 floods before they reach app infra</li>
+          <li>Gives you one stable VIP even as Gateway instances scale up/down</li>
+        </ul>
+      </div>
+      <div class="compare-col gw">
+        <h3>API Gateway — only starts here</h3>
+        <ul>
+          <li>Authentication & authorization (JWT / OAuth)</li>
+          <li>Per-user / per-key rate limiting</li>
+          <li>Request/response transformation</li>
+          <li>Routing to the correct microservice</li>
+          <li>Logging, tracing, request aggregation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">how to decide</div>
+      <h2>What actually belongs in the API Gateway?</h2>
+    </div>
+    <table class="decision-table">
+      <thead><tr><th>Ask this</th><th>If yes →</th></tr></thead>
+      <tbody>
+        <tr><td>Does it need to know <em>who</em> the caller is?</td><td class="layer-cell">Gateway</td></tr>
+        <tr><td>Does it depend on the URL path, headers, or payload content?</td><td class="layer-cell">Gateway</td></tr>
+        <tr><td>Is it identical for every single request, regardless of business meaning? (TLS, health check, raw distribution)</td><td class="layer-cell">Load Balancer</td></tr>
+        <tr><td>Does it change per environment (canary %, A/B rules, feature flags)?</td><td class="layer-cell">Gateway</td></tr>
+        <tr><td>Would it need to happen even if your app were a static file server?</td><td class="layer-cell">Load Balancer</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= NEW: L7 CONTENT-BASED ROUTING ================= -->
+  <section class="divider">
+    <div class="section-head">
+      <div class="section-eyebrow">deep dive</div>
+      <h2>How L7 content-based routing actually works</h2>
+      <p class="lede">Once the L7 balancer can read the HTTP request, it matches it against an ordered rulebook. First rule that matches, wins.</p>
+    </div>
+    <div class="hop-example rule-line" style="font-size:14px; line-height:2;">
+<span class="kw">IF</span> Host == <span class="val">"api.shop.com"</span> <span class="kw">AND</span> Path startsWith <span class="val">"/orders"</span>      <span class="arrow-out">→ Order Service Pool</span>
+<span class="kw">IF</span> Host == <span class="val">"api.shop.com"</span> <span class="kw">AND</span> Path startsWith <span class="val">"/payments"</span>    <span class="arrow-out">→ Payment Service Pool</span>
+<span class="kw">IF</span> Header[<span class="val">"X-Beta-User"</span>] == <span class="val">"true"</span>                          <span class="arrow-out">→ Canary Pool</span>
+<span class="kw">IF</span> Cookie[<span class="val">"session_region"</span>] == <span class="val">"IN"</span>                       <span class="arrow-out">→ Mumbai Pool</span>
+<span class="kw">IF</span> Path == <span class="val">"/static/*"</span>                                       <span class="arrow-out">→ CDN / Static Pool</span>
+<span class="kw">DEFAULT</span>                                                       <span class="arrow-out">→ 404 Pool</span>
+    </div>
+    <p class="lede" style="margin-top:16px;">This is exactly the mechanism behind canary releases, A/B testing, blue-green deploys, and regional routing — no application code changes, just rulebook changes at the LB.</p>
+  </section>
+
+  <!-- ================= NEW: TWO QUESTIONS DIAGRAM ================= -->
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">the diagram, redrawn</div>
+      <h2>Two questions, two different machines</h2>
+    </div>
+    <div class="diagram-block"><span class="c-client">Client</span>
+   │
+   │  <span class="c-q">"How do I reach a Load Balancer?"</span>
+   │
+   ├──▶ <span class="c-mid">DNS</span>
+   ├──▶ <span class="c-mid">Anycast</span>
+   ├──▶ <span class="c-mid">VIP</span>
+   └──▶ <span class="c-mid">ECMP</span>
+   │
+   ▼
+<span class="c-client">Load Balancer</span>
+   │
+   │  <span class="c-q">"Which backend server should handle my request?"</span>
+   │
+   ├──▶ <span class="c-end">Server 1</span>
+   ├──▶ <span class="c-end">Server 2</span>
+   └──▶ <span class="c-end">Server 3</span></div>
+    <p class="diagram-caption">Two separate problems, solved by two separate systems — reaching the LB is a routing/DNS problem, picking the server is the LB's own problem.</p>
+  </section>
+
+  <!-- ================= NEW: L4 USE CASE ================= -->
+  <section class="divider">
+    <div class="section-head">
+      <div class="section-eyebrow">in short</div>
+      <h2>What's the actual use case for a Layer 4 load balancer?</h2>
+    </div>
+    <div class="short-answer">
+      <div class="badge">L4</div>
+      <p><strong>One job:</strong> spread raw TCP/UDP connections across healthy backends — fast — without ever opening the packet to read HTTP. Use it for raw speed, TLS pass-through, or any non-HTTP protocol: databases, gRPC streams, game servers, custom TCP services. It doesn't know a URL path exists.</p>
+    </div>
+  </section>
+
+  <!-- ================= NEW: L4 vs L7 DECISION TREE ================= -->
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">decision tree</div>
+      <h2>When to use L4 vs L7</h2>
+    </div>
+    <div class="tree">
+      <div class="tree-root">What does this traffic actually need?</div>
+      <div class="tree-stem"></div>
+      <div class="tree-branches">
+        <div class="tree-branch">
+          <div class="branch-q">Need speed?</div>
+          <div class="branch-card l4">Use L4<div class="branch-sub">raw connection balancing, no packet inspection</div></div>
+        </div>
+        <div class="tree-branch">
+          <div class="branch-q">Need intelligence?</div>
+          <div class="branch-card l7">Use L7<div class="branch-sub">route by host, path, header, cookie</div></div>
+        </div>
+        <div class="tree-branch">
+          <div class="branch-q">Need speed <em>and</em> smart routing?</div>
+          <div class="branch-card both">L4 + L7 together<div class="branch-sub">L4 absorbs the flood, L7 does the thinking</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= NEW: NGINX & KUBERNETES ================= -->
+  <section class="divider">
+    <div class="section-head">
+      <div class="section-eyebrow">where do they actually sit</div>
+      <h2>Nginx and Kubernetes — same journey, different job titles</h2>
+      <p class="lede">Nginx isn't one fixed layer. It's a tool that gets deployed to play <em>different roles</em> depending on where you put it. Tap each role below.</p>
+    </div>
+    <div class="journey" id="nginx-journey"></div>
+  </section>
+
+  <!-- ================= RECALL ================= -->
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">quick recall</div>
+      <h2>Flip each card — name the question or the one-liner</h2>
+    </div>
+    <div class="flash-grid" id="flash"></div>
+    <div class="hint">tap a card to reveal · tap again to hide</div>
+  </section>
+
+</div>
+
+<footer>request lifecycle · study notes</footer>
+
+<script>
+function renderAccordion(containerId, items){
+  const container = document.getElementById(containerId);
+  items.forEach(h => {
+    const card = document.createElement('div');
+    card.className = 'hop';
+    card.innerHTML = `
+      <div class="hop-num ${h.danger ? 'waf' : ''}">${h.num}</div>
+      <div class="hop-card">
+        <button class="hop-toggle">
+          <div class="hop-title">
+            <div class="hop-name">${h.name}</div>
+            <div class="hop-tag">${h.tag}</div>
+          </div>
+          <div class="hop-chevron">+</div>
+        </button>
+        <div class="hop-body">
+          <div class="hop-inner">
+            <div class="question-pill ${h.danger ? 'danger' : ''}">? &nbsp;${h.question}</div>
+            <div class="hop-desc">${h.desc}</div>
+            <div class="hop-example">${h.example}</div>
+            <div class="hop-note">${h.note}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+    const cardEl = card.querySelector('.hop-card');
+    const btn = card.querySelector('.hop-toggle');
+    const body = card.querySelector('.hop-body');
+    btn.addEventListener('click', () => {
+      const isOpen = cardEl.classList.contains('open');
+      if (isOpen){ body.style.maxHeight = null; cardEl.classList.remove('open'); }
+      else { cardEl.classList.add('open'); body.style.maxHeight = body.scrollHeight + 'px'; }
+    });
+  });
+}
+
+const hops = [
+  { num:"01", name:"DNS", tag:"\"Where is api.shop.com?\"",
+    question:"Where is this hostname?",
+    desc:"DNS knows nothing about users, orders, or HTTP. It only resolves a name to an IP address.",
+    example:"api.shop.com  →  35.240.100.20",
+    note:"It doesn't even know a web server exists yet." },
+  { num:"02", name:"Global Entry Point", tag:"Anycast / VIP / ECMP",
+    question:"Which data center should get this?",
+    desc:"The packet reaches your network edge. Routing picks the nearest healthy data center — still without opening the HTTP request.",
+    example:"User in India\n      │\nAnycast address\n   /        \\\nMumbai DC   London DC\n   ↓ chosen (nearest + healthy)",
+    note:"Still hasn't looked inside HTTP." },
+  { num:"03", name:"WAF", tag:"Web Application Firewall", danger:true,
+    question:"Is this request malicious?",
+    desc:"Sits right at the edge, before the load balancer proper does its job. Inspects patterns — SQL injection, XSS, bad bots, known attacker IPs, credential-stuffing bursts — and blocks or allows.",
+    example:"SQLi pattern?      → block\nXSS payload?       → block\nBad IP reputation?  → block\nClean request       → pass through",
+    note:"Doesn't know or care what an 'order' is — only attack patterns." },
+  { num:"04", name:"Layer 4 Load Balancer", tag:"TCP / connection balancer",
+    question:"Which L7 LB machine has capacity?",
+    desc:"L4 balances raw TCP connections across a pool of L7 load balancers. It has no concept of URL paths.",
+    example:"LB1 : 95% CPU\nLB2 : 15%  ← chosen\nLB3 : 20%\nLB4 : down\nLB5 : 80%",
+    note:"It doesn't know /orders exists." },
+  { num:"05", name:"Layer 7 Load Balancer", tag:"HTTP-aware",
+    question:"Which host / path / method is this?",
+    desc:"Now the HTTP request is actually visible. L7 routes based on host, path, headers, and cookies — often implemented by Nginx, Envoy, or HAProxy.",
+    example:"Host: api.shop.com\nPath: /orders/123\n  ↓\nRoute → API Gateway Pool",
+    note:"static.shop.com would route somewhere else entirely." },
+  { num:"06", name:"API Gateway", tag:"Business rules begin here",
+    question:"Is this request valid, authorized, and whose job is it?",
+    desc:"First layer asking business questions: identity, auth, rate limits, logging, and which microservice owns this path.",
+    example:"✓ JWT valid?\n✓ OAuth token valid?\n✓ Rate limit ok?\n✓ Add tracing header\n✓ Log request\n  ↓\nOwner: Order Service",
+    note:"First layer that knows what 'orders' even means." },
+  { num:"07", name:"Kubernetes Service", tag:"ClusterIP",
+    question:"Which pod of Order Service is healthy?",
+    desc:"The Gateway only knows the service name. Kubernetes picks a specific, healthy pod to actually run it — usually simple round-robin via kube-proxy.",
+    example:"Order Service\n  Pod 1\n  Pod 2 ← chosen (10% CPU, healthy)\n  Pod 3\n  Pod 4",
+    note:"Doesn't know or care about auth — already handled." },
+  { num:"08", name:"Application Pod", tag:"End of the line",
+    question:"What's the actual answer?",
+    desc:"The pod finally runs business logic, queries the database, and builds the response.",
+    example:"Receive request\n  ↓\nBusiness logic\n  ↓\nDatabase / cache\n  ↓\nReturn JSON",
+    note:"Response then retraces the entire path back to the user." }
+];
+
+const analogy = [
+  ["DNS","Reception (phone directory)"],
+  ["Anycast","Hospital campus gate"],
+  ["WAF","ID & bag check at the door"],
+  ["L4 LB","Security guard directing traffic"],
+  ["L7 LB","Reception desk"],
+  ["API Gateway","Triage nurse"],
+  ["Kubernetes Service","Correct department"],
+  ["Pod","Available doctor"]
+];
+
+const nginxRoles = [
+  { num:"A", name:"Nginx as Edge Reverse Proxy / L7 LB", tag:"Outside the cluster",
+    question:"Am I the L7 hop in the journey above?",
+    desc:"Deployed standalone at the edge, Nginx terminates TLS and does host/path-based routing — literally playing the 'Layer 7 Load Balancer' role from the journey above.",
+    example:"Client → Nginx (L7) → API Gateway pool",
+    note:"This is Nginx wearing the load-balancer hat." },
+  { num:"B", name:"Nginx as Kubernetes Ingress Controller", tag:"Runs as a pod, inside the cluster",
+    question:"How does traffic get from outside into the cluster?",
+    desc:"Nginx Ingress Controller runs as a pod inside Kubernetes, watches Ingress resources, and applies host/path routing rules right at the cluster boundary — before traffic ever hits a Service.",
+    example:"External LB → Nginx Ingress Controller (in-cluster)\n  → K8s Service (ClusterIP)\n  → Pod",
+    note:"This is where 'Nginx' and 'Kubernetes' actually meet." },
+  { num:"C", name:"Kubernetes Service", tag:"kube-proxy, ClusterIP",
+    question:"Which of MY pods is healthy, right now?",
+    desc:"Once inside the cluster, the Service does its own lightweight load balancing — typically round-robin via kube-proxy (iptables/IPVS) — across the pods backing it.",
+    example:"Service: order-service\n  endpoints: [pod-1, pod-2, pod-3]\n  → round robin",
+    note:"This is a separate, smaller load-balancing decision from Nginx's." },
+  { num:"D", name:"Nginx as a mini API Gateway", tag:"Small-scale setups",
+    question:"Do I need a dedicated Gateway at all?",
+    desc:"At smaller scale, teams often bolt auth, rate limiting, and header rewriting onto Nginx itself instead of running a separate Gateway (Kong, Apigee, Envoy). Works — until business rules outgrow config files.",
+    example:"nginx.conf:\n  limit_req zone=api burst=20;\n  auth_request /validate;",
+    note:"Fine at small scale, painful once logic gets complex — that's when a real Gateway earns its keep." }
+];
+
+renderAccordion('journey', hops);
+renderAccordion('nginx-journey', nginxRoles);
+
+const tbody = document.getElementById('table-body');
+hops.forEach(h => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="layer-cell">${h.name}</td><td>${h.question} — ${h.desc}</td>`;
+  tbody.appendChild(tr);
+});
+
+const analogyGrid = document.getElementById('analogy');
+analogy.forEach(([tech, real]) => {
+  const row = document.createElement('div');
+  row.className = 'analogy-row';
+  row.innerHTML = `<div class="analogy-cell tech">${tech}</div><div class="arrow">→</div><div class="analogy-cell real">${real}</div>`;
+  analogyGrid.appendChild(row);
+});
+
+const extraConcepts = [
+  { name:"LB vs Gateway", question:"LB decides WHO gets the connection. Gateway decides WHAT happens to it." },
+  { name:"Nginx's real job", question:"Reverse proxy / L7 LB — very often deployed as the Kubernetes Ingress Controller." },
+  { name:"L4 LB in one line", question:"Fast traffic cop for connections — never opens the packet." },
+  { name:"L4 or L7?", question:"Need speed → L4. Need intelligence → L7. Need both → use them together." },
+  { name:"WAF's one job", question:"Blocks malicious requests before they ever reach the load balancer." }
+];
+
+const flash = document.getElementById('flash');
+[...hops, ...extraConcepts].forEach(h => {
+  const card = document.createElement('div');
+  card.className = 'flash-card';
+  card.innerHTML = `<div class="flash-inner"><div class="flash-face flash-front">${h.name}</div><div class="flash-face flash-back">${h.question}</div></div>`;
+  card.addEventListener('click', () => card.classList.toggle('flipped'));
+  flash.appendChild(card);
+});
+</script>
+
+</body>
+</html>

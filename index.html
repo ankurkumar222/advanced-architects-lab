@@ -284,6 +284,7 @@
   .topic-lb      { --topic-color: #F59E0B; --topic-color2: #B45309; --topic-tint: rgba(245,158,11,0.09); }
   .topic-nosql   { --topic-color: #10B981; --topic-color2: #047857; --topic-tint: rgba(16,185,129,0.09); }
   .topic-sql     { --topic-color: #F43F5E; --topic-color2: #9F1239; --topic-tint: rgba(244,63,94,0.09);  }
+  .topic-sidecar { --topic-color: #EC4899; --topic-color2: #9D174D; --topic-tint: rgba(236,72,153,0.09); }
 
   @media (prefers-color-scheme: dark) {
     .topic-kafka   { --topic-tint: rgba(99,102,241,0.15); }
@@ -292,6 +293,7 @@
     .topic-lb      { --topic-tint: rgba(245,158,11,0.15); }
     .topic-nosql   { --topic-tint: rgba(16,185,129,0.15); }
     .topic-sql     { --topic-tint: rgba(244,63,94,0.15);  }
+    .topic-sidecar { --topic-tint: rgba(236,72,153,0.15); }
   }
   :root[data-theme="dark"] .topic-kafka   { --topic-tint: rgba(99,102,241,0.15); }
   :root[data-theme="dark"] .topic-tracing { --topic-tint: rgba(168,85,247,0.15); }
@@ -299,6 +301,7 @@
   :root[data-theme="dark"] .topic-lb      { --topic-tint: rgba(245,158,11,0.15); }
   :root[data-theme="dark"] .topic-nosql   { --topic-tint: rgba(16,185,129,0.15); }
   :root[data-theme="dark"] .topic-sql     { --topic-tint: rgba(244,63,94,0.15);  }
+  :root[data-theme="dark"] .topic-sidecar { --topic-tint: rgba(236,72,153,0.15); }
 
   /* ── Card Grid ── */
   .topic-notes {
@@ -620,7 +623,7 @@
         <div class="topic-group-header">
           <span class="topic-group-icon"></span>
           <span class="topic-group-title">Load Balancer</span>
-          <span class="topic-note-count">2 notes</span>
+          <span class="topic-note-count">3 notes</span>
         </div>
         <div class="topic-notes">
 
@@ -645,6 +648,19 @@
               <p class="note-box-desc">Walk through designing a production load balancer — from health checking and connection tracking to weighted routing and the session-stickiness trade-offs operators actually face.</p>
               <div class="note-box-footer">
                 <span class="tag">Build Session</span>
+                <span class="tag">Networking</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="load-balancer design/request_lifecycle.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">One Request, Eight Checkpoints — The Request Lifecycle</div>
+              <p class="note-box-desc">Follow a single HTTP request hop by hop — from DNS resolution through TLS handshake, load balancer, backend, and back — with one sharp question at each checkpoint.</p>
+              <div class="note-box-footer">
+                <span class="tag">Request Lifecycle</span>
                 <span class="tag">Networking</span>
                 <span class="note-box-arrow">→</span>
               </div>
@@ -724,6 +740,32 @@
               <div class="note-box-footer">
                 <span class="tag">Build Session</span>
                 <span class="tag">Query Planning</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- ── Sidecar / Service Mesh ── -->
+      <div class="topic-group topic-sidecar">
+        <div class="topic-group-header">
+          <span class="topic-group-icon"></span>
+          <span class="topic-group-title">Sidecar &amp; Service Mesh</span>
+          <span class="topic-note-count">1 note</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-box" href="sidecar mesh design/sidecar_service_mesh.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Sidecars &amp; Service Mesh — What's Really Riding Inside a Pod</div>
+              <p class="note-box-desc">What's actually living alongside your app container — how sidecar proxies intercept traffic, why service meshes offload mTLS and retries from application code, and when the overhead is worth it.</p>
+              <div class="note-box-footer">
+                <span class="tag">Kubernetes</span>
+                <span class="tag">mTLS</span>
+                <span class="tag">Observability</span>
                 <span class="note-box-arrow">→</span>
               </div>
             </div>

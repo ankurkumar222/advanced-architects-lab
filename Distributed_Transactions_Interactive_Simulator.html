@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distributed Transactions — Interactive Simulator</title>
+<style>
+body{margin:0;font-family:Arial;background:#eef3f8}
+header{background:#1f3c88;color:#fff;padding:14px;text-align:center}
+header p{margin:4px 0 0;font-size:13px;color:#cfe0ff;font-weight:normal}
+.tabs{display:flex;justify-content:center;gap:8px;background:#16295c;padding:10px;flex-wrap:wrap}
+.tabbtn{background:#2a4a9e;color:#dbe6ff;border:none;padding:10px 16px;border-radius:20px;cursor:pointer;font-size:14px;font-weight:bold}
+.tabbtn.active{background:#ff7b00;color:#fff}
+.tabpanel{display:none}
+.tabpanel.active{display:block}
+.container{display:grid;grid-template-columns:2.2fr 1fr;gap:14px;padding:14px}
+.card{background:#fff;border-radius:10px;padding:12px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.simnet{position:relative;height:560px}
+#network{position:relative;height:560px}
+.node{position:absolute;width:180px;border:2px solid #3b6cb7;border-radius:10px;background:#f8fbff;padding:8px;font-size:13px}
+.node.wide{background:#fffaf0;border-color:#d39e00}
+#client{left:420px;top:10px}
+#coord{left:420px;top:120px}
+#a{left:40px;top:340px}
+#b{left:420px;top:340px}
+#c{left:800px;top:340px}
+svg{position:absolute;left:0;top:0}
+.packet{fill:#ff7b00;display:none}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;color:#fff;font-size:12px}
+.wait{background:#d39e00}.prep{background:#007bff}.ok{background:#28a745}.fail{background:#dc3545}
+.comp{background:#8e44ad}.neutral{background:#6c757d}.info2{background:#17a2b8}
+button{padding:10px 18px;margin:4px;border-radius:6px;border:1px solid #ccc;background:#f2f2f2;cursor:pointer;font-weight:bold}
+button:hover{background:#e6e6e6}
+pre{white-space:pre-wrap;background:#f7f9fc;padding:8px;border-radius:6px}
+#timeline{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.dot{width:18px;height:18px;border-radius:50%;background:#bbb}
+.active{background:#007bff}.done{background:#28a745}
+table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px}
+.tag{display:inline-block;background:#eef3f8;border:1px solid #cdd8ea;border-radius:6px;padding:1px 6px;font-size:11px;margin-left:4px}
+</style>
+</head>
+<body>
+<header>
+<h2>Distributed Transactions — Interactive Simulator</h2>
+<p>Step through four real-world patterns for keeping data consistent across services</p>
+</header>
+
+<div class="tabs">
+<button class="tabbtn active" onclick="showTab('2pc',this)">1️⃣ Two-Phase Commit</button>
+<button class="tabbtn" onclick="showTab('saga',this)">2️⃣ Saga Pattern</button>
+<button class="tabbtn" onclick="showTab('outbox',this)">3️⃣ Transactional Outbox</button>
+<button class="tabbtn" onclick="showTab('idem',this)">4️⃣ Idempotency + Reconciliation</button>
+</div>
+
+<!-- ================= TAB 1: 2PC (original, unchanged) ================= -->
+<div class="tabpanel active" id="tab-2pc">
+<div class="container">
+<div class="card">
+<div id="network">
+<svg width="1000" height="560">
+<line x1="510" y1="70" x2="510" y2="120" stroke="#666" stroke-width="2"/>
+<line x1="510" y1="220" x2="130" y2="340" stroke="#666" stroke-width="2"/>
+<line x1="510" y1="220" x2="510" y2="340" stroke="#666" stroke-width="2"/>
+<line x1="510" y1="220" x2="890" y2="340" stroke="#666" stroke-width="2"/>
+<circle id="pkt" class="packet" cx="510" cy="220" r="8"/>
+</svg>
+<div class="node" id="client"><b>CLIENT</b><hr>Transfer ₹100</div>
+<div class="node" id="coord">
+<b>COORDINATOR</b><hr>
+Txn: <b>TXN-1001</b><br>
+Decision: <span id="decision">Pending</span><br>
+Phase: <span id="phase">Begin</span><br>
+Timeout: <span id="timer">10s</span>
+</div>
+<div class="node" id="a"></div>
+<div class="node" id="b"></div>
+<div class="node" id="c"></div>
+</div>
+<div id="timeline"></div>
+<div style="margin-top:12px">
+<button onclick="prev()">◀ Previous</button>
+<button onclick="next()">Next ▶</button>
+<button onclick="resetSim()">Reset</button>
+</div>
+</div>
+<div class="card">
+<h3 id="title"></h3>
+<h4>📖 What's happening?</h4>
+<div id="what"></div>
+<h4>🧠 Why is this necessary?</h4>
+<div id="why"></div>
+<h4>💥 If the coordinator crashes now...</h4>
+<div id="crash"></div>
+<h4>📝 Live Event Log</h4>
+<pre id="log"></pre>
+<h4>💾 Database View</h4>
+<table>
+<tr><th>Before</th><th>Pending</th><th>Committed</th></tr>
+<tr><td>₹1000</td><td id="pending">-</td><td id="committed">-</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<!-- ================= TAB 2: SAGA PATTERN ================= -->
+<div class="tabpanel" id="tab-saga">
+<div class="container">
+<div class="card">
+<div class="simnet">
+<svg width="1000" height="560">
+<line x1="100" y1="70" x2="100" y2="150" stroke="#666" stroke-width="2"/>
+<line x1="120" y1="200" x2="360" y2="200" stroke="#666" stroke-width="2" stroke-dasharray="0"/>
+<line x1="360" y1="200" x2="600" y2="200" stroke="#666" stroke-width="2"/>
+<line x1="600" y1="200" x2="840" y2="200" stroke="#666" stroke-width="2"/>
+<line x1="120" y1="250" x2="300" y2="330" stroke="#999" stroke-width="2"/>
+<line x1="360" y1="250" x2="420" y2="330" stroke="#999" stroke-width="2"/>
+<line x1="600" y1="250" x2="560" y2="330" stroke="#999" stroke-width="2"/>
+<line x1="840" y1="250" x2="700" y2="330" stroke="#999" stroke-width="2"/>
+<line x1="810" y1="70" x2="810" y2="150" stroke="#666" stroke-width="2" stroke-dasharray="4"/>
+</svg>
+<div class="node" id="saga-node-client" style="left:20px;top:10px;width:160px;"><b>CLIENT</b><hr>Place order for 1 item</div>
+<div class="node" style="left:700px;top:10px;width:220px;">
+<b>SAGA TRACKER</b><hr>
+Saga ID: <b>SAGA-2001</b><br>
+Status: <span id="saga-field-status">-</span><br>
+Current Step: <span id="saga-field-step">-</span>
+</div>
+<div class="node" id="saga-node-order" style="left:20px;top:150px;width:200px;"></div>
+<div class="node" id="saga-node-payment" style="left:260px;top:150px;width:200px;"></div>
+<div class="node" id="saga-node-inventory" style="left:500px;top:150px;width:200px;"></div>
+<div class="node" id="saga-node-shipping" style="left:740px;top:150px;width:200px;"></div>
+<div class="node wide" id="saga-node-bus" style="left:150px;top:330px;width:650px;"></div>
+</div>
+<div id="saga-timeline" class="tl"></div>
+<div style="margin-top:12px">
+<button onclick="sagaSim.prev()">◀ Previous</button>
+<button onclick="sagaSim.next()">Next ▶</button>
+<button onclick="sagaSim.reset()">Reset</button>
+</div>
+</div>
+<div class="card">
+<h3 id="saga-title"></h3>
+<h4>📖 What's happening?</h4>
+<div id="saga-what"></div>
+<h4>🧠 Why is this necessary?</h4>
+<div id="saga-why"></div>
+<h4>💥 What if a step fails?</h4>
+<div id="saga-crash"></div>
+<h4>📝 Live Event Log</h4>
+<pre id="saga-log"></pre>
+</div>
+</div>
+</div>
+
+<!-- ================= TAB 3: TRANSACTIONAL OUTBOX ================= -->
+<div class="tabpanel" id="tab-outbox">
+<div class="container">
+<div class="card">
+<div class="simnet">
+<svg width="1000" height="560">
+<line x1="120" y1="70" x2="120" y2="150" stroke="#666" stroke-width="2"/>
+<line x1="300" y1="190" x2="440" y2="190" stroke="#666" stroke-width="2"/>
+<line x1="620" y1="190" x2="620" y2="330" stroke="#666" stroke-width="2"/>
+<line x1="620" y1="380" x2="780" y2="380" stroke="#666" stroke-width="2"/>
+<line x1="960" y1="380" x2="960" y2="240" stroke="#666" stroke-width="2"/>
+<line x1="960" y1="240" x2="820" y2="190" stroke="#666" stroke-width="2"/>
+</svg>
+<div class="node" id="outbox-node-client" style="left:20px;top:10px;width:180px;"><b>CLIENT</b><hr>POST /orders</div>
+<div class="node" style="left:700px;top:10px;width:220px;">
+<b>STATUS PANEL</b><hr>
+Order ID: <b>ORD-501</b><br>
+DB Txn: <span id="outbox-field-txn">-</span><br>
+Outbox Row: <span id="outbox-field-outboxstatus">-</span>
+</div>
+<div class="node" id="outbox-node-service" style="left:20px;top:150px;width:260px;"></div>
+<div class="node wide" id="outbox-node-db" style="left:440px;top:150px;width:340px;"></div>
+<div class="node" id="outbox-node-relay" style="left:440px;top:330px;width:220px;"></div>
+<div class="node" id="outbox-node-broker" style="left:750px;top:330px;width:220px;"></div>
+<div class="node" id="outbox-node-consumer" style="left:750px;top:150px;width:220px;"></div>
+</div>
+<div id="outbox-timeline" class="tl"></div>
+<div style="margin-top:12px">
+<button onclick="outboxSim.prev()">◀ Previous</button>
+<button onclick="outboxSim.next()">Next ▶</button>
+<button onclick="outboxSim.reset()">Reset</button>
+</div>
+</div>
+<div class="card">
+<h3 id="outbox-title"></h3>
+<h4>📖 What's happening?</h4>
+<div id="outbox-what"></div>
+<h4>🧠 Why is this necessary?</h4>
+<div id="outbox-why"></div>
+<h4>💥 What if the relay crashes now?</h4>
+<div id="outbox-crash"></div>
+<h4>📝 Live Event Log</h4>
+<pre id="outbox-log"></pre>
+</div>
+</div>
+</div>
+
+<!-- ================= TAB 4: IDEMPOTENCY + RECONCILIATION ================= -->
+<div class="tabpanel" id="tab-idem">
+<div class="container">
+<div class="card">
+<div class="simnet">
+<svg width="1000" height="560">
+<line x1="120" y1="70" x2="330" y2="150" stroke="#666" stroke-width="2"/>
+<line x1="510" y1="190" x2="510" y2="330" stroke="#666" stroke-width="2"/>
+<line x1="330" y1="230" x2="330" y2="330" stroke="#666" stroke-width="2"/>
+<line x1="700" y1="190" x2="700" y2="330" stroke="#666" stroke-width="2"/>
+<line x1="330" y1="380" x2="700" y2="380" stroke="#666" stroke-width="2" stroke-dasharray="4"/>
+</svg>
+<div class="node" id="idem-node-client" style="left:20px;top:10px;width:200px;"><b>CLIENT</b><hr>Pay ₹500 for order ORD-501</div>
+<div class="node" style="left:700px;top:10px;width:220px;">
+<b>REQUEST TRACKER</b><hr>
+Idempotency-Key: <b>abc-123</b><br>
+Attempt #: <span id="idem-field-attempt">-</span><br>
+Status: <span id="idem-field-status">-</span>
+</div>
+<div class="node" id="idem-node-api" style="left:230px;top:150px;width:200px;"></div>
+<div class="node wide" id="idem-node-store" style="left:230px;top:330px;width:200px;"></div>
+<div class="node" id="idem-node-gateway" style="left:600px;top:150px;width:200px;"></div>
+<div class="node wide" id="idem-node-recon" style="left:600px;top:330px;width:200px;"></div>
+</div>
+<div id="idem-timeline" class="tl"></div>
+<div style="margin-top:12px">
+<button onclick="idemSim.prev()">◀ Previous</button>
+<button onclick="idemSim.next()">Next ▶</button>
+<button onclick="idemSim.reset()">Reset</button>
+</div>
+</div>
+<div class="card">
+<h3 id="idem-title"></h3>
+<h4>📖 What's happening?</h4>
+<div id="idem-what"></div>
+<h4>🧠 Why is this necessary?</h4>
+<div id="idem-why"></div>
+<h4>💥 What could still go wrong?</h4>
+<div id="idem-crash"></div>
+<h4>📝 Live Event Log</h4>
+<pre id="idem-log"></pre>
+</div>
+</div>
+</div>
+
+<script>
+/* ============ TAB SWITCHING ============ */
+function showTab(name,btn){
+document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
+document.getElementById('tab-'+name).classList.add('active');
+document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+btn.classList.add('active');
+}
+
+/* ============ TAB 1: 2PC (original, unchanged logic) ============ */
+const steps=[
+{t:"1. Begin",p:"BEGIN",d:"Pending",s:["INIT","INIT","INIT"],l:"09:10:01 Client starts TXN-1001",w:"Client requests one logical transaction spanning three databases.",y:"All participants must eventually reach exactly the same outcome.",c:"Safe to retry.",db:["-","-"]},
+{t:"2. PREPARE",p:"PREPARE",d:"Pending",s:["PREPARING","PREPARING","PREPARING"],l:"09:10:02 PREPARE sent to A\n09:10:02 PREPARE sent to B\n09:10:02 PREPARE sent to C",w:"Coordinator asks every participant 'Can you commit?'",y:"Nobody commits until everyone is ready.",c:"Participants wait holding locks.",db:["₹900","-"]},
+{t:"3. Votes",p:"WAITING",d:"Pending",s:["READY","READY","READY"],l:"09:10:03 A -> YES\n09:10:03 B -> YES\n09:10:04 C -> YES",w:"Each participant validates, locks data and writes PREPARE to its WAL.",y:"Durable logs allow recovery after crashes.",c:"System blocks until coordinator returns.",db:["₹900","-"]},
+{t:"4. Decision",p:"DECISION",d:"COMMIT",s:["READY","READY","READY"],l:"09:10:05 Global Decision = COMMIT",w:"Coordinator has unanimous YES votes.",y:"One global decision preserves atomicity.",c:"Decision is recoverable from coordinator log.",db:["₹900","-"]},
+{t:"5. COMMIT",p:"COMMIT",d:"COMMIT",s:["COMMITTING","COMMITTING","COMMITTING"],l:"09:10:06 COMMIT sent to all participants",w:"Commit packets are broadcast.",y:"Everyone executes the same final decision.",c:"Recovered coordinator retransmits COMMIT.",db:["₹900","₹900"]},
+{t:"6. Complete",p:"DONE",d:"COMMITTED",s:["COMMITTED","COMMITTED","COMMITTED"],l:"09:10:07 ACK from A\n09:10:07 ACK from B\n09:10:08 ACK from C",w:"Locks released. Transaction finished.",y:"All databases are now consistent.",c:"Already durable.",db:["₹900","₹900"]},
+{t:"7. Failure",p:"ROLLBACK",d:"ROLLBACK",s:["ROLLED BACK","ROLLED BACK","ROLLED BACK"],l:"Participant B voted NO\nROLLBACK broadcast",w:"Any NO vote aborts the entire transaction.",y:"Atomicity means all-or-nothing.",c:"Rollback is replayed after recovery.",db:["-","-"]}
+];
+let idx=0;
+function color(state){
+if(state.includes("COMMITTED"))return"ok";
+if(state.includes("PREP"))return"prep";
+if(state.includes("ROLL"))return"fail";
+return"wait";
+}
+function part(name,i){
+return `<b>${name}</b><hr>
+State: <span class="badge ${color(steps[idx].s[i])}">${steps[idx].s[i]}</span><br>
+Lock: ${idx>=2&&idx<6?"🔒":"🔓"}<br>
+Vote: ${idx<2?"?":idx<6?"YES":"NO"}<br>
+Log: ${steps[idx].p}`;
+}
+function render(){
+document.getElementById("title").textContent=steps[idx].t;
+document.getElementById("what").textContent=steps[idx].w;
+document.getElementById("why").textContent=steps[idx].y;
+document.getElementById("crash").textContent=steps[idx].c;
+document.getElementById("decision").textContent=steps[idx].d;
+document.getElementById("phase").textContent=steps[idx].p;
+document.getElementById("log").textContent=steps[idx].l;
+document.getElementById("pending").textContent=steps[idx].db[0];
+document.getElementById("committed").textContent=steps[idx].db[1];
+document.getElementById("a").innerHTML=part("Participant A",0);
+document.getElementById("b").innerHTML=part("Participant B",1);
+document.getElementById("c").innerHTML=part("Participant C",2);
+let tl="";
+for(let i=0;i<steps.length;i++){tl+=`<div class="dot ${i<idx?'done':i==idx?'active':''}"></div>`;}
+document.getElementById("timeline").innerHTML=tl;
+}
+function next(){if(idx<steps.length-1){idx++;render();}}
+function prev(){if(idx>0){idx--;render();}}
+function resetSim(){idx=0;render();}
+render();
+
+/* ============ GENERIC ENGINE FOR NEW TABS ============ */
+class Sim{
+constructor(prefix,steps){this.prefix=prefix;this.steps=steps;this.idx=0;this.render();}
+el(suffix){return document.getElementById(this.prefix+'-'+suffix);}
+render(){
+const s=this.steps[this.idx];
+this.el('title').textContent=s.t;
+this.el('what').innerHTML=s.w;
+this.el('why').innerHTML=s.y;
+this.el('crash').innerHTML=s.c;
+this.el('log').textContent=s.l;
+Object.keys(s.nodes||{}).forEach(k=>{const e=this.el('node-'+k);if(e)e.innerHTML=s.nodes[k];});
+Object.keys(s.fields||{}).forEach(k=>{const e=this.el('field-'+k);if(e)e.textContent=s.fields[k];});
+let tl="";
+for(let i=0;i<this.steps.length;i++){tl+=`<div class="dot ${i<this.idx?'done':i==this.idx?'active':''}"></div>`;}
+this.el('timeline').innerHTML=tl;
+}
+next(){if(this.idx<this.steps.length-1){this.idx++;this.render();}}
+prev(){if(this.idx>0){this.idx--;this.render();}}
+reset(){this.idx=0;this.render();}
+}
+
+/* ============ TAB 2: SAGA PATTERN ============ */
+const INIT_SVC=(n)=>`<b>${n}</b><hr>State: <span class="badge neutral">INIT</span><br>Local txn: not started`;
+const sagaSteps=[
+{t:"1. Begin the Saga",
+ w:"The client places an order. Instead of one giant distributed transaction (like 2PC), the order will be completed as a <b>chain of small, independent local transactions</b> — one per service. Each service commits to its own database immediately.",
+ y:"Saga avoids holding locks across services for a long time. Each step is fast, local, and ACID only within that one service.",
+ c:"Nothing has started yet — perfectly safe to retry or cancel.",
+ l:"10:00:00 Client -> Order Service: place order (item x1)",
+ fields:{status:"STARTED",step:"0 / 4"},
+ nodes:{order:INIT_SVC("Order Service"),payment:INIT_SVC("Payment Service"),inventory:INIT_SVC("Inventory Service"),shipping:INIT_SVC("Shipping Service"),
+   bus:`<b>EVENT BUS</b><hr>Last event: <i>none yet</i>`}},
+
+{t:"2. T1 — Order Service commits locally",
+ w:"Order Service runs its own local ACID transaction: insert an Order row with status <b>CREATED</b>. It then publishes an <b>OrderCreated</b> event onto the event bus for the next service to react to.",
+ y:"Each local step is small and fast, so locks are held for milliseconds, not the whole saga's duration — unlike 2PC's global lock-and-wait.",
+ c:"If Order Service crashes right after commit but before publishing, the event is stuck. Using a Transactional Outbox (see next tab!) for this publish step avoids losing it.",
+ l:"10:00:01 Order Service: local commit (Order=CREATED)\n10:00:01 Event published: OrderCreated",
+ fields:{status:"IN PROGRESS",step:"1 / 4"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Order row committed`,
+   payment:INIT_SVC("Payment Service"),inventory:INIT_SVC("Inventory Service"),shipping:INIT_SVC("Shipping Service"),
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge ok">OrderCreated</span>`}},
+
+{t:"3. T2 — Payment Service commits locally",
+ w:"Payment Service, listening for OrderCreated, charges the customer's card and commits its own local transaction: Payment row = <b>CHARGED</b>. It then emits <b>PaymentCompleted</b>.",
+ y:"Each service owns its own data and business rules. No other service needs to know how payments are processed internally.",
+ c:"If the card charge fails here, Payment Service simply emits <b>PaymentFailed</b> instead — triggering compensation later (see step 6).",
+ l:"10:00:02 Payment Service: charged ₹500\n10:00:02 Event published: PaymentCompleted",
+ fields:{status:"IN PROGRESS",step:"2 / 4"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Order row committed`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Payment=CHARGED`,
+   inventory:INIT_SVC("Inventory Service"),shipping:INIT_SVC("Shipping Service"),
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge ok">PaymentCompleted</span>`}},
+
+{t:"4. T3 — Inventory Service commits locally (success path)",
+ w:"Inventory Service reserves 1 unit of stock and commits locally: Stock row = <b>RESERVED</b>. It emits <b>StockReserved</b>.",
+ y:"Every step so far only touched one database. The saga is coordinated purely through events — this style is called <b>choreography</b>.",
+ c:"We'll explore the failure branch for this exact step later (step 6) — for now assume stock is available.",
+ l:"10:00:03 Inventory Service: reserved 1 unit\n10:00:03 Event published: StockReserved",
+ fields:{status:"IN PROGRESS",step:"3 / 4"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Order row committed`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Payment=CHARGED`,
+   inventory:`<b>Inventory Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Stock=RESERVED`,
+   shipping:INIT_SVC("Shipping Service"),
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge ok">StockReserved</span>`}},
+
+{t:"5. T4 — Shipping Service commits locally → Saga COMPLETE",
+ w:"Shipping Service schedules the shipment and commits locally: Shipment = <b>SCHEDULED</b>. Every step succeeded, so the saga is now fully complete — with no single moment where a global lock was held across all four services.",
+ y:"Because each local commit was independent, the total time services spent locking data was tiny compared to 2PC, where every participant waits for the slowest one.",
+ c:"Nothing to compensate — the saga finished successfully.",
+ l:"10:00:04 Shipping Service: shipment scheduled\n10:00:04 SAGA COMPLETE ✅",
+ fields:{status:"✅ COMPLETE",step:"4 / 4"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   inventory:`<b>Inventory Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   shipping:`<b>Shipping Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Shipment=SCHEDULED`,
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge ok">ShipmentScheduled</span>`}},
+
+{t:"6. ⚠️ Failure branch — Inventory is out of stock",
+ w:"Let's rewind to step 4 and imagine the item is out of stock. Inventory Service commits <b>Stock=FAILED</b> locally and emits <b>StockReservationFailed</b> instead of StockReserved. The saga cannot continue forward.",
+ y:"A saga has no global 'vote' like 2PC — a step either succeeds or it doesn't. When one fails, we must undo the steps that already succeeded using <b>compensating transactions</b>, run in reverse order.",
+ c:"The failure itself is safe — Inventory never reserved anything, so there's nothing to undo there. But Order and Payment already committed and must now be reversed.",
+ l:"10:00:03 Inventory Service: OUT OF STOCK\n10:00:03 Event published: StockReservationFailed\n10:00:03 Saga Tracker: begin COMPENSATION",
+ fields:{status:"⚠️ COMPENSATING",step:"rollback 2/2"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Order row committed`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Payment=CHARGED`,
+   inventory:`<b>Inventory Service</b><hr>State: <span class="badge fail">FAILED</span><br>DB: Stock=FAILED (no reservation made)`,
+   shipping:`<b>Shipping Service</b><hr>State: <span class="badge neutral">SKIPPED</span><br>Never triggered`,
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge fail">StockReservationFailed</span>`}},
+
+{t:"7. C2 — Compensate Payment (refund)",
+ w:"Working backwards, Payment Service runs its compensating transaction: <b>refund ₹500</b>. This is a normal local commit too — just one that undoes the earlier effect.",
+ y:"Compensating transactions must be designed up front for every step — they are the 'undo button' for a saga, since there's no automatic rollback across services.",
+ c:"If the refund call itself fails, it's retried until it succeeds (compensations are usually designed to be safely retryable).",
+ l:"10:00:04 Payment Service: refunded ₹500\n10:00:04 Event published: PaymentRefunded",
+ fields:{status:"⚠️ COMPENSATING",step:"rollback 1/2"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>DB: Order row committed`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge comp">COMPENSATED</span><br>DB: Payment=REFUNDED`,
+   inventory:`<b>Inventory Service</b><hr>State: <span class="badge fail">FAILED</span>`,
+   shipping:`<b>Shipping Service</b><hr>State: <span class="badge neutral">SKIPPED</span>`,
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge comp">PaymentRefunded</span>`}},
+
+{t:"8. C1 — Compensate Order (cancel) → Saga ROLLED BACK",
+ w:"Finally, Order Service runs its compensating transaction: mark the order <b>CANCELLED</b>. Every effect of the saga has now been undone in reverse order — the system is back to a consistent state, just via a different path than it would take with a single atomic transaction.",
+ y:"This is the core trade-off of Sagas: you get fast, local, highly-available steps, but you give up true atomicity — for a short window, other users could have seen the 'in progress' order before it was cancelled.",
+ c:"The saga tracker's log is the audit trail proving every step and every compensation ran — critical for debugging and for customer support.",
+ l:"10:00:05 Order Service: cancelled order\n10:00:05 SAGA ROLLED BACK (fully compensated)",
+ fields:{status:"↩️ ROLLED BACK",step:"rollback 0/2"},
+ nodes:{order:`<b>Order Service</b><hr>State: <span class="badge comp">COMPENSATED</span><br>DB: Order=CANCELLED`,
+   payment:`<b>Payment Service</b><hr>State: <span class="badge comp">COMPENSATED</span>`,
+   inventory:`<b>Inventory Service</b><hr>State: <span class="badge fail">FAILED</span>`,
+   shipping:`<b>Shipping Service</b><hr>State: <span class="badge neutral">SKIPPED</span>`,
+   bus:`<b>EVENT BUS</b><hr>Last event: <span class="badge comp">OrderCancelled</span>`}}
+];
+const sagaSim=new Sim('saga',sagaSteps);
+
+/* ============ TAB 3: TRANSACTIONAL OUTBOX ============ */
+const outboxSteps=[
+{t:"1. Begin — Client places an order",
+ w:"The client calls the Order Service. Internally, the service must do two things that need to happen <b>together, or not at all</b>: save the order to its database, AND notify other services (e.g. Inventory) that a new order exists.",
+ y:"This 'save + notify' combo is called the <b>dual-write problem</b>: writing to a database and publishing to a message broker are two separate systems, so a plain implementation can't guarantee both succeed or both fail together.",
+ c:"Nothing has happened yet.",
+ l:"11:00:00 Client -> Order Service: POST /orders",
+ fields:{txn:"not started",outboxstatus:"-"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders table: empty<br>Outbox table: empty`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": empty`,
+   consumer:`<b>Inventory Service</b><hr>(consumer)<br>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"2. Start ONE local database transaction",
+ w:"Order Service opens a single local transaction. Everything inside it will be committed or rolled back together — this is the key trick of the outbox pattern.",
+ y:"By keeping both writes inside the database's own transaction, we get atomicity for free from the database itself — no distributed coordinator needed.",
+ c:"Still nothing durable — a crash here loses nothing since the transaction hasn't committed.",
+ l:"11:00:01 Order Service: BEGIN TRANSACTION",
+ fields:{txn:"OPEN",outboxstatus:"-"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge prep">PROCESSING</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders table: empty<br>Outbox table: empty`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": empty`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"3. Insert Order row + Outbox row (same transaction)",
+ w:"Inside that one transaction, the service inserts an Order row (status=CREATED) <b>and</b> an Outbox row (event=OrderCreated, published=false). Both writes go to the same local database.",
+ y:"The Outbox table is just a normal table — it's the 'to-do list' of messages that still need to be published. Since it's written in the same transaction as the business data, it can never get out of sync with it.",
+ c:"If the app crashes right now, the whole transaction is rolled back — neither row exists. Nothing was ever half-done.",
+ l:"11:00:02 INSERT Orders (id=ORD-501, status=CREATED)\n11:00:02 INSERT Outbox (event=OrderCreated, published=false)",
+ fields:{txn:"OPEN (2 writes pending)",outboxstatus:"pending write"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge prep">WRITING</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge wait">pending</span> ORD-501=CREATED<br>Outbox: <span class="badge wait">pending</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": empty`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"4. COMMIT — both rows become durable atomically",
+ w:"The transaction commits. Order row and Outbox row are saved together, permanently, in one atomic step. This is the moment the dual-write problem is solved: there is no possible state where one exists without the other.",
+ y:"Unlike calling the message broker directly inside the request (which could succeed while the DB commit fails, or vice versa), this write only ever touches ONE system at commit time — the local database.",
+ c:"Even a crash right after commit is safe — both rows are already durable on disk.",
+ l:"11:00:03 COMMIT — Order + Outbox rows durable together",
+ fields:{txn:"✅ COMMITTED",outboxstatus:"unpublished"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span><br>Returned 201 to client`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge ok">CREATED</span> ORD-501<br>Outbox: <span class="badge wait">unpublished</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": empty`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"5. Relay polls the Outbox table",
+ w:"A separate background process — the <b>Message Relay</b> (could be a simple poller, or a CDC tool like Debezium reading the DB log) — periodically scans the Outbox table for rows where published=false.",
+ y:"The relay is decoupled from the request path. The client already got their response in step 4 — publishing happens asynchronously, so a slow or unavailable broker never blocks the customer.",
+ c:"If the relay itself is down, rows just pile up as unpublished — no data is lost, publishing simply resumes once it's back.",
+ l:"11:00:05 Relay: SELECT * FROM outbox WHERE published=false\n11:00:05 Relay: found 1 row (OrderCreated)",
+ fields:{txn:"COMMITTED",outboxstatus:"unpublished"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge ok">CREATED</span> ORD-501<br>Outbox: <span class="badge wait">unpublished</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge prep">POLLING</span><br>Found 1 unpublished row`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": empty`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"6. Relay publishes the event to the Message Broker",
+ w:"The relay reads the Outbox row's payload and publishes it as a real message on the broker's topic (e.g. Kafka topic \"orders\").",
+ y:"This is the only place the message actually leaves the local database's boundary — and since it's driven off durable, committed data, the relay can safely retry this publish as many times as needed.",
+ c:"If the relay crashes right after publishing but before the next step, it will simply publish again on restart — which is exactly why consumers must be idempotent (see the next tab!).",
+ l:"11:00:06 Relay -> Broker: publish(topic=orders, event=OrderCreated, orderId=ORD-501)",
+ fields:{txn:"COMMITTED",outboxstatus:"publishing"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge ok">CREATED</span> ORD-501<br>Outbox: <span class="badge wait">unpublished</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge prep">PUBLISHING</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": <span class="badge ok">1 message</span> OrderCreated`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"7. Relay marks the Outbox row as published",
+ w:"After a successful publish, the relay updates the Outbox row to published=true (or deletes it). This just prevents it from being picked up again on the next poll — it's a housekeeping step, not a correctness-critical one.",
+ y:"Even if this update itself fails and the row gets republished later, that's OK — it just means the same event may be sent twice, which downstream consumers handle safely using idempotency keys.",
+ c:"Worst case here is a duplicate publish, never a lost one — the pattern is designed to fail towards 'at-least-once' delivery, not zero delivery.",
+ l:"11:00:06 UPDATE Outbox SET published=true WHERE event_id=...",
+ fields:{txn:"COMMITTED",outboxstatus:"✅ published"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge ok">CREATED</span> ORD-501<br>Outbox: <span class="badge ok">published</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge ok">DONE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": <span class="badge ok">1 message</span> OrderCreated`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge neutral">WAITING</span>`}},
+
+{t:"8. Consumer receives and processes the event",
+ w:"Inventory Service, subscribed to the \"orders\" topic, receives the OrderCreated message and reserves stock for ORD-501 — completing the cross-service side effect that started this whole flow.",
+ y:"End-to-end, the database write and the message delivery ended up perfectly consistent — without ever needing a distributed transaction across the database and the broker.",
+ c:"If this same message is ever delivered twice (see step 6), Inventory Service should recognize it already processed ORD-501 and simply ignore the duplicate — that's the idempotency pattern covered in the next tab.",
+ l:"11:00:07 Inventory Service <- Broker: consume(OrderCreated, ORD-501)\n11:00:07 Inventory Service: stock reserved for ORD-501",
+ fields:{txn:"COMMITTED",outboxstatus:"✅ published"},
+ nodes:{service:`<b>Order Service</b><hr>State: <span class="badge ok">DONE</span>`,
+   db:`<b>LOCAL DATABASE</b><hr>Orders: <span class="badge ok">CREATED</span> ORD-501<br>Outbox: <span class="badge ok">published</span> OrderCreated`,
+   relay:`<b>Message Relay</b><hr>State: <span class="badge ok">DONE</span>`,
+   broker:`<b>Message Broker</b><hr>Topic "orders": <span class="badge ok">delivered</span>`,
+   consumer:`<b>Inventory Service</b><hr>State: <span class="badge ok">DONE</span><br>Stock reserved for ORD-501`}}
+];
+const outboxSim=new Sim('outbox',outboxSteps);
+
+/* ============ TAB 4: IDEMPOTENCY + RECONCILIATION ============ */
+const idemSteps=[
+{t:"1. Client prepares a request with an Idempotency-Key",
+ w:"Before calling Pay, the client generates a unique key — <b>abc-123</b> — and attaches it to the request header. This key will represent 'this exact payment attempt' no matter how many times it's actually sent over the network.",
+ y:"Networks are unreliable: a request can time out even after the server successfully processed it. Idempotency keys let the client safely retry without risking a duplicate side effect (like charging twice).",
+ c:"Nothing sent yet — no risk.",
+ l:"12:00:00 Client generates Idempotency-Key: abc-123",
+ fields:{attempt:"0",status:"-"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge neutral">not found</span>`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"2. First attempt — API Server checks the key",
+ w:"The client sends POST /payments with header Idempotency-Key: abc-123. The API Server's first move is to look this key up in its Idempotency Store — a small table of {key, status, response}.",
+ y:"Checking BEFORE doing any work is what prevents duplicate processing — the server needs to know if it has already seen this exact request.",
+ c:"Key not found yet, so it's safe to proceed with real processing.",
+ l:"12:00:01 Client -> API Server: POST /payments (Idempotency-Key: abc-123)\n12:00:01 API Server: lookup abc-123 -> NOT FOUND",
+ fields:{attempt:"1",status:"checking"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge prep">CHECKING KEY</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge fail">NOT FOUND</span>`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"3. Server processes the payment and records the key",
+ w:"The API Server charges the card via the Payment Gateway, then — in the SAME local transaction as writing the business result — stores {key: abc-123, status: COMPLETED, response: {...}} in the Idempotency Store.",
+ y:"Storing the key and the business write together (atomically) means the cached response always matches what actually happened — there's no gap where one exists without the other.",
+ c:"If the app crashed between charging the gateway and writing the idempotency record, that's a real edge case — it's exactly what Reconciliation (step 7) exists to catch.",
+ l:"12:00:02 API Server -> Gateway: charge ₹500\n12:00:02 Gateway: charge SUCCESS (txn_id=GTW-9001)\n12:00:02 API Server: store {key:abc-123, status:COMPLETED}",
+ fields:{attempt:"1",status:"processing"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge prep">PROCESSING</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge wait">writing...</span>`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge ok">CHARGED</span><br>txn_id=GTW-9001`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"4. Server returns the response",
+ w:"The API Server sends back 200 OK with the payment confirmation. As far as the server is concerned, this request is fully and durably complete.",
+ y:"The cached response is now permanently tied to the key abc-123 — any future request carrying that same key will get this exact response instead of being processed again.",
+ c:"All good so far — the risk is entirely on the network path back to the client, covered next.",
+ l:"12:00:03 API Server -> Client: 200 OK {status: COMPLETED, txn_id: GTW-9001}",
+ fields:{attempt:"1",status:"✅ completed (server-side)"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge ok">DONE</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span>`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge ok">CHARGED</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"5. ⚠️ Network failure — response is lost",
+ w:"The response never reaches the client (dropped connection, timeout, proxy hiccup — take your pick). From the client's point of view, it has no idea whether the payment succeeded or not.",
+ y:"This is precisely the ambiguous situation idempotency keys are designed for — 'did it work?' becomes irrelevant, because retrying is always safe.",
+ c:"Without an idempotency key, the client's only safe options would be 'maybe double-charge the customer' or 'maybe never complete the payment' — both bad.",
+ l:"12:00:04 [response lost in transit — client sees a timeout]",
+ fields:{attempt:"1",status:"⚠️ unknown to client"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge ok">DONE (client doesn't know)</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span>`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge ok">CHARGED</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"6. Client retries with the SAME Idempotency-Key",
+ w:"Seeing a timeout, the client automatically retries — sending the exact same request again, with the exact same header Idempotency-Key: abc-123. The API Server looks the key up again, this time finding it: status=COMPLETED.",
+ y:"Because the key already resolves to COMPLETED, the server returns the cached response immediately <b>without</b> charging the card again. No duplicate charge, no confusion — the retry is 100% safe.",
+ c:"This only works because the client reused the same key. If it had generated a NEW key for the retry, it would cause a real duplicate charge — the key must represent 'this attempt', not 'this call'.",
+ l:"12:00:06 Client retries: POST /payments (Idempotency-Key: abc-123)\n12:00:06 API Server: lookup abc-123 -> FOUND (COMPLETED)\n12:00:06 API Server -> Client: 200 OK (cached response, no reprocessing)",
+ fields:{attempt:"2",status:"✅ served from cache"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge ok">DONE (cache hit)</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span> (returned, not reprocessed)`,
+   gateway:`<b>Payment Gateway</b><hr>State: <span class="badge ok">CHARGED (once)</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge neutral">not run yet</span>`}},
+
+{t:"7. Reconciliation Job runs on schedule",
+ w:"Separately, a Reconciliation Job runs every night. It compares the internal ledger (what our system believes happened) against the Payment Gateway's own transaction records (what actually happened on their side) to catch anything idempotency keys couldn't — like the crash-between-charge-and-write edge case from step 3.",
+ y:"Idempotency handles duplicate REQUESTS. Reconciliation handles drift BETWEEN SYSTEMS — a different class of problem that needs an independent, periodic safety net rather than per-request logic.",
+ c:"A gap here usually means a rare crash or bug, not a systemic issue — but it needs to be found regardless, since it directly affects money.",
+ l:"02:00:00 Reconciliation Job: comparing Ledger vs Gateway records for last 24h\n02:00:01 Found 1 mismatch: GTW-9047 charged, no matching ledger entry",
+ fields:{attempt:"2",status:"reconciling"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span>`,
+   gateway:`<b>Payment Gateway</b><hr>Records: 47 charges today`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge prep">RUNNING</span><br>1 mismatch found: GTW-9047`}},
+
+{t:"8. Mismatch found and flagged",
+ w:"The job discovers that transaction GTW-9047 was charged at the gateway, but no corresponding ledger entry exists internally — likely a request that crashed the app right after step 3 above, before the idempotency/ledger record was written.",
+ y:"This is exactly the gap that idempotency keys alone cannot close, since the key record itself was never written. Reconciliation is the independent check that catches money-affecting bugs before they become customer complaints.",
+ c:"Left unresolved, this becomes a customer who was charged but has no order — a support escalation waiting to happen.",
+ l:"02:00:01 Mismatch report: GTW-9047 (₹500) has no ledger entry\n02:00:01 Flagged for auto-correction",
+ fields:{attempt:"2",status:"⚠️ mismatch flagged"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span>`,
+   gateway:`<b>Payment Gateway</b><hr>GTW-9047: <span class="badge fail">orphaned charge</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge fail">MISMATCH FOUND</span><br>GTW-9047 ₹500`}},
+
+{t:"9. Reconciliation resolves the mismatch",
+ w:"The job auto-creates the missing ledger entry for GTW-9047 (or, if the business rule prefers, triggers a refund) and marks the case resolved. The internal ledger and the gateway's records now agree again.",
+ y:"This closes the loop: idempotency keys prevent duplicate work on the request path in real time, while reconciliation guarantees eventual consistency across systems even when something slips through.",
+ c:"Nothing outstanding — but the underlying crash that caused the gap in step 3 is worth investigating separately so it happens less often.",
+ l:"02:00:02 Reconciliation Job: created missing ledger entry for GTW-9047\n02:00:02 Ledger and Gateway now consistent ✅",
+ fields:{attempt:"2",status:"✅ resolved"},
+ nodes:{api:`<b>API Server</b><hr>State: <span class="badge neutral">IDLE</span>`,
+   store:`<b>IDEMPOTENCY STORE</b><hr>key=abc-123: <span class="badge ok">COMPLETED</span>`,
+   gateway:`<b>Payment Gateway</b><hr>GTW-9047: <span class="badge ok">reconciled</span>`,
+   recon:`<b>Reconciliation Job</b><hr>Status: <span class="badge ok">RESOLVED</span><br>Ledger = Gateway ✅`}}
+];
+const idemSim=new Sim('idem',idemSteps);
+</script>
+</body>
+</html>
