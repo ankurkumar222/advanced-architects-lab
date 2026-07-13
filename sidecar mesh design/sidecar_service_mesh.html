@@ -222,6 +222,31 @@ section.divider{ border-top:1px solid var(--border); }
 .stat-num{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:30px; color:var(--red); }
 .stat-label{ font-family:'JetBrains Mono', monospace; font-size:11.5px; color:var(--muted); margin-top:6px; text-transform:uppercase; letter-spacing:0.04em; }
 
+/* ---------- CONTROLS BAR ---------- */
+.controls-bar{ display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+.btn-toggle{
+  font-family:'JetBrains Mono', monospace; font-size:12.5px; color:var(--text);
+  background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  padding:9px 16px; cursor:pointer; transition:border-color 0.2s ease, color 0.2s ease;
+}
+.btn-toggle:hover{ border-color:var(--purple); color:var(--purple); }
+
+/* ---------- REVEAL (question visible, answer hidden) ---------- */
+.reveal-box{ background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--red); border-radius:8px; overflow:hidden; }
+.reveal-q{
+  width:100%; text-align:left; background:none; border:none; color:var(--text);
+  padding:20px 22px; cursor:pointer; display:flex; justify-content:space-between; align-items:flex-start; gap:14px;
+}
+.reveal-q .rq-label{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--red); text-transform:uppercase; letter-spacing:0.1em; display:block; margin-bottom:8px; }
+.reveal-q .rq-text{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; line-height:1.4; }
+.reveal-chevron{ font-family:'JetBrains Mono', monospace; color:var(--red); font-size:20px; flex-shrink:0; transition:transform 0.25s ease; margin-top:2px; }
+.reveal-box.open .reveal-chevron{ transform:rotate(45deg); }
+.reveal-a{ max-height:0; overflow:hidden; transition:max-height 0.4s ease; border-top:1px solid transparent; }
+.reveal-box.open .reveal-a{ border-top:1px solid var(--border); }
+.reveal-a-inner{ padding:18px 22px; font-size:15px; color:var(--text); }
+.reveal-a-inner strong{ color:var(--red); }
+.reveal-hint{ font-family:'JetBrains Mono', monospace; font-size:11.5px; color:var(--muted); padding:0 22px 16px; margin-top:-6px; }
+
 /* ---------- RECALL ---------- */
 .flash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
 .flash-card{ perspective:1000px; height:130px; cursor:pointer; }
@@ -329,6 +354,10 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
     <div class="section-head">
       <div class="section-eyebrow">tap to expand</div>
       <h2>Four things people actually put in a sidecar</h2>
+    </div>
+    <div class="controls-bar">
+      <button class="btn-toggle" id="expand-sidecar">+ Expand all</button>
+      <button class="btn-toggle" id="collapse-sidecar">− Collapse all</button>
     </div>
     <div class="journey" id="sidecar-journey"></div>
   </section>
@@ -499,9 +528,65 @@ inside both apps</span></div>
         │    + init-container (installs iptables rules)
         ▼
   <span class="c-q">Pod actually scheduled — with 2 containers</span></div>
-    <div class="thought-box" style="margin-top:18px;">
-      <span class="tb-label">worth sitting with</span>
-      You never approved that second container. The API server did — silently, on every single pod, cluster-wide. That's what makes the mesh "transparent." It's also exactly why a broken sidecar injector can quietly stop your entire cluster from scheduling anything.
+    <div class="reveal-box" style="margin-top:18px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">worth sitting with</span><span class="rq-text">Who actually approved that second container?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">You didn't. The API server did — silently, on every single pod, cluster-wide. That's what makes the mesh <strong>"transparent."</strong> It's also exactly why a broken sidecar injector can quietly stop your entire cluster from scheduling anything: one misconfigured webhook, and every new pod cluster-wide fails to schedule.</div></div>
+    </div>
+  </section>
+
+  <!-- ================= NEW: STARTUP ORDERING RACE ================= -->
+  <section class="divider">
+    <div class="section-head">
+      <div class="section-eyebrow">a gotcha almost nobody sees coming</div>
+      <h2>Two containers, one pod, same start time. Then what?</h2>
+    </div>
+    <div class="reveal-box">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">The app and the sidecar both start at t=0. Which one is actually ready to handle traffic first?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">
+        <div class="diagram-block" style="margin-bottom:14px;">t=0ms    Pod scheduled — both containers start together
+t=5ms    <span class="c-mid">App container</span> boots, immediately calls payment-service
+t=5ms    <span class="c-end">Envoy sidecar</span> still initializing — not intercepting yet
+              │
+              ▼
+     <span class="c-q">connection refused — proxy isn't listening yet</span>
+              (that request silently fails)
+
+t=40ms   <span class="c-end">Envoy sidecar</span> finally ready
+t=41ms+  App calls now succeed normally</div>
+        Neither container is "wrong" — they just don't know about each other's readiness. This exact race condition caused years of flaky pod-startup failures across the industry, until Kubernetes 1.28 introduced <strong>native sidecar containers</strong> (a special <code class="mono">restartPolicy: Always</code> init container) that guarantees the sidecar starts first and stops last, every time.
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ================= NEW: HEALTH PROBE NUANCE ================= -->
+  <section>
+    <div class="section-head">
+      <div class="section-eyebrow">a question with a genuinely surprising answer</div>
+      <h2>When kubelet health-checks your pod, what is it actually talking to?</h2>
+    </div>
+    <div class="reveal-box">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">The sidecar's iptables rules redirect ALL traffic in and out of the pod. So does the health probe hit your app — or does it hit Envoy?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">
+        <div class="diagram-block" style="margin-bottom:14px;"><span class="c-client">kubelet</span> ──probe──▶ <span class="c-mid">Pod IP:8080</span>
+                        │
+              iptables rules installed by the
+              sidecar's init-container redirect
+              <span class="c-q">EVERY</span> port... including probe traffic
+
+                        ▼
+        without a fix: probe hits <span class="c-end">Envoy</span>,
+        never actually reaches your app container</div>
+        This is a real, well-known gotcha — and it's exactly why every production mesh (Istio, Linkerd) explicitly <strong>excludes health-probe ports from the iptables redirect</strong>, so kubelet keeps talking straight to your app container, bypassing the sidecar entirely for that one path. Miss this configuration on a self-managed setup, and you'll see pods marked "unhealthy" that are, in fact, working fine.
+      </div></div>
     </div>
   </section>
 
@@ -530,9 +615,12 @@ inside both apps</span></div>
       <h2>What happens when one dependency quietly gets slow?</h2>
       <p class="lede">Not down. Just slow. This is the failure mode that takes down entire platforms — and it's almost never the slow service itself that causes the outage.</p>
     </div>
-    <div class="thought-box">
-      <span class="tb-label">follow the chain</span>
-      Inventory Service starts responding in 4s instead of 40ms. Order Service times out at 2s and <strong>retries 3 times</strong> — "just to be safe." Every one of those retries is a brand new request hitting an already-struggling Inventory Service. Multiply that by every concurrent Order request, and a single slow dependency turns into <strong>10x–100x amplified load</strong> hitting the one service that can least afford it. Inventory doesn't just stay slow — it falls over completely, and takes Order Service down with it through exhausted connection pools.
+    <div class="reveal-box">
+      <button class="reveal-q">
+        <div><span class="rq-label">follow the chain</span><span class="rq-text">One dependency gets slow — not down, just slow. What actually brings the whole platform down?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Inventory Service starts responding in 4s instead of 40ms. Order Service times out at 2s and <strong>retries 3 times</strong> — "just to be safe." Every one of those retries is a brand new request hitting an already-struggling Inventory Service. Multiply that by every concurrent Order request, and a single slow dependency turns into <strong>10x–100x amplified load</strong> hitting the one service that can least afford it. Inventory doesn't just stay slow — it falls over completely, and takes Order Service down with it through exhausted connection pools.</div></div>
     </div>
     <p class="lede" style="margin-top:18px; margin-bottom:10px;">A mesh sidecar breaks this chain the same way an electrical circuit breaker does — by refusing to send more current once it detects a fault:</p>
     <div class="state-row">
@@ -562,9 +650,12 @@ inside both apps</span></div>
 <span class="c-mid">Notification</span>                     [██]                 3ms  (fire-and-forget)
               └──────────────────────────────────┘
                      total: 46ms</div>
-    <div class="thought-box" style="margin-top:18px;">
-      <span class="tb-label">worth sitting with</span>
-      Nobody wrote timing code in any of these five services. Each sidecar simply read the <code class="mono">trace-id</code> header its neighbor forwarded, stamped its own start/end time against it, and shipped that span to a collector (Jaeger/Zipkin). <strong>The moment your organization gets a service mesh, every future service is traceable by default</strong> — tracing becomes infrastructure, not a feature teams remember to build.
+    <div class="reveal-box" style="margin-top:18px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">worth sitting with</span><span class="rq-text">Who wrote the timing code for all five of these services?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Nobody. Each sidecar simply read the <code class="mono">trace-id</code> header its neighbor forwarded, stamped its own start/end time against it, and shipped that span to a collector (Jaeger/Zipkin). <strong>The moment your organization gets a service mesh, every future service is traceable by default</strong> — tracing becomes infrastructure, not a feature teams remember to build.</div></div>
     </div>
   </section>
 
@@ -718,6 +809,32 @@ const sidecarTypes = [
 ];
 
 renderAccordion('sidecar-journey', sidecarTypes);
+
+// generic reveal (question visible, answer hidden) toggle
+document.querySelectorAll('.reveal-q').forEach(btn => {
+  const box = btn.closest('.reveal-box');
+  const answer = box.querySelector('.reveal-a');
+  btn.addEventListener('click', () => {
+    const isOpen = box.classList.contains('open');
+    if (isOpen){ answer.style.maxHeight = null; box.classList.remove('open'); }
+    else { box.classList.add('open'); answer.style.maxHeight = answer.scrollHeight + 'px'; }
+  });
+});
+
+// expand all / collapse all for the sidecar accordion
+document.getElementById('expand-sidecar').addEventListener('click', () => {
+  document.querySelectorAll('#sidecar-journey .hop-card').forEach(card => {
+    card.classList.add('open');
+    const body = card.querySelector('.hop-body');
+    body.style.maxHeight = body.scrollHeight + 'px';
+  });
+});
+document.getElementById('collapse-sidecar').addEventListener('click', () => {
+  document.querySelectorAll('#sidecar-journey .hop-card').forEach(card => {
+    card.classList.remove('open');
+    card.querySelector('.hop-body').style.maxHeight = null;
+  });
+});
 
 const flashDeck = [
   { name:"Pod, defined", question:"One or more containers that share network + storage, always scheduled together." },
