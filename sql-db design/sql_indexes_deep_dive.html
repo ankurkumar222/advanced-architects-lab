@@ -394,11 +394,11 @@
 <header class="hero">
   <div class="hero-tag">Architects Lab — Internals Series</div>
   <h1 class="hero-title">The Index <em>Ledger</em></h1>
-  <p class="hero-sub">Seven entries. Same question asked seven ways: where does the data actually sit, and what does the engine have to do to find it. Expand each card — don't just read the answer, argue with it first.</p>
+  <p class="hero-sub">Ten entries — seven on SQL, three on the fault line between SQL and NoSQL indexing. Same question asked every way: where does the data actually sit, and what does the engine have to do to find it. Expand each card — don't just read the answer, argue with it first.</p>
   <div class="hero-meta">
-    <div><b>07</b>topics</div>
-    <div><b>46</b>questions to expand</div>
-    <div><b>~35 min</b>first pass</div>
+    <div><b>10</b>topics</div>
+    <div><b>40+</b>questions to expand</div>
+    <div><b>~55 min</b>first pass</div>
   </div>
 </header>
 
@@ -410,6 +410,9 @@
   <a href="#t5"><span class="num">05</span>Primary Key vs Unique Key</a>
   <a href="#t6"><span class="num">06</span>Covering Index</a>
   <a href="#t7"><span class="num">07</span>Foreign Key Indexing</a>
+  <a href="#t8"><span class="num">08</span>The NoSQL Index Landscape</a>
+  <a href="#t9"><span class="num">09</span>Only SQL Can Do This</a>
+  <a href="#t10"><span class="num">10</span>Only NoSQL Can Do This</a>
 </nav>
 
 <!-- ============================================================ -->
@@ -1006,6 +1009,251 @@ INCLUDE (policy_number, premium_amount);</pre>
       <pre>CREATE INDEX idx_holdings_demat_account_id
 ON holdings (demat_account_id);</pre>
       <p>Without it, every account deletion forces a full scan of <code style="background:none;color:inherit;padding:0;">holdings</code> to find rows to cascade-delete, while holding locks that block concurrent reads/writes to that table — exactly the kind of issue that stays invisible in low-traffic testing and surfaces only once real concurrent load hits production.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 8 — THE NOSQL INDEX LANDSCAPE -->
+<!-- ============================================================ -->
+<section class="topic" id="t8">
+  <div class="topic-head">
+    <span class="topic-num">08</span>
+    <h2 class="topic-title">The NoSQL Index Landscape</h2>
+  </div>
+  <p class="topic-dek">Same word, different physics. In SQL, "index" means a second structure pointing at your table. In most NoSQL systems, the index <em>is</em> the data placement strategy — you don't add it after the fact, you design around it from day one.</p>
+
+  <table class="compare">
+    <tr><th>System</th><th>What "index" means there</th><th>Its native index types</th></tr>
+    <tr><td>MongoDB</td><td>A B-Tree, same core structure as SQL, but built for documents</td><td>Single-field, compound, <b>multikey</b> (arrays), text (inverted), geospatial (2dsphere), hashed, wildcard, TTL</td></tr>
+    <tr><td>Cassandra</td><td>The partition key <em>is</em> the primary index — it decides which node owns the data</td><td>Partition key (mandatory), clustering columns (in-partition sort), secondary index (local, expensive), materialized views (auto-maintained denormalized copy)</td></tr>
+    <tr><td>DynamoDB</td><td>You don't "add" an index later — you declare access patterns up front as named indexes</td><td>Base table (partition+sort key), Local Secondary Index (LSI), Global Secondary Index (GSI)</td></tr>
+    <tr><td>Elasticsearch</td><td>Every document is indexed by default — there's no "unindexed" state</td><td>Inverted index (core), doc values (columnar, for sort/aggregation), geo, nested</td></tr>
+    <tr><td>Redis</td><td>No native secondary index — you build one yourself out of other data structures</td><td>Sorted sets / hashes as hand-rolled indexes; RediSearch module for real inverted indexing</td></tr>
+  </table>
+
+  <div class="diagram-frame" style="margin:30px 0 10px;">
+    <div class="caption"><span>Fig 5 — Where a secondary index lives: SQL vs Cassandra</span><button onclick="replay('svg5')">▸ replay</button></div>
+    <svg id="svg5" class="flow-svg" viewBox="0 0 460 220" width="100%">
+      <text x="10" y="18" font-size="11" class="amber">SQL — one machine, one B-Tree, done</text>
+      <rect x="10" y="30" width="200" height="34" fill="none" stroke="#d9a441" rx="4"/>
+      <text x="20" y="51" font-size="10">index(status) → seek → rows</text>
+      <circle cx="30" cy="47" r="4" fill="#d9a441">
+        <animate attributeName="cx" values="30;190;30" dur="2.2s" repeatCount="indefinite"/>
+      </circle>
+
+      <text x="10" y="100" font-size="11" class="teal">Cassandra — data scattered by partition key,</text>
+      <text x="10" y="116" font-size="11" class="teal">secondary index value could be on ANY node</text>
+      <rect x="10" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="22" y="145" font-size="9">Node A</text>
+      <rect x="115" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="127" y="145" font-size="9">Node B</text>
+      <rect x="220" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="232" y="145" font-size="9">Node C</text>
+      <rect x="325" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="337" y="145" font-size="9">Node D</text>
+      <text x="10" y="180" font-size="10" class="dim">query status='ACTIVE' → must ask ALL FOUR nodes</text>
+      <text x="10" y="196" font-size="10" class="dim">and merge results. This is "scatter-gather."</text>
+      <circle cx="55" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="160" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="265" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="370" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+    </svg>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does MongoDB's multikey index — which indexes every element of an array — refuse to let you build a compound index across two array fields?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>A multikey index doesn't create one index entry per document — it creates <b>one entry per array element</b>. If a document has <code style="background:none;color:inherit;padding:0;">tags: ["a","b","c"]</code>, that's three separate leaf entries pointing back to the same document.</p>
+      <p>Now imagine two array fields on the same document, say <code style="background:none;color:inherit;padding:0;">tags: [a,b,c]</code> and <code style="background:none;color:inherit;padding:0;">colors: [x,y,z]</code>. A compound multikey index across both would have to generate an entry for <em>every combination</em> — a Cartesian product (3×3 = 9 entries for one document). This isn't a small inefficiency — it grows combinatorially with array size, and worse, it produces an ambiguous, exploding index that doesn't actually mean anything coherent for querying "does this doc have tag=a AND color=x" (they were never paired together in the source data). So MongoDB simply disallows it, not as an arbitrary limitation but because the concept doesn't have a sane definition once two arrays are involved.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why is a secondary index in Cassandra a fundamentally different (and much weaker) thing than a secondary index in SQL?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>In SQL, all your data lives in one coherent structure (or a small, known number of shards in distributed SQL), so a secondary index can point directly to exactly where a row lives — one seek, done.</p>
+      <p>In Cassandra, the <b>partition key</b> is what decides which physical node owns a row — that's the whole point of the architecture, spreading write load evenly across a cluster by hashing the partition key. A secondary index on a <em>non-partition-key</em> column has no way to know which node holds any given value, because rows with the same secondary-index value could be scattered across every node in the cluster. So Cassandra is forced to build a local index <em>on every node</em> and, at query time, ask <b>every node</b> to check its local index and return matches — a scatter-gather. This defeats the entire reason you chose Cassandra (avoiding cross-node coordination), which is why Cassandra secondary indexes carry a strong "avoid this at scale" warning, and why materialized views (a second, denormalized copy of the data, pre-organized by the new access pattern) are the idiomatic fix instead.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does DynamoDB force you to declare a Global Secondary Index with its own partition key, rather than just letting you query any attribute like SQL's WHERE clause?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>DynamoDB's entire performance promise (single-digit millisecond latency at any scale) comes from never having to scan — every read must resolve to a direct partition lookup. A GSI is, structurally, a <em>second table</em> that DynamoDB automatically keeps in sync with the base table, reorganized around a different partition key so a different access pattern can also get a direct lookup.</p>
+      <p>This is why DynamoDB modeling famously happens "access-pattern first" — you're not adding a query capability after the fact the way <code style="background:none;color:inherit;padding:0;">CREATE INDEX</code> does in SQL. You're pre-declaring a second physical copy of the data, organized differently, and accepting the write amplification and (by default) eventual consistency that comes with keeping two independently-partitioned copies in sync.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">You're logging every KYC verification event in DynamoDB, partitioned by <code style="background:none;color:inherit;padding:0;">user_id</code>. Ops now wants "show me all FAILED verifications across all users, today." LSI or GSI — or neither?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict yes">GSI</span>
+      <p>An LSI shares the base table's partition key (<code style="background:none;color:inherit;padding:0;">user_id</code>) and only gives you an alternate <em>sort</em> key within that same partition — it can't answer "across all users" because it's still scoped per-user. You need a <b>GSI</b> with a new partition key — likely <code style="background:none;color:inherit;padding:0;">status</code> (or better, a composite like <code style="background:none;color:inherit;padding:0;">status#date</code> to avoid one enormous "FAILED" partition becoming a hot key) — with <code style="background:none;color:inherit;padding:0;">event_timestamp</code> as the sort key.</p>
+      <p>Watch the hot-partition trap here: if 95% of events are <code style="background:none;color:inherit;padding:0;">SUCCESS</code> and 5% are <code style="background:none;color:inherit;padding:0;">FAILED</code>, partitioning the GSI purely by <code style="background:none;color:inherit;padding:0;">status</code> creates two wildly uneven partitions — one enormous, one small — which is the DynamoDB equivalent of the low-cardinality problem from Topic 4, except here it doesn't just make the index unused, it can throttle your whole table under load.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 9 — ONLY SQL CAN DO THIS -->
+<!-- ============================================================ -->
+<section class="topic" id="t9">
+  <div class="topic-head">
+    <span class="topic-num">09</span>
+    <h2 class="topic-title">Indexing Capabilities Only SQL Really Gives You</h2>
+  </div>
+  <p class="topic-dek">Not "SQL is better." SQL made a specific trade: give up easy horizontal partitioning, in exchange for indexes that can be added freely, joined across, and trusted absolutely. Here's what that trade buys you.</p>
+
+  <ul class="core-facts">
+    <li><span class="bullet">→</span><div><b>True ad-hoc indexing.</b> You can <code>CREATE INDEX</code> on any new column combination, anytime, without redesigning your data model — because all the data already lives in one coherent, queryable structure.</div></li>
+    <li><span class="bullet">→</span><div><b>Instantly, globally consistent uniqueness.</b> A <code>UNIQUE</code> index in SQL is enforced the moment a transaction commits — no other transaction can ever observe a duplicate, even for a microsecond.</div></li>
+    <li><span class="bullet">→</span><div><b>Join-optimized index usage.</b> The query planner can use an index on <code>orders.user_id</code> to drive an index nested loop join against <code>users.id</code> — combining two indexed structures at query time, without pre-merging the data.</div></li>
+    <li><span class="bullet">→</span><div><b>Cost-based, dynamic index selection.</b> The optimizer evaluates multiple candidate indexes per query and picks the cheapest one based on live statistics — not something you commit to at write time.</div></li>
+  </ul>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can a SQL UNIQUE index guarantee "this value will never be duplicated, ever, even for an instant" — while a DynamoDB GSI cannot make that same promise?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict no">not possible in most NoSQL</span>
+      <p>SQL's uniqueness guarantee comes from the index living in the same transactional boundary as the write itself — the engine checks the B-Tree for a conflict and commits the row atomically, as one indivisible operation, typically on a single coordinating structure. There's no window where a duplicate could exist, because the check and the write are the same event.</p>
+      <p>A DynamoDB GSI, by contrast, is asynchronously propagated from the base table — by default it's <b>eventually consistent</b>. Two concurrent writes with the same GSI key could both succeed on the base table before either one's GSI entry is even created, meaning a transient duplicate is genuinely possible in that window. This isn't a bug — it's the direct cost of DynamoDB's horizontal scalability model, where a "global" secondary index is really a separately-partitioned, asynchronously-synced copy, not a live extension of the same atomic write path. If you truly need global uniqueness in DynamoDB, you have to engineer it yourself (e.g. a separate table keyed by the unique value, written transactionally alongside the main write) — the index itself won't hand it to you for free.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why is "just add an index for this new query" a five-minute operation in SQL, but effectively a data-model redesign in Cassandra?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict no">not possible in Cassandra the same way</span>
+      <p>In SQL, the table's physical layout doesn't encode your query patterns — the data sits in one place, and indexes are separate, disposable structures layered on top. Adding one doesn't require moving any existing row.</p>
+      <p>In Cassandra, the table's physical layout <em>is</em> your query pattern — the partition key was chosen specifically so that one known access pattern becomes a single-node lookup. A genuinely new query shape (filtering by a column that wasn't part of the partition key) usually means the existing table simply cannot serve it efficiently, full stop. The idiomatic fix isn't "add an index," it's "create a new table, denormalized and re-partitioned around the new access pattern, and write to both tables going forward" (this is literally what a materialized view automates). That's not a schema tweak — it's provisioning new infrastructure and a new write path. This is the single biggest mental shift required moving from SQL to wide-column NoSQL: <b>you model tables around queries, not around entities.</b></p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can SQL efficiently JOIN two indexed tables at query time, while Cassandra/DynamoDB push you toward denormalizing at write time instead?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict no">not efficiently possible in partition-based NoSQL</span>
+      <p>An index nested loop join works because both tables' indexes live in the same coordinated storage layer, reachable with predictable, low latency — the engine can afford to do many small index seeks back and forth between two structures.</p>
+      <p>In a horizontally partitioned NoSQL system, "the other table" might live on a completely different node, and a join would mean per-row cross-node network calls — for every single row of the outer loop. At scale, that's not slow, it's architecturally untenable. So instead of joining at query time, these systems ask you to join at <em>write</em> time: embed the related data directly into the document (MongoDB embedding), or write it redundantly into a second, pre-joined table shaped exactly for the read (Cassandra denormalization). You pay the cost once, at write time, in exchange for every read being a single-partition lookup forever after. It's the same underlying trade as topic 6's covering index — read speed bought with write cost and storage — just pushed to an extreme.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Someone on your team proposes moving the <code style="background:none;color:inherit;padding:0;">holdings</code> ledger — where every debit/credit must be exactly consistent, joined against accounts and instruments, and audited — to DynamoDB "for scale." What's your pushback?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>The ledger's defining requirement isn't throughput — it's that a balance can never be transiently wrong, never double-counted, and must be joinable against accounts/instruments for reporting without pre-computing every possible report shape in advance. That's precisely the profile SQL's transactional, instantly-consistent, freely-indexable model was built for.</p>
+      <p>Moving it to DynamoDB would mean either accepting eventual consistency on financial state (unacceptable for a ledger) or engineering your own transactional layer on top of DynamoDB to fake what SQL gives you natively — at which point you've rebuilt a worse, custom version of what you already had. The honest scaling conversation isn't "SQL vs NoSQL" here — it's "does this table's actual write volume justify horizontal partitioning at all, or does it need read replicas / sharding within a SQL system that keeps ACID intact." Save NoSQL's real strengths (topic 10) for the parts of the platform that are genuinely append-heavy, denormalized-by-nature, and don't need cross-entity consistency — event logs, audit trails, notification feeds.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 10 — ONLY NOSQL CAN DO THIS -->
+<!-- ============================================================ -->
+<section class="topic" id="t10">
+  <div class="topic-head">
+    <span class="topic-num">10</span>
+    <h2 class="topic-title">Indexing Capabilities Only NoSQL Really Gives You</h2>
+  </div>
+  <p class="topic-dek">The trade runs both ways. Give up joins and instant global consistency, and NoSQL hands you index capabilities that a single coherent SQL structure structurally cannot offer — not "hasn't implemented yet," cannot.</p>
+
+  <ul class="core-facts">
+    <li><span class="bullet">→</span><div><b>Native multikey/array indexing.</b> MongoDB indexes every element of an array field directly — no join table, no child table, one index.</div></li>
+    <li><span class="bullet">→</span><div><b>Wildcard indexing on unknown fields.</b> You can index "every field under <code>metadata.*</code>" even for fields that don't exist yet at index-creation time — impossible in SQL, where a column must exist before you can index it.</div></li>
+    <li><span class="bullet">→</span><div><b>TTL indexes.</b> A document expires and is automatically removed purely because of an index on a timestamp field — no scheduled job, no batch DELETE.</div></li>
+    <li><span class="bullet">→</span><div><b>Index co-located with data at unbounded horizontal scale.</b> A partition key doesn't just organize a lookup — it decides physical node placement, so the "index" and the sharding strategy are the same decision, scaling to any number of nodes.</div></li>
+    <li><span class="bullet">→</span><div><b>Deliberately tunable consistency on the index itself.</b> You can explicitly choose an eventually-consistent secondary index to buy dramatically higher write throughput — a knob SQL's ACID-bound indexes don't expose at all.</div></li>
+  </ul>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can MongoDB index every element of an array natively, while SQL needs a whole separate child table to represent the same one-to-many relationship?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict no">not natively possible in SQL</span>
+      <p>A SQL column holds exactly one scalar value per row — that's the relational model's foundational rule (first normal form). An array inside a single cell violates that rule outright, so the relational answer to "one order has many line items" was never "put them in one cell" — it was "put them in a separate table, linked by a foreign key," and index <em>that</em> table normally. The B-Tree never needed to understand "arrays" because the model never allowed them to exist in a column in the first place.</p>
+      <p>MongoDB's document model has no such restriction — a field can hold an array natively, so the multikey index mechanism was built specifically to handle it: instead of one leaf entry per document, it emits one leaf entry per array element, each pointing back to the parent document. It's not that MongoDB found a clever trick SQL missed — it's that SQL's normalization rules made this indexing problem not exist in the first place, at the cost of needing an extra join whenever you want the child rows back together.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">A wildcard index can index fields that don't exist yet. Why does that concept have literally no SQL equivalent?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <span class="verdict no">not possible in SQL</span>
+      <p><code style="background:none;color:inherit;padding:0;">CREATE INDEX</code> in SQL requires naming an existing column — the schema is defined before the index, and the index is a promise about a specific, known column. SQL has no concept of "a field that might show up later with any name" because every column must be declared via <code style="background:none;color:inherit;padding:0;">ALTER TABLE</code> first; the schema is the contract.</p>
+      <p>MongoDB documents can carry arbitrary, dynamic fields per document — one document might have a <code style="background:none;color:inherit;padding:0;">metadata.riskScore</code> field, another might have <code style="background:none;color:inherit;padding:0;">metadata.sourceChannel</code>, neither declared in any schema. A wildcard index (<code style="background:none;color:inherit;padding:0;">{"metadata.$**": 1}</code>) tells the engine "index whatever keys actually show up under this path, for every document, automatically." This only makes sense in a schema-flexible model — it's solving a problem (unknown-at-design-time field names) that a schema-enforced system doesn't have, because in SQL every field name is known and fixed by definition.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why would anyone deliberately choose an eventually-consistent index over a strongly consistent one — what do you actually gain?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>Strong consistency on a secondary index means every write has to wait for that index to be updated (and, in a distributed system, often coordinated/confirmed across replicas) before the write is considered done. At massive write volume, that coordination cost becomes the bottleneck — not disk, not CPU, but the waiting.</p>
+      <p>Accepting eventual consistency on the index means the base write returns immediately, and the index catches up asynchronously — usually within milliseconds, but with no hard guarantee. In exchange, you get dramatically higher sustained write throughput and lower write latency on the primary path. This trade only makes sense when a few milliseconds of index staleness genuinely doesn't matter for that query — a "recent orders" feed, a search index, an analytics rollup. It becomes dangerous exactly where SQL's guarantees matter most: anything involving money movement, uniqueness enforcement, or a decision that can't tolerate acting on stale state. Knowing which category a given index falls into is, honestly, the core architectural judgment call in this entire topic.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does a TTL index remove the need for a scheduled cleanup job — isn't "delete rows older than X" trivial to schedule in SQL anyway?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>It's trivial to <em>write</em> in SQL (a cron job running <code style="background:none;color:inherit;padding:0;">DELETE WHERE created_at < NOW() - INTERVAL</code>), but it's an external process you have to build, deploy, monitor, and handle failure for — and a poorly-tuned bulk delete can itself lock rows and hurt concurrent traffic, ironically the exact problem topic 7 covered for foreign keys.</p>
+      <p>A MongoDB TTL index makes expiry a property of the index itself — a background process built into the engine periodically scans the TTL-indexed field and removes expired documents automatically, with no external job, no separate monitoring, no query pattern of your own to write. This is genuinely a capability difference, not just convenience: it's baking a lifecycle policy directly into the storage engine's index maintenance loop, something a B-Tree index in SQL was never designed to express — a SQL index describes "how to find data faster," never "when this data should cease to exist."</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Your PolicyBazaar integration needs to log every raw webhook payload for 90 days for debugging, at high volume, with wildly inconsistent JSON shapes per insurer. Where does this live, and what index?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <p>This is close to the textbook case for NoSQL's actual strengths rather than SQL's. The payload shape varies per insurer and changes without your control — forcing it into a rigid SQL schema means either a huge sparse table or a JSON blob column you can't meaningfully index anyway. A document store (MongoDB) lets each payload keep its native shape.</p>
+      <p>Index design: a compound index on <code style="background:none;color:inherit;padding:0;">(insurer_id, received_at)</code> for your actual debugging access pattern ("show me PolicyBazaar's payloads from this window"), plus a <b>TTL index</b> on <code style="background:none;color:inherit;padding:0;">received_at</code> set to 90 days — so the 90-day retention policy enforces itself with no cleanup job for you to own. If specific insurers occasionally send fields you want to search on without knowing their names in advance, a <b>wildcard index</b> on the payload's metadata path covers that without you pre-declaring every possible key.</p>
+      <p>Contrast this with the <code style="background:none;color:inherit;padding:0;">holdings</code> ledger from Topic 9 — same platform, opposite answer, because the actual requirements (consistency vs. schema flexibility) are opposite. That contrast <em>is</em> the skill: not "SQL or NoSQL" as a platform-wide choice, but per-table, per-access-pattern reasoning.</p>
     </div></div>
   </div>
 </section>
