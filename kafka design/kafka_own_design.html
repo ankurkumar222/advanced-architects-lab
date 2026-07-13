@@ -408,17 +408,38 @@ ui.click.events          Low            keep accepting, occasional loss OK</pre>
       <p>Commit, in writing, to: (1) your ordering guarantee scope — global or per-partition-key? (2) your delivery semantics — at-least-once, at-most-once, or exactly-once, and where the cost of that choice lands. Justify both against your own segment-1 numbers before revealing.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">Reference decision — ordering scope and delivery semantics.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">Reference decision — ordering scope.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>Ordering:</b> per-partition-key ordering only. No global order across a topic. Order for a given folio/account is guaranteed by routing every event for that key to the same partition.
-        <b style="display:block;margin-top:8px;">Delivery:</b> at-least-once by default, everywhere. Exactly-once only for the narrow slice that truly can't tolerate a duplicate (settlement writes) — implemented as idempotent writes at the consumer, not as a broker-wide guarantee.
-        <div class="why"><b>Why this matters:</b> Global ordering requires a single writer for the whole topic, which caps your throughput at one partition's worth of I/O — directly violating your segment-1 throughput target. And broker-wide exactly-once (transactional producers + read-committed consumers everywhere) triples your write-path latency for topics that never needed it, like UI click events. Committing to "per-key order, at-least-once by default" isn't a compromise — it's the decision that makes segment-1's 3.5k msgs/sec and sub-50ms ack even possible.</div>
+        <b>Per-partition-key ordering only.</b> No global order across a whole topic.
+        <pre class="sketch">GLOBAL ORDER (one writer for the whole topic):
+  Topic: [msg1][msg2][msg3][msg4][msg5]   <- single line, single writer
+  Throughput capped at ONE partition's worth of I/O
+
+PER-PARTITION-KEY ORDER (what we pick):
+  Partition 0 (key=folio_A): [A1][A2][A3]     <- always in order for folio_A
+  Partition 1 (key=folio_B): [B1][B2][B3]     <- always in order for folio_B
+  Partition 2 (key=folio_C): [C1][C2]         <- always in order for folio_C
+
+  Many partitions write in PARALLEL -> throughput scales
+  But there's no single line across all of them -> no global order</pre>
+        <div class="why"><b>Why this matters:</b> global order needs one writer for the whole topic — that single-lane bottleneck directly breaks segment 1's throughput target. Routing every event for a key to the same partition gives you order exactly where it's needed (per folio, per account) without paying for order where it isn't (across unrelated customers).</div>
       </div></div></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R4</span><span class="q-text">If a future team demands exactly-once end-to-end for a new topic, what do you tell them?</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R4</span><span class="q-text">Reference decision — delivery semantics.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        You don't change the broker's default guarantee for everyone. You offer it as an opt-in mode per topic: idempotent producer (sequence numbers dedupe retries) plus a transactional write path for that specific producer-consumer pair. It costs that topic latency and throughput — a cost the rest of the platform shouldn't pay for a need it doesn't have.
-        <div class="why"><b>Why this matters:</b> The moment you make one team's requirement the platform default, every future topic inherits a cost it never asked for. Per-topic opt-in keeps the platform's baseline fast and lets the rare expensive requirement pay for itself.</div>
+        <b>At-least-once everywhere, by default.</b> Exactly-once only opt-in, for the narrow slice that truly can't tolerate a duplicate (settlement writes).
+        <pre class="sketch">AT-LEAST-ONCE (default, cheap):
+  message sent -> maybe delivered twice on retry -> consumer must dedupe
+  cost: consumer does idempotent writes            speed: fast
+
+EXACTLY-ONCE (opt-in, expensive):
+  message sent -> transactional producer + read-committed consumer
+  cost: extra coordination on EVERY write           speed: slower
+
+  Applying exactly-once to EVERY topic:
+    ui.click.events   <- pays exactly-once tax it never needed  ✗
+    settlement.writes <- actually needs it                       ✓</pre>
+        <div class="why"><b>Why this matters:</b> making exactly-once the platform default means every topic — including low-stakes ones like UI clicks — pays extra latency for a guarantee most of them never asked for. Opt-in per topic keeps the platform's baseline fast and lets the rare, genuinely expensive requirement pay for itself.</div>
       </div></div></div>
   </section>
 
@@ -817,16 +838,18 @@ Scoped by BLAST RADIUS:
       <p>Sketch what's actually stored on disk per partition, and estimate: how many topics, partitions, and bytes/day across your 80+ microservices? Then answer the gut-check: is this actually a "big data" storage problem, or not? Decide what's durable config vs. ephemeral in-memory derived state, and why mixing them up would be a mistake.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R7</span><span class="q-text">Reference data model and sizing.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R7</span><span class="q-text">Reference: what's on disk, and rough sizing.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>On disk, per partition:</b> a sequence of immutable log segment files (e.g. 1GB each), each with a paired sparse offset index (offset → byte position) and a timestamp index. Segments roll over by size or time; old segments are deleted or compacted per the topic's retention policy.
+        <b>On disk, per partition — like a notebook split into chapters:</b>
         <pre class="sketch">partition-3/
   00000000000000000000.log      <- segment (records, append-only)
-  00000000000000000000.index    <- offset -> byte-position lookup
+  00000000000000000000.index    <- offset -> byte-position lookup ("go to page X")
   00000000000000000000.timeindex
-  00000000000045210000.log      <- next segment after rollover
-  ...</pre>
-        <b>Sizing (illustrative, across the wealth platform):</b>
+  00000000000045210000.log      <- next segment, starts once the first one fills up
+  ...
+
+Old segments get deleted or compacted once they age past the topic's retention policy.</pre>
+        <b>Sizing, across the wealth platform (illustrative):</b>
         <div class="stat-grid">
           <div class="stat-card"><div class="label">Topics</div><div class="value">~40 <span>active</span></div></div>
           <div class="stat-card"><div class="label">Total partitions</div><div class="value">~420 <span>cluster-wide</span></div></div>
@@ -835,30 +858,150 @@ Scoped by BLAST RADIUS:
           <div class="stat-card"><div class="label">Daily volume</div><div class="value">~190 <span>GB/day pre-replication</span></div></div>
           <div class="stat-card"><div class="label">Replicated footprint</div><div class="value">~570 <span>GB/day (RF=3)</span></div></div>
         </div>
-        <b>Durable vs. ephemeral:</b> log segments, indexes, and committed offsets are durable — written to disk, replicated, survive a restart. Broker-side metadata caches (which broker thinks it's leader for which partition, right now), consumer group in-memory assignment state, and ISR membership snapshots are derived/ephemeral — rebuilt from the controller/quorum on restart, never treated as a source of truth.
-        <div class="why"><b>Why conflating them is a mistake:</b> if you accidentally treat an in-memory ISR snapshot as durable truth, a broker restart can "forget" a valid replica was in sync and either falsely exclude it (unnecessary re-catch-up) or falsely trust a stale one (data loss risk). The controller/quorum is the only durable source of who's really in sync — everything else is a fast, disposable cache of that fact.</div>
-        <div class="why"><b>The big-data gut check:</b> ~570 GB/day sounds large, but at 7-day retention that's ~4TB steady-state per replicated topic set — comfortably single-digit-node storage, not a big-data problem. The actual hard part isn't <em>volume</em>, it's <em>throughput + ordering + durability under concurrent access</em> — a systems problem, not a "shard it across 200 nodes" problem. Don't let the word "Kafka" trick you into over-building for scale you don't have yet.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R8</span><span class="q-text">What's durable vs. ephemeral — and why mixing them up is a mistake?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">DURABLE (on disk, survives a restart, the real source of truth):
+  - log segments
+  - offset indexes
+  - committed consumer offsets
+
+EPHEMERAL (in-memory, just a fast cache, rebuilt on restart):
+  - "which broker is leader for this partition, right now"
+  - consumer group's current in-memory assignment
+  - ISR membership snapshot</pre>
+        <div class="why"><b>Why conflating them is a mistake:</b> if a broker restart accidentally treats its in-memory ISR snapshot as truth instead of re-checking with the controller, it can either wrongly distrust a replica that was actually fine (wasted re-catch-up) or wrongly trust a stale one (real data-loss risk). The controller is the only durable source of "who's really in sync" — everything else is a disposable cache of that fact, not truth itself.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R9</span><span class="q-text">Gut check — is this actually a "big data" problem?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">~570 GB/day replicated x 7-day retention
+  = ~4 TB steady-state per replicated topic set
+
+That's comfortably single-digit-node storage.
+NOT a "shard across 200 machines" problem.</pre>
+        <div class="why"><b>Why this matters:</b> the actual hard part here isn't volume — it's throughput + ordering + durability under concurrent access. That's a systems problem, not a big-data problem. Don't let the word "Kafka" trick you into over-building for scale you don't actually have yet.</div>
       </div></div></div>
   </section>
 
   <!-- SEGMENT 6 -->
   <section class="segment" id="s6" style="--seg:#6B9A44">
     <div class="segment-head"><span class="segment-offset">step 06</span><h2>Core algorithm: the append + ISR replication protocol</h2></div>
-    <p class="segment-note">Pick one mechanism and get concrete. This is the single piece of logic your entire durability story depends on.</p>
+    <p class="segment-note">This is the heart of Kafka. Everything about durability depends on one question: <b>when should Kafka tell the producer "your message is safely stored"?</b></p>
 
     <div class="build-box">
       <div class="build-label">✎ build it yourself first</div>
-      <p>Write actual pseudocode — not prose — for: (1) the leader's append operation, (2) how a follower catches up and joins the ISR, (3) how the leader decides when to ack a producer. Then answer: what happens if the ISR shrinks to zero in-sync replicas mid-write?</p>
+      <p>Sketch the flow yourself first: leader receives a message → what happens step by step before the producer gets an ACK? Then answer: what happens if the ISR shrinks to zero in-sync replicas mid-write?</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R8</span><span class="q-text">Reference pseudocode — append path, ISR tracking, ack decision.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R10</span><span class="q-text">Reference: the overall flow, one step at a time.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Producer
+    │
+    │ Produce(Order Created)
+    ▼
++------------------+
+| Leader Broker    |
++------------------+
+        │
+        │ 1. Save locally
+        ▼
+    Local Log
+        │
+        │ 2. Copy to followers
+        ▼
++-----------+    +-----------+
+|Follower A |    |Follower B |
++-----------+    +-----------+
+        │              │
+        └──────┬───────┘
+               │
+     All copies completed?
+               │
+        Yes → ACK Producer</pre>
+
+        <b>Step 1 — Leader receives a message:</b>
+        <pre class="sketch">Producer --> "Order Created" --> Leader writes it to its own disk immediately
+
+Leader Log: [100][101][102][103]     <- very fast, local only</pre>
+
+        <b>Step 2 — Leader tells followers:</b>
+        <pre class="sketch">Leader --> Follower A: "copy message 103"
+Leader --> Follower B: "copy message 103"</pre>
+
+        <b>Step 3 — Followers reply:</b>
+        <pre class="sketch">Follower A: ✓ done
+Follower B: ✓ done
+        --> Leader now knows everyone has the message</pre>
+
+        <b>Step 4 — Leader sends ACK:</b>
+        <pre class="sketch">Producer receives: SUCCESS   --> safe to continue</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R11</span><span class="q-text">What is ISR (In-Sync Replicas), and what happens when a follower falls behind?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>ISR = the followers fully caught up with the leader.</b>
+        <pre class="sketch">Leader:     offset 100
+Follower A: offset 100
+Follower B: offset 100
+
+ISR = { Leader, Follower A, Follower B }    <- everyone healthy</pre>
+        <b>If one follower falls behind:</b>
+        <pre class="sketch">Leader:     offset 105
+Follower A: offset 105
+Follower B: offset 98      <- too far behind
+
+ISR = { Leader, Follower A }     <- B removed, not trusted yet
+      (B keeps copying in the background, just not counted for acks)</pre>
+        <b>How it comes back:</b>
+        <pre class="sketch">Follower B: 98 -> 99 -> 100 -> 101 -> ... -> 105   <- catches up
+
+Kafka: "Welcome back!"
+ISR = { Leader, Follower A, Follower B }</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R12</span><span class="q-text">The three ACK modes — what's the tradeoff of each?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">acks = 0  (fastest, riskiest)
+  Producer --> send --> continue immediately, doesn't wait at all
+
+acks = 1  (safer)
+  Producer --> Leader Disk --> ACK
+  (followers may not have copied yet)
+
+acks = all  (slowest, safest)
+  Producer --> Leader --> Follower A --> Follower B --> ACK
+  (leader waits for every replica in the ISR)</pre>
+        <div class="why"><b>Why this matters:</b> this one setting is the concrete dial behind segment 1's "durability &gt; availability for money, availability &gt; durability for clicks" — <code>acks=all</code> for settlement topics, <code>acks=0</code> or <code>1</code> for low-stakes ones like UI clicks.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R13</span><span class="q-text">What if the followers disappear entirely — leader alone, min.insync.replicas=2, acks=all?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Leader:     ✓ up
+Follower A: ❌ down
+Follower B: ❌ down
+
+Only the Leader remains. Setting: min.insync.replicas=2, acks=all
+
+Kafka: ❌ "Not Enough Replicas — Write Rejected"</pre>
+        <b>Why reject instead of just accepting it anyway?</b>
+        <pre class="sketch">IF Kafka accepted the write anyway:
+  Leader saves message --> Leader crashes immediately after
+  --> no copy exists anywhere --> money transaction lost forever
+
+INSTEAD, Kafka is honest:
+  "Sorry, I cannot safely store your message. Please retry later."</pre>
+        <div class="why"><b>Why this matters:</b> refusing the write is a worse experience in the moment, but a strictly better guarantee for the business — this is exactly what protects a settlement pipeline from silently lying about durability.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R14</span><span class="q-text">Bonus, for the technically curious: what does this look like as actual pseudocode?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
         <pre class="sketch">// Leader-side state per partition
 struct PartitionState {
   log: AppendOnlyLog          // local durable segment writer
   isr: Set&lt;ReplicaId&gt;         // currently in-sync replicas, includes self
   high_watermark: Offset      // highest offset acked by ALL of isr
-  pending_acks: Map&lt;Offset, List&lt;Waiter&gt;&gt;
   lock: SingleWriterLock       // one append at a time, this partition only
 }
 
@@ -867,52 +1010,120 @@ function append(record, acks_mode):
   lock.acquire()
   offset = log.write(record)       // sequential disk write, local only
   lock.release()
-
-  if acks_mode == 0:
-    return ack_immediately()        // fire and forget
-  elif acks_mode == 1:
-    return ack_immediately()        // leader-local durability only
-  else: // acks == "all"
-    pending_acks[offset].add(current_waiter)
+  if acks_mode == "all":
     return wait_until(offset &lt;= high_watermark)   // blocks until ISR catches up
+  return ack_immediately()
 
 // 2. Follower replication loop (async, off the hot path)
 function follower_replicate_loop(follower):
   while true:
-    fetch_offset = follower.last_replicated_offset + 1
-    records = leader.log.read_from(fetch_offset)
+    records = leader.log.read_from(follower.last_replicated_offset + 1)
     follower.log.write(records)
     follower.last_replicated_offset += len(records)
-    leader.update_follower_progress(follower.id, follower.last_replicated_offset)
 
-// 3. High watermark advance + ISR membership (leader-side, periodic)
+// 3. ISR membership check (leader-side, periodic — NOT inside the append lock)
 function recompute_high_watermark_and_isr():
   for replica in isr:
-    if replica.lag_ms() &gt; replica.lag.threshold_ms:
-      isr.remove(replica)          // fell behind -> out of ISR, catch-up continues separately
-  high_watermark = min(replica.last_replicated_offset for replica in isr)
-  release_waiters_up_to(high_watermark)   // unblocks pending acks==all producers</pre>
-        <div class="why"><b>Why the append and the ISR recompute are separate functions, not one:</b> the append path needs to stay a single fast local write with a lock held for microseconds. If ISR bookkeeping (network round-trip checks, lag calculation) happened inside that same lock, every append would serialize behind the slowest follower's heartbeat — reintroducing the exact coupling segment 3 said to avoid.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R9</span><span class="q-text">The ISR shrinks to zero in-sync replicas (leader included, hypothetically) mid-write. What happens?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        With <code>min.insync.replicas</code> set (e.g. 2) and <code>acks=all</code>, the leader must <b>refuse the write</b> and return a "not enough replicas" error the moment ISR count drops below the configured minimum — it does not silently downgrade to a weaker guarantee. The producer is responsible for retry/backoff until ISR recovers.
-        <div class="why"><b>Why this matters:</b> the alternative — quietly accepting the write with fewer in-sync copies than promised — is how "the broker said it was durable" becomes "the broker lied," which is the single worst thing a log-as-source-of-truth can do for a settlement pipeline. Refusing to write is a worse user experience in the moment and a strictly better guarantee for the business. This is the concrete mechanism behind segment 1's "durability over availability" NFR for order/settlement topics.</div>
+    if replica.lag_ms() &gt; threshold_ms: isr.remove(replica)
+  high_watermark = min(replica.last_replicated_offset for replica in isr)</pre>
+        <div class="why"><b>Why append and ISR-recompute are separate functions:</b> the append path needs to stay a fast local write held under lock for microseconds. If ISR bookkeeping (network checks, lag calculation) happened inside that same lock, every append would serialize behind the slowest follower's heartbeat — exactly the coupling segment 3 said to avoid.</div>
       </div></div></div>
   </section>
 
   <!-- SEGMENT 7 -->
   <section class="segment" id="s7" style="--seg:#C1547A">
     <div class="segment-head"><span class="segment-offset">step 07</span><h2>Supporting subsystem: the consumer group coordinator</h2></div>
-    <p class="segment-note">Every distributed log needs something deciding "who reads what" as consumers join, leave, and crash. Design its loop precisely.</p>
+    <p class="segment-note">This has only one job: <b>decide which consumer reads which partition.</b> Simpler than it looks once you see it as a classroom, not a protocol.</p>
 
     <div class="build-box">
       <div class="build-label">✎ build it yourself first</div>
       <p>Design the coordinator's heartbeat/timeout/rebalance loop as precisely as you can — when does it trigger, what does it do. Then decide: should this coordinator be one centralized process per group, or a distributed protocol among the consumers themselves? Justify before revealing.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R10</span><span class="q-text">Reference: coordinator loop and the centralized-vs-distributed call.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R15</span><span class="q-text">Reference: normal working — who assigns what.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Orders Topic: Partition 0, 1, 2, 3
+Three consumers start: Consumer A, B, C
+
+               Coordinator
+                    │
+      ┌─────────────┼─────────────┐
+      │             │             │
+      ▼             ▼             ▼
+Consumer A    Consumer B    Consumer C
+
+Coordinator says:
+  A → P0
+  B → P1
+  C → P2, P3</pre>
+        <b>Consumers keep saying "I'm alive":</b>
+        <pre class="sketch">Consumer A: ❤️ ... ❤️ ... ❤️  (every few seconds)
+Coordinator updates: "last heartbeat = now"</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R16</span><span class="q-text">What happens when a consumer crashes, or a new one joins?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Consumer B crashes:</b>
+        <pre class="sketch">Consumer B stops sending heartbeats
+Coordinator waits: 5 sec ... 10 sec ... 15 sec ... still nothing
+Coordinator: "Consumer B is dead" --> removes it --> REBALANCE
+
+BEFORE:                AFTER:
+  A → P0                 A → P0, P1
+  B → P1     --dies-->    C → P2, P3
+  C → P2, P3
+
+Nobody reads Partition 1 twice. Nobody misses Partition 1.</pre>
+        <b>A new consumer D joins:</b>
+        <pre class="sketch">A, B, C already running --> D joins
+Coordinator: "let's redistribute work"
+
+New assignment:
+  A → P0
+  B → P1
+  C → P2
+  D → P3      <- everyone gets less work</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R17</span><span class="q-text">Why heartbeats — and why only ONE coordinator, not consumers deciding among themselves?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>Without heartbeats:</b>
+        <pre class="sketch">Consumer crashes --> Coordinator has no way to know
+--> Partition becomes unread FOREVER</pre>
+        <b>Without a single coordinator — consumers deciding among themselves:</b>
+        <pre class="sketch">A: "I own P1"
+B: "No, I own P1"
+C: "I think A owns P1"
+
+CHAOS -- two consumers might read the same partition,
+or nobody reads it at all.
+
+Instead: ONE coordinator --> ONE decision --> everyone follows it.</pre>
+        <div class="analogy"><b>Classroom analogy:</b> Teacher = Coordinator, Students = Consumers, Homework = Partitions.
+        <pre class="sketch">Teacher assigns:  Ankur → Math,  Rahul → Science,  Amit → English
+
+Rahul leaves --> Teacher: "Ankur, you also take Science"
+New student arrives --> Teacher redistributes the work
+
+Students don't argue among themselves. The teacher decides once, everyone follows.</pre></div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R18</span><span class="q-text">Why doesn't a single, centralized coordinator become a bottleneck?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">The Coordinator does NOT process messages.
+It only acts when:
+  - a consumer joins
+  - a consumer leaves
+  - a consumer crashes
+
+These events are RARE.
+
+Actual message flow:
+  Producer --> Broker --> Consumer     (Coordinator is NOT in this path)</pre>
+        <div class="why"><b>Why this matters:</b> the coordinator never moves data — it only decides who reads what. That's exactly why it can stay centralized without becoming a performance bottleneck; centralizing a rare, infrequent decision is cheap, while centralizing the hot data path would not be.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R19</span><span class="q-text">Bonus, for the technically curious: the coordinator loop as pseudocode.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
         <pre class="sketch">// Runs on one broker elected as coordinator for this group_id
 function coordinator_loop(group):
@@ -935,8 +1146,7 @@ function trigger_rebalance(group):
   assignment = partition_assignor(partitions, group.members)  // e.g. sticky/round-robin
   broadcast_assignment(assignment)
   group.state = STABLE</pre>
-        <b>Centralized, per group.</b> One broker acts as coordinator for a given <code>group_id</code> (chosen deterministically, e.g. by hashing the group ID to a partition of an internal topic) — not a fully distributed consensus protocol among consumers themselves.
-        <div class="why"><b>Why centralized wins here:</b> a distributed protocol among consumer instances (each independently deciding partition ownership via gossip or voting) trades one coordinator bottleneck for a harder problem — network-partition-tolerant distributed consensus, for a decision that's made infrequently (only on join/leave/crash) and needs to be fast to converge, not fast to sustain high QPS. A single coordinator broker handles this fine because rebalances are rare events, not steady-state traffic — the coordinator never sits on the hot data path. The real risk isn't the centralization, it's a <em>rebalance storm</em> (too many join/leave events too close together) — which is a tuning problem (session timeout, static membership), not an architecture problem.</div>
+        <div class="why"><b>Centralized per group, not distributed consensus:</b> one broker acts as coordinator for a given <code>group_id</code>, chosen deterministically. A fully distributed protocol among consumers (gossip/voting) trades this for network-partition-tolerant consensus — solving a much harder problem for a decision that's rare and just needs to converge fast, not sustain high QPS. The real risk isn't centralization, it's a <em>rebalance storm</em> — too many join/leave events too close together — which is a tuning problem (session timeout, static membership), not an architecture problem.</div>
       </div></div></div>
   </section>
 
@@ -950,24 +1160,39 @@ function trigger_rebalance(group):
       <p>Draw the state machine: partition states, replica states, consumer group states, and the transitions between them. Then find the "stuck forever" risk — is there any state your design could enter and never leave without a timeout forcing an exit? Write your answer before revealing.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R11</span><span class="q-text">Reference state machine.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R20</span><span class="q-text">Reference: three state machines, one at a time.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">PARTITION (per broker's view of a partition)
-  [Offline] --controller assigns--> [Becoming-Leader] --logs recovered--> [Leader]
-  [Offline] --controller assigns--> [Follower] --catches up--> [In-Sync Follower]
-  [Leader]/[Follower] --broker unreachable--> [Offline] --> controller re-elects
+        <b>A partition, from a broker's point of view:</b>
+        <pre class="sketch">[Offline] --controller assigns--> [Becoming-Leader] --logs recovered--> [Leader]
+[Offline] --controller assigns--> [Follower] --catches up--> [In-Sync Follower]
+[Leader]/[Follower] --broker unreachable--> [Offline] --> controller re-elects</pre>
 
-REPLICA (per follower, from leader's view)
-  [Catching-Up] --lag below threshold--> [In-Sync (ISR member)]
-  [In-Sync] --lag exceeds threshold--> [Catching-Up] --removed from ISR--
-  [Catching-Up] --replica never catches up (timeout)--> [Considered Dead]
+        <b>A replica, from the leader's point of view (this is the ISR dance from segment 6):</b>
+        <pre class="sketch">[Catching-Up] --lag below threshold--> [In-Sync, ISR member]
+[In-Sync] --lag exceeds threshold--> [Catching-Up] --removed from ISR--
+[Catching-Up] --never catches up (timeout)--> [Considered Dead]</pre>
 
-CONSUMER GROUP
-  [Stable] --member join/leave/crash--> [Rebalancing]
-  [Rebalancing] --new assignment broadcast + acked--> [Stable]
-  [Rebalancing] --rebalance timeout exceeded--> [Rebalancing] (retry, with backoff)</pre>
-        <b>The "stuck forever" risk:</b> without a hard ceiling, <code>[Rebalancing]</code> can theoretically loop if members keep joining/leaving faster than assignment can stabilize (a rebalance storm), and <code>[Becoming-Leader]</code> can stall if log recovery hangs on a corrupted segment.
-        <div class="why"><b>Why every state needs a timeout-forced exit:</b> a distributed system state machine that only transitions on "success" events (join succeeded, catch-up succeeded, recovery succeeded) has no way out of a state where the success event never comes. The fix in both cases is the same shape: a bounded timeout that forces a transition regardless of outcome — <code>[Becoming-Leader]</code> times out into "mark partition unavailable, alert operator" rather than hanging forever, and <code>[Rebalancing]</code> uses exponential backoff plus a max-rebalance-attempts ceiling that eventually kicks a flapping member out of the group entirely rather than blocking the whole group's progress indefinitely. Retry and idempotency plug in exactly here: every one of these forced exits is safe only because the operations being retried (fetch, produce with sequence numbers, offset commit) are idempotent — a forced retry after a timeout never double-applies an effect.</div>
+        <b>A consumer group (this is the rebalance loop from segment 7):</b>
+        <pre class="sketch">[Stable] --member join/leave/crash--> [Rebalancing]
+[Rebalancing] --new assignment broadcast + acked--> [Stable]
+[Rebalancing] --rebalance timeout exceeded--> [Rebalancing]  (retry, with backoff)</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R21</span><span class="q-text">Where's the "stuck forever" risk, and how do you close it?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">RISK 1: [Rebalancing] loops forever
+  if members keep joining/leaving faster than assignment can stabilize
+  (a "rebalance storm")
+
+RISK 2: [Becoming-Leader] stalls forever
+  if log recovery hangs on a corrupted segment</pre>
+        <b>The fix, same shape both times — a timeout that forces an exit no matter what:</b>
+        <pre class="sketch">[Becoming-Leader] --timeout--> "mark partition unavailable, alert operator"
+  (instead of hanging forever waiting for recovery to "succeed")
+
+[Rebalancing] --backoff + max-attempts ceiling--> kick the flapping member out
+  (instead of blocking the whole group's progress indefinitely)</pre>
+        <div class="why"><b>Why this matters:</b> a state machine that only moves forward on "success" events has no way out of a state where success never comes. Every forced exit above is only safe because the operation being retried afterward — fetch, produce with a sequence number, offset commit — is idempotent. A forced retry after a timeout never double-applies an effect; that's the retry/idempotency plug-in point.</div>
       </div></div></div>
   </section>
 
@@ -981,12 +1206,38 @@ CONSUMER GROUP
       <p>Decide: as broker count grows, what keeps controller/metadata decisions from becoming a coordination bottleneck? Then write one concrete metric, tied back to your segment-1 NFRs, that would tell you "it's time to scale out."</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R12</span><span class="q-text">Reference: keeping the controller/metadata layer from becoming the bottleneck.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R22</span><span class="q-text">Reference: what stops the controller from becoming the bottleneck as brokers grow?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        Two moves: (1) the controller itself runs as a small quorum (3 or 5 nodes, Raft-style — this is what KRaft replaced ZooKeeper with) rather than one node, so it's fault-tolerant without being "everyone votes on everything." (2) metadata changes are <b>batched and propagated asynchronously</b> to brokers as an event log of their own (a metadata topic), not synchronously pushed on every single change — brokers pull/cache metadata and only re-fetch on a version bump, so a metadata update doesn't mean N broker-to-controller round trips per partition change.
-        <div class="why"><b>Why this matters:</b> the naive design — every broker synchronously confirms every metadata change with the controller — turns partition count into a coordination cost multiplier: 420 partitions means 420x the chatter on every leadership change. Treating metadata itself as a log that brokers tail asynchronously converts an O(n) synchronous coordination problem into an O(1) "check my cached version" read, which is exactly the same trick the data plane uses (append-only log + independent readers) applied to the control plane.</div>
-        <b style="display:block;margin-top:10px;">Scale-out trigger metric:</b> sustained <b>under-replicated partition count &gt; 0 for more than 2 minutes</b>, or <b>controller request queue depth</b> trending upward across 3 consecutive monitoring windows — both are leading indicators that current broker/controller capacity can't keep up with metadata or replication churn, well before producer-side latency (your segment-1 p99 target) actually breaches.
-        <div class="why"><b>Why this metric and not raw CPU/disk:</b> CPU and disk usage on a healthy cluster can look fine right up until the moment replication falls behind — under-replicated partitions is the metric that's actually causally close to your durability guarantee breaking, so it gives you lead time instead of a lagging confirmation that something already went wrong.</div>
+        <b>Move 1 — a small quorum, not one node:</b>
+        <pre class="sketch">ONE controller node:
+  fast, but a single point of failure
+
+Quorum of 3-5 nodes (Raft-style — what KRaft replaced ZooKeeper with):
+  fault-tolerant, without needing "everyone votes on everything"</pre>
+
+        <b>Move 2 — treat metadata itself as a log, don't push it synchronously:</b>
+        <pre class="sketch">NAIVE (synchronous push, doesn't scale):
+  every metadata change --> controller waits for ALL brokers to confirm
+  420 partitions --> 420x the chatter on every leadership change   ✗
+
+BETTER (metadata as its own log, brokers tail it):
+  controller writes change --> metadata log
+  each broker --> reads/caches, re-fetches only on a version bump
+  metadata update becomes an O(1) "check my cached version" read   ✓</pre>
+        <div class="why"><b>Why this matters:</b> this is the exact same trick the data plane uses — append-only log + independent readers — just applied to the control plane instead of order data. The naive synchronous design turns partition count into a coordination-cost multiplier; the log-based design doesn't.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R23</span><span class="q-text">What's the one metric that tells you "it's time to scale out"?</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <pre class="sketch">Watch for:
+  under-replicated partition count > 0, sustained for 2+ minutes
+  OR
+  controller request queue depth trending up across 3+ monitoring windows
+
+NOT:
+  raw CPU / disk usage alone
+  (a cluster can look "healthy" on CPU right up until replication falls behind)</pre>
+        <div class="why"><b>Why this matters:</b> under-replicated partitions is causally close to your actual durability guarantee breaking — it gives you lead time to act, instead of a lagging confirmation that something already went wrong after your segment-1 latency target has already been breached.</div>
       </div></div></div>
   </section>
 
