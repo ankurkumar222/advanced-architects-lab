@@ -247,6 +247,33 @@ section.divider{ border-top:1px solid var(--border); }
 .reveal-a-inner strong{ color:var(--red); }
 .reveal-hint{ font-family:'JetBrains Mono', monospace; font-size:11.5px; color:var(--muted); padding:0 22px 16px; margin-top:-6px; }
 
+/* ---------- POD ANATOMY (fixed layout, no ASCII alignment issues) ---------- */
+.anatomy-pod{
+  border:1px dashed var(--border); border-radius:12px; padding:28px 24px 22px;
+  max-width:420px; margin:0 auto; position:relative;
+}
+.anatomy-pod-label{
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%);
+  background:var(--bg); padding:0 12px; font-family:'JetBrains Mono', monospace;
+  font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; white-space:nowrap;
+}
+.anatomy-box{ border-radius:8px; padding:14px 16px; text-align:center; }
+.anatomy-box.app{ background:rgba(46,196,182,0.08); border:1px solid var(--teal-dim); color:var(--teal); }
+.anatomy-box.side{ background:rgba(185,140,255,0.08); border:1px solid #5a3f8a; color:var(--purple); }
+.anatomy-name{ font-family:'JetBrains Mono', monospace; font-size:14px; font-weight:600; }
+.anatomy-sub{ font-family:'Inter', sans-serif; font-size:12px; color:var(--muted); margin-top:4px; }
+.anatomy-link{ width:2px; height:22px; background:repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 4px, transparent 4px, transparent 8px); margin:6px auto; }
+.anatomy-footer{ text-align:center; font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--muted); margin-top:18px; border-top:1px dashed var(--border); padding-top:14px; line-height:1.8; }
+
+/* ---------- ZERO TRUST DIAGRAM ---------- */
+.zt-row{ display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; }
+.zt-pod{ border:1px solid var(--border); border-radius:8px; padding:16px 20px; text-align:center; background:var(--surface); min-width:170px; }
+.zt-pod-label{ font-family:'JetBrains Mono', monospace; font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:10px; }
+.zt-app{ font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--text); background:var(--surface-2); border-radius:6px; padding:6px 0; margin-bottom:6px; }
+.zt-proxy{ font-family:'JetBrains Mono', monospace; font-size:13px; color:var(--purple); display:flex; align-items:center; justify-content:center; gap:6px; }
+.zt-link{ display:flex; flex-direction:column; align-items:center; gap:2px; font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--muted); min-width:150px; text-align:center; line-height:1.6; }
+.zt-link .glyph{ font-size:22px; color:var(--text); margin-bottom:2px; }
+
 /* ---------- RECALL ---------- */
 .flash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
 .flash-card{ perspective:1000px; height:130px; cursor:pointer; }
@@ -322,19 +349,19 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
       <h2>What's actually inside a Pod?</h2>
       <p class="lede">A Pod is never just "your app." It's one or more containers that are always scheduled together, on the same machine, sharing the same network identity.</p>
     </div>
-    <div class="diagram-block">POD  (single IP: 10.4.2.17)
-┌───────────────────────────────────┐
-│  <span class="c-mid">App Container</span>                       │
-│  listens on  <span class="c-q">localhost:8080</span>              │
-│                                     │
-│  ╌╌╌╌╌╌╌ same network namespace ╌╌╌╌╌╌╌  │
-│                                     │
-│  <span class="c-end">Sidecar Container</span>                   │
-│  listens on  <span class="c-q">localhost:9090</span>              │
-│                                     │
-│  same volumes · same lifecycle ·   │
-│  created together, killed together │
-└───────────────────────────────────┘</div>
+    <div class="anatomy-pod">
+      <div class="anatomy-pod-label">POD · single IP 10.4.2.17</div>
+      <div class="anatomy-box app">
+        <div class="anatomy-name">App Container</div>
+        <div class="anatomy-sub">listens on localhost:8080</div>
+      </div>
+      <div class="anatomy-link"></div>
+      <div class="anatomy-box side">
+        <div class="anatomy-name">Sidecar Container</div>
+        <div class="anatomy-sub">listens on localhost:9090</div>
+      </div>
+      <div class="anatomy-footer">same network namespace · same volumes · same lifecycle<br>created together, killed together</div>
+    </div>
     <p class="diagram-caption">Because they share "localhost," the sidecar can watch or intercept everything the app does — without the app calling any external service or even knowing the sidecar exists.</p>
   </section>
 
@@ -344,8 +371,12 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
       <div class="section-eyebrow">the logic behind the pattern</div>
       <h2>Why bolt on a sidecar instead of coding it into the app?</h2>
     </div>
-    <div class="intro-box">
-      Think of a motorcycle sidecar: it travels everywhere the bike goes, starts and stops with it — but it isn't the engine, and it doesn't steer. It just carries something the rider doesn't want strapped to their own back. That's the whole idea. <strong>Monitoring, logging, and network policy are not your app's job</strong> — they're concerns that repeat identically across every service, regardless of whether that service is written in Go, Java, or Python. Push them into a sidecar once, and every app inherits them for free, upgraded on its own schedule, never touching app code.
+    <div class="reveal-box">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">Why not just put logging, monitoring, and networking logic directly inside the app's own code?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Think of a motorcycle sidecar: it travels everywhere the bike goes, starts and stops with it — but it isn't the engine, and it doesn't steer. It just carries something the rider doesn't want strapped to their own back. That's the whole idea. <strong>Monitoring, logging, and network policy are not your app's job</strong> — they're concerns that repeat identically across every service, regardless of whether that service is written in Go, Java, or Python. Push them into a sidecar once, and every app inherits them for free, upgraded on its own schedule, never touching app code.</div></div>
     </div>
   </section>
 
@@ -376,7 +407,13 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
                                           ▼
                           <span class="c-client">Monitoring backend</span>
                     (Prometheus · Datadog · Grafana)</div>
-    <p class="lede" style="margin-top:16px;">Nothing here ever leaves the pod insecurely — the app never needs an outbound network call, an API key for the monitoring vendor, or any code changes when you switch monitoring tools. Swap Datadog for Prometheus by swapping the sidecar, not the app.</p>
+    <div class="reveal-box" style="margin-top:16px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">Why route metrics through a sidecar instead of just having the app call the monitoring vendor directly?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Nothing here ever leaves the pod insecurely — the app never needs an outbound network call, an API key for the monitoring vendor, or any code changes when you switch monitoring tools. Swap Datadog for Prometheus by swapping the sidecar, not the app.</div></div>
+    </div>
   </section>
 
   <!-- ================= SERVICE MESH - BEFORE/AFTER ================= -->
@@ -412,7 +449,13 @@ inside both apps</span></div>
 <span class="c-end">Payment App</span></div>
       </div>
     </div>
-    <p class="lede" style="margin-top:18px;"><strong style="color:var(--amber)">The thought-provoking part:</strong> the app's own code is <em>identical</em> in both diagrams. It still just calls <code class="mono">payment-service:8080</code>. Traffic rules injected at pod startup silently redirect that call through the sidecar first. The app is unaware the mesh even exists.</p>
+    <div class="reveal-box" style="margin-top:18px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">Compare the two diagrams above closely. What actually changed in the app's own code?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Nothing. The app's code is <em>identical</em> in both diagrams. It still just calls <code class="mono">payment-service:8080</code>. Traffic rules injected at pod startup silently redirect that call through the sidecar first. The app is unaware the mesh even exists.</div></div>
+    </div>
   </section>
 
   <!-- ================= CONTROL PLANE VS DATA PLANE ================= -->
@@ -605,7 +648,13 @@ t=41ms+  App calls now succeed normally</div>
     <div class="hop-example" style="margin-top:16px; font-size:14px; line-height:2;">route order-service:
   - destination: v1   weight: 90
   - destination: v2   weight: 10</div>
-    <p class="lede" style="margin-top:16px;">Watch v2's error rate and latency for an hour. Error rate flat? Shift to 50/50, then 100. Error rate spikes? Shift back to 100/0 in one config change — no redeploy, no rollback pipeline, no user-facing downtime.</p>
+    <div class="reveal-box" style="margin-top:16px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">What do you actually do with that 10% of traffic once it's flowing to v2?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Watch v2's error rate and latency for an hour. Error rate flat? Shift to 50/50, then 100. Error rate spikes? Shift back to 100/0 in one config change — no redeploy, no rollback pipeline, no user-facing downtime.</div></div>
+    </div>
   </section>
 
   <!-- ================= RETRY STORM / CIRCUIT BREAKER ================= -->
@@ -666,16 +715,26 @@ t=41ms+  App calls now succeed normally</div>
       <h2>Zero trust: stop assuming your own network is safe</h2>
       <p class="lede">The old model: "we're inside the VPC, traffic between our own services doesn't need encryption." The mesh model: <strong>assume any hop could be observed</strong> — encrypt everything, service-to-service, automatically.</p>
     </div>
-    <div class="diagram-block"><span class="c-end">Order Service pod</span>                    <span class="c-end">Payment Service pod</span>
-┌─────────────────┐              ┌─────────────────┐
-│  App             │              │  App             │
-│  Envoy 🔒 ────────┼──── mTLS ────┼──── 🔒 Envoy      │
-└─────────────────┘   encrypted   └─────────────────┘
-                       + mutually
-                       authenticated
-                       (cert per workload,
-                       rotated automatically)</div>
-    <p class="lede" style="margin-top:16px;">Neither app wrote a line of TLS code. Neither app even has the private key — the sidecar does, and the control plane rotates it before it ever expires. A compromised node inside your own VPC still can't read or spoof traffic between two meshed services.</p>
+    <div class="zt-row">
+      <div class="zt-pod">
+        <div class="zt-pod-label">Order Service pod</div>
+        <div class="zt-app">App</div>
+        <div class="zt-proxy">🔒 Envoy</div>
+      </div>
+      <div class="zt-link"><span class="glyph">⇄</span>mTLS encrypted<br>+ mutually authenticated<br>(cert per workload,<br>rotated automatically)</div>
+      <div class="zt-pod">
+        <div class="zt-pod-label">Payment Service pod</div>
+        <div class="zt-app">App</div>
+        <div class="zt-proxy">🔒 Envoy</div>
+      </div>
+    </div>
+    <div class="reveal-box" style="margin-top:16px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">If neither app ever touches a TLS certificate, who actually holds the private key — and what does that protect against?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">Neither app wrote a line of TLS code. Neither app even has the private key — the sidecar does, and the control plane rotates it before it ever expires. A compromised node inside your own VPC still can't read or spoof traffic between two meshed services.</div></div>
+    </div>
   </section>
 
   <!-- ================= THE HIDDEN COST ================= -->
@@ -690,7 +749,13 @@ t=41ms+  App calls now succeed normally</div>
       <div class="stat-card"><div class="stat-num">+1 hop</div><div class="stat-label">latency, every single call</div></div>
       <div class="stat-card"><div class="stat-num">500+</div><div class="stat-label">extra Envoy processes at 500-pod scale</div></div>
     </div>
-    <p class="lede" style="margin-top:18px;">At 500 pods, that's not a rounding error — it's meaningfully extra compute spend and one more process per pod that can crash, lag, or misconfigure. This is exactly why Istio's newer <strong style="color:var(--purple)">"ambient mesh"</strong> mode exists: instead of one proxy per pod, it runs one lightweight proxy per <em>node</em> (called a <code class="mono">ztunnel</code>), shared by every pod on that machine — trading a little isolation for a lot less overhead.</p>
+    <div class="reveal-box" style="margin-top:18px;">
+      <button class="reveal-q">
+        <div><span class="rq-label">think before you expand</span><span class="rq-text">At 500 pods, is this overhead actually a problem — and did anyone try to fix it?</span></div>
+        <div class="reveal-chevron">+</div>
+      </button>
+      <div class="reveal-a"><div class="reveal-a-inner">At 500 pods, that's not a rounding error — it's meaningfully extra compute spend and one more process per pod that can crash, lag, or misconfigure. This is exactly why Istio's newer <strong style="color:var(--purple)">"ambient mesh"</strong> mode exists: instead of one proxy per pod, it runs one lightweight proxy per <em>node</em> (called a <code class="mono">ztunnel</code>), shared by every pod on that machine — trading a little isolation for a lot less overhead.</div></div>
+    </div>
     <div class="compare" style="margin-top:20px;">
       <div class="compare-col a">
         <h3>Sidecar mode</h3>
