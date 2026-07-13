@@ -116,6 +116,13 @@
   .q-answer-inner .why b{color:#2E8B62;}
   body.dark-theme .q-answer-inner .why{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
   body.dark-theme .q-answer-inner .why b{color:#5FC28E;}
+  .q-answer-inner .analogy{
+    margin-top:10px;padding:10px 14px;border-radius:4px;background:#EEF2FA;border:1px solid #CBD8EE;
+    font-size:.88rem;color:#2A3B57;
+  }
+  .q-answer-inner .analogy b{color:#3A63B8;}
+  body.dark-theme .q-answer-inner .analogy{background:#141B28;border-color:#233350;color:#C4D0E8;}
+  body.dark-theme .q-answer-inner .analogy b{color:#6E96E0;}
 
   /* API CARD */
   .api-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;padding:14px 16px;}
@@ -256,39 +263,138 @@
   <!-- SEGMENT 1 -->
   <section class="segment" id="s1" style="--seg:#C9871F">
     <div class="segment-head"><span class="segment-offset">step 01</span><h2>Functional & non-functional requirements</h2></div>
-    <p class="segment-note">You're not designing "a Kafka." You're designing the log system that sits under mutual fund order flow, IPO allotment, NSDL demat sync, and MOFSL/PolicyBazaar integrations across 80+ microservices. Requirements first — everything downstream will be judged against these numbers.</p>
+    <p class="segment-note">Imagine you're building your own Kafka for a banking/wealth platform. Functional requirements say <b>what it must do</b>. Non-functional requirements say <b>how well it must do it</b>. Everything downstream will be judged against these.</p>
 
     <div class="build-box">
       <div class="build-label">✎ build it yourself first</div>
-      <p>Write your own FR list (5–7 bullets) and NFR targets with real numbers — throughput, p99 latency, your consistency/availability trade-off — for this log system inside your domain. Then write one line on what you're explicitly scoping OUT, and why leaving it out is itself a design decision.</p>
+      <p>Write your own FR list (5–7 bullets) and NFR targets with real numbers — throughput, latency, your durability/availability trade-off — for this log system inside your domain. Then write one line on what you're explicitly scoping OUT, and why leaving it out is itself a design decision.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R1</span><span class="q-text">Reference: what would a staff engineer write for FRs and NFRs here?</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R1</span><span class="q-text">Reference: the functional requirements, sketched out one at a time.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>Functional requirements</b>
-        <ul>
-          <li>Producers (order-service, nsdl-adapter, mofsl-webhook, nav-ingest) append records to named, partitioned topics.</li>
-          <li>Records within a partition are delivered to consumers in the exact order they were appended.</li>
-          <li>Multiple independent consumer groups (settlement, reporting, audit, notification) read the same topic at their own pace, without affecting each other.</li>
-          <li>A consumer can resume from its last committed position after a crash or restart — no manual replay coordination needed.</li>
-          <li>A new consumer, onboarded months later, can replay history within the retention window.</li>
-          <li>Topic and partition metadata (who's leader, what's the replica set) is discoverable by every client without a single point of failure.</li>
-          <li>Writes are acknowledged only once durably replicated to a configurable quorum — not just written to one disk.</li>
-        </ul>
-        <b>Non-functional targets</b>
-        <ul>
-          <li>Throughput: sustain 3.5k msgs/sec peak (your NAV cutoff window), steady-state 400–600/sec, headroom to 3x for surge.</li>
-          <li>Latency: p99 produce-to-durable-ack under 50ms; p99 end-to-end (produce to consumer read) under 500ms for real-time flows.</li>
-          <li>Durability &gt; availability for order/settlement topics: a partition with no in-sync replica should refuse writes rather than silently accept and risk loss.</li>
-          <li>Availability &gt; strict durability for low-stakes topics (e.g. UI click events): favor uptime, tolerate rare loss.</li>
-        </ul>
-        <div class="why"><b>Why this matters:</b> Kafka itself doesn't have one durability/availability setting — it's per-topic (<code>acks</code>, <code>min.insync.replicas</code>). Writing this out first forces you to notice that "the system" doesn't have one NFR profile; your <em>topics</em> do. That single realization drives almost every later decision.</div>
+
+        <b>1. Producers should be able to send messages</b>
+        <pre class="sketch">Order Service        \
+NSDL Adapter    -------> Kafka
+NAV Ingest            /
+MOFSL Webhook        /
+
+Each one writes into a Topic:
+  Topic: orders
+    Order #101
+    Order #102
+    Order #103</pre>
+        <div class="analogy"><b>Simple meaning:</b> any application can send data into Kafka.</div>
+
+        <b>2. Messages inside one partition should never change order</b>
+        <pre class="sketch">WRITTEN order:
+  Order Created --> Payment Received --> Order Completed
+
+MUST be READ in the same order:
+  Order Created --> Payment Received --> Order Completed
+
+NEVER like this:
+  Order Completed --> Payment Received --> Order Created   ✗</pre>
+        <div class="analogy"><b>Simple meaning:</b> whatever order messages are written in, they must be read in that same order.</div>
+
+        <b>3. Different consumers should read independently</b>
+        <pre class="sketch">                     Order Created
+                          |
+        -----------------------------------------
+        |            |            |             |
+   Settlement    Reporting      Audit      Notification
+   read till 100  read till 80  read till 20  read till 60
+
+   Nobody waits for anybody else. Nobody blocks anybody else.</pre>
+        <div class="analogy"><b>Simple meaning:</b> every consumer reads at its own speed.</div>
+
+        <b>4. Consumer should continue after restart</b>
+        <pre class="sketch">Consumer processed: [1][2][3][4][5]
+        *** crash ***
+Restart --> "where was I?" --> offset says 5 --> resume from [6]
+
+NOT from [1]. NOT from some random spot.</pre>
+        <div class="analogy"><b>Simple meaning:</b> after a crash, continue where you stopped.</div>
+
+        <b>5. New consumers should be able to read old messages</b>
+        <pre class="sketch">Jan --- Feb --- Mar --- ... --- Jul
+                                  |
+                          New Audit Service
+                          created in July
+                                  |
+                     "give me everything from Jan"
+                                  |
+                    Kafka still has it (within retention)</pre>
+        <div class="analogy"><b>Simple meaning:</b> new applications can replay old data.</div>
+
+        <b>6. Every client should know where data is stored</b>
+        <pre class="sketch">Producer: "Where is Orders Partition 2?"
+                    |
+                    v
+Kafka: "Broker 3"
+                    |
+                    v
+Producer sends DIRECTLY to Broker 3 (no guessing)</pre>
+        <div class="analogy"><b>Simple meaning:</b> clients can discover which broker owns which partition.</div>
+
+        <b>7. Don't say "success" until data is safely stored</b>
+        <pre class="sketch">Producer sends "Order Created"
+        |
+Broker 1 receives it --> crashes immediately
+
+IF Kafka already said "SUCCESS"  --> data is LOST, producer thinks it's safe ✗
+
+INSTEAD, Kafka waits:
+  Broker 1 ✓ --> Broker 2 ✓ --> Broker 3 ✓ --> NOW reply "SUCCESS"</pre>
+        <div class="analogy"><b>Simple meaning:</b> tell the producer "success" only after the data is safely replicated.</div>
+
+        <div class="why"><b>Why this matters:</b> Kafka doesn't have one durability setting for the whole cluster — it's per-topic. Writing out each FR like this, one small scene at a time, is what makes you notice that "the system" doesn't have one behavior; your <em>topics</em> do. That realization drives almost everything downstream.</div>
       </div></div></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R2</span><span class="q-text">What should you explicitly scope OUT — and why does that matter as much as what's in scope?</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R2</span><span class="q-text">Reference: the non-functional requirements, sketched out.</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+
+        <b>1. Throughput</b>
+        <pre class="sketch">Normal day:         500 msgs/sec     [====------------------]
+Busy market hours: 3,500 msgs/sec   [==============--------]
+Future growth:      10,000 msgs/sec  [======================]</pre>
+        <div class="analogy"><b>Simple meaning:</b> handle lots of messages without slowing down.</div>
+
+        <b>2. Latency</b>
+        <pre class="sketch">9:00:00.000  producer sends
+9:00:00.030  Kafka stores it        (30 ms)
+9:00:00.250  consumer receives it   (250 ms end-to-end)</pre>
+        <div class="analogy"><b>Simple meaning:</b> messages should move through Kafka very quickly.</div>
+
+        <b>3. Critical topics should never lose data</b>
+        <pre class="sketch">Topic: money.transfer
+
+Replicas available?  NO
+        |
+        v
+REJECT the write, return an error   (not: silently accept and risk loss)</pre>
+        <div class="analogy"><b>Simple meaning:</b> for important data, it's better to reject writes than lose data.</div>
+
+        <b>4. Less important topics can prioritize availability</b>
+        <pre class="sketch">Topic: ui.click.events
+
+One message lost? --> shrug, keep going, app stays online</pre>
+        <div class="analogy"><b>Simple meaning:</b> for non-critical data, staying online matters more than perfect durability.</div>
+
+        <b>Why different settings per topic?</b>
+        <pre class="sketch">Topic                    Importance     Preferred behavior
+--------------------------------------------------------------------
+payment.transactions     Very High      never lose data, even reject writes
+orders                   High           strong durability
+notifications            Medium         small delays/rare loss OK
+ui.click.events          Low            keep accepting, occasional loss OK</pre>
+        <div class="why"><b>Why this matters:</b> not one rule for the whole cluster — each topic gets its own dial. That's the concrete mechanism behind "durability &gt; availability for money, availability &gt; durability for clicks" — it's a per-topic config (<code>acks</code>, <code>min.insync.replicas</code>), not a cluster-wide switch.</div>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">What should you explicitly scope OUT — and why does that matter as much as what's in scope?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
         Scope out: <b>stream processing / joins / windowed aggregation</b> (that's a layer built <em>on</em> this system, e.g. Kafka Streams/Flink — not the log itself), <b>schema enforcement</b> (that's a registry sitting beside the broker, not inside it), and <b>exactly-once cross-topic transactions</b> (a significant added protocol on top of the base replication model).
-        <div class="why"><b>Why this matters:</b> Every one of those is a legitimate, common ask — and every one of them, if you try to build it into segment 1, will silently bend your component boundaries in segment 3 before you've even validated the core log works. Scoping out isn't laziness — it's protecting the shape of the core design from feature creep disguised as a requirement.</div>
+        <div class="why"><b>Why this matters:</b> every one of those is a legitimate, common ask — and every one of them, if you try to build it into segment 1, will silently bend your component boundaries in segment 3 before you've even validated the core log works. Scoping out isn't laziness — it's protecting the shape of the core design from feature creep disguised as a requirement.</div>
       </div></div></div>
   </section>
 
@@ -319,120 +425,385 @@
   <!-- SEGMENT 3 -->
   <section class="segment" id="s3" style="--seg:#C1543A">
     <div class="segment-head"><span class="segment-offset">step 03</span><h2>Component breakdown</h2></div>
-    <p class="segment-note">Draw your own boxes before you see the reference. The interesting question isn't what the components are — it's why some of them are <em>not allowed</em> to be the same component.</p>
+    <p class="segment-note">Think of this as designing the building blocks of your own mini-Kafka, and how data flows through them. Draw your own boxes before you see the reference — the interesting question isn't what the components are, it's why some of them are <em>not allowed</em> to be the same component.</p>
 
     <div class="build-box">
       <div class="build-label">✎ build it yourself first</div>
       <p>Sketch 5–7 boxes for your system. Then answer: why can't the hot-path append logic live in the same component as the durable replication/sync path? Write your reasoning before revealing.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R5</span><span class="q-text">Reference component diagram.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R5</span><span class="q-text">Reference: the overall picture, and each box walked through one at a time.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">+------------------+     +---------------------+
-| Producer Client  |---->| Broker: Partition    |
-| (order-service,  |     | Leader (append path) |
-|  nsdl-adapter...) |     +----------+-----------+
-+------------------+                |
-                                     v
-                        +------------------------+
-                        | Replication Manager     |
-                        | (ISR sync to followers)  |
-                        +------------+-------------+
-                                     |
-                     +---------------+---------------+
-                     v                                 v
-          +--------------------+          +--------------------+
-          | Follower Broker A  |          | Follower Broker B  |
-          +--------------------+          +--------------------+
 
-+------------------+     +---------------------+     +----------------------+
-| Consumer Client  |<----| Broker: Fetch Path   |<----| Log Segment Storage  |
-| (settlement-svc)  |     | (read from log)      |     | (append-only files)  |
-+------------------+     +---------------------+     +----------------------+
+        <b>Overall picture</b>
+        <pre class="sketch">                 PRODUCER
+                     |
+                     v
+             Append Path (Leader)
+                     |
+                     v
+          Replication Manager
+             |             |
+             v             v
+      Follower A      Follower B
 
-+---------------------------+     +----------------------------+
-| Controller / Metadata     |<--->| Consumer Group Coordinator |
-| Quorum (KRaft-style)      |     | (rebalance, offset store)  |
-+---------------------------+     +----------------------------+</pre>
-        7 boxes: <b>append path</b>, <b>replication manager</b>, <b>fetch/read path</b>, <b>log segment storage</b>, <b>controller/metadata quorum</b>, <b>consumer group coordinator</b>, and the <b>client libraries</b> (producer/consumer) that talk to all of the above.
-        <div class="why"><b>Why the append path and replication manager can't be one component:</b> the append path's only job is "write this record to my local log as fast as possible and hand back an offset" — it's a single-writer, sequential-disk-write hot path measured in microseconds. The replication manager's job is "coordinate with N other machines over the network and wait for acknowledgment" — a fundamentally different latency class (milliseconds, subject to network partitions). Fusing them means every local append blocks on network I/O, which caps your throughput at your slowest follower's network latency — exactly what segment 1's sub-50ms target can't survive. Separating them lets the leader append locally, return fast, and let replication catch up asynchronously up to the acks contract.</div>
+
+                 CONSUMER
+                     ^
+                     |
+               Fetch Path
+                     ^
+                     |
+             Log Segment Storage
+
+
+      Controller / Metadata
+               |
+               v
+    Consumer Group Coordinator</pre>
+
+        <b>1. Producer Client</b>
+        <pre class="sketch">Order Service
+NSDL Adapter    ----> "Customer bought a mutual fund" ----> Produce()
+NAV Service</pre>
+        <div class="analogy">Think of a producer as: <b>"I have data. Please save it."</b></div>
+
+        <b>2. Append Path (Leader Broker)</b>
+        <pre class="sketch">Producer --> "Order Created" --> Append Path --> writes to local disk
+
+Disk:
+  [Message 101][Message 102][Message 103]</pre>
+        <div class="analogy"><b>Analogy:</b> a cashier. Customer arrives, cashier enters the order, done — the cashier doesn't worry about delivery. Its only job: save the message as fast as possible. Nothing else.</div>
+
+        <b>3. Replication Manager</b>
+        <pre class="sketch">Leader (has message 101)
+    |
+    +---copy---> Follower A (now has message 101)
+    |
+    +---copy---> Follower B (now has message 101)
+
+If Leader crashes --> Followers already have a copy --> nothing lost</pre>
+        <div class="analogy"><b>Analogy:</b> making photocopies. Original → Copy 1 → Copy 2 → Copy 3. Its only job: make sure copies exist on other brokers.</div>
+
+        <b>4. Follower Brokers</b>
+        <pre class="sketch">Leader: [Message 101]
+   |
+   v (replicated)
+Follower A: [Message 101]
+Follower B: [Message 101]
+
+Leader dies --> Follower A promoted --> becomes new Leader</pre>
+        <div class="analogy"><b>Analogy:</b> backup hard disks.</div>
+
+        <b>5. Log Segment Storage</b>
+        <pre class="sketch">One giant notebook, never edited, only ever extended:
+
+[Offset 0][Offset 1][Offset 2][Offset 3][Offset 4] --> next write goes to [Offset 5]
+
+Old pages NEVER change. New entries only go at the end.</pre>
+        <div class="analogy"><b>Analogy:</b> a school attendance register — every new student added to the next empty line, nobody erases previous entries. This is the <b>append-only log</b>.</div>
+
+        <b>6. Fetch Path</b>
+        <pre class="sketch">Consumer --> Fetch() --> Log Storage --> returns [Message 200][201][202]</pre>
+        <div class="analogy">Consumers never read directly from producers — only from storage. Its job: read from disk, send to consumers.</div>
+
+        <b>7. Consumer Client</b>
+        <pre class="sketch">Settlement Service  --> "give me messages from offset 500" --> Kafka returns [500][501][502]
+Reporting Service   --> reads at its own pace, independently
+Audit Service        --> reads at its own pace, independently</pre>
+
+        <b>8. Controller / Metadata</b>
+        <pre class="sketch">Broker 1, Broker 2, Broker 3 ... someone has to remember:
+  - which topics exist?
+  - which partitions exist?
+  - who is Leader, who are Followers?
+
+Example:
+  orders / Partition 0 --> Leader: Broker 2, Followers: Broker 1, Broker 3</pre>
+        <div class="analogy"><b>Analogy:</b> the brain of Kafka.</div>
+
+        <b>9. Consumer Group Coordinator</b>
+        <pre class="sketch">Topic: 8 partitions
+Consumer A, B, C start
+
+Coordinator assigns:
+  A --> [0][1]
+  B --> [2][3]
+  C --> [4][5][6][7]
+
+If B crashes --> Coordinator redistributes B's partitions to A and C</pre>
+        <div class="analogy"><b>Analogy:</b> a manager assigning work to employees.</div>
+
+        <b>Complete flow</b>
+        <pre class="sketch">Producer --> Append Path --> Replication Manager --> Followers --> Log Storage --> Fetch Path --> Consumer</pre>
+      </div></div></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Why are Append Path and Replication Manager separate? (the most important decision in this whole segment)</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <b>If they were combined:</b>
+        <pre class="sketch">Producer
+   |
+   v
+Write locally (1 ms)
+   |
+   v
+Wait for Follower A ack (30 ms over network)
+   |
+   v
+Wait for Follower B ack (30 ms over network)
+   |
+   v
+Return Success
+
+TOTAL: 31+ ms, EVERY single write, blocked on network round-trips</pre>
+        <b>Separated instead:</b>
+        <pre class="sketch">STEP 1 (fast, hot path):
+Producer --> Append Path --> write to local disk --> Done   (~1 ms)
+
+STEP 2 (in parallel, independent):
+Leader --> copy to Follower A
+Leader --> copy to Follower B
+(this happens WHILE the next producer write is already being appended)</pre>
+        <table class="diff-table">
+          <tr><th>Append Path</th><th>Replication Manager</th></tr>
+          <tr><td>Writes to local disk</td><td>Talks to other brokers over network</td></tr>
+          <tr><td>Microseconds to a few ms</td><td>Tens of ms, depends on network</td></tr>
+          <tr><td>Performance-critical ("hot path")</td><td>Reliability-focused</td></tr>
+          <tr><td>Goal: write as fast as possible</td><td>Goal: keep replicas in sync</td></tr>
+        </table>
+        <div class="analogy"><b>Easy analogy — Amazon warehouse:</b>
+        <pre class="sketch">1. Truck arrives with packages.
+2. Worker scans and shelves each package immediately.        <- Append Path
+3. Another team later copies inventory to backup warehouses.  <- Replication Manager
+4. Customers order, staff pick items from shelves.             <- Fetch Path
+5. Manager tracks which warehouse stores which products.       <- Controller / Metadata
+6. Supervisor assigns picking work to different employees.     <- Consumer Group Coordinator</pre>
+        If the same worker had to scan the package, personally drive it to every backup warehouse, and only then accept the next package — the whole warehouse grinds to a halt.</div>
+        <div class="why"><b>Why this matters:</b> separating them is what lets Kafka get <b>both</b> high throughput and high durability, instead of picking one. This is also exactly why segment 1's sub-50ms latency target and 3.5k msgs/sec throughput target are both achievable at once — they'd directly conflict if append and replication were the same blocking call.</div>
       </div></div></div>
   </section>
 
   <!-- SEGMENT 4 -->
   <section class="segment" id="s4" style="--seg:#7A63B8">
     <div class="segment-head"><span class="segment-offset">step 04</span><h2>Low-level API design</h2></div>
-    <p class="segment-note">Concrete endpoints, not prose. For each: who actually calls it — a service, an operator, an autoscaler? — and what happens if it's called twice.</p>
+    <p class="segment-note">Think of Kafka like a database — a database has INSERT, SELECT, UPDATE, DELETE. Kafka needs its own doors too, so producers, consumers, and admins know exactly how to talk to the broker. Six doors, each solving one problem.</p>
 
     <div class="build-box">
       <div class="build-label">✎ build it yourself first</div>
       <p>Write 5–6 API cards of your own: method/path, purpose, caller, payload, idempotency behavior. Then decide: should authorization be scoped by team ownership, or by blast radius? Write your answer before revealing.</p>
     </div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Reference API cards — data plane and control plane.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Reference: the six doors into Kafka, one at a time.</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
 
+        <pre class="sketch">                 PRODUCER
+                     |
+                Produce()
+                     |
+          -------------------------
+          |      Kafka Broker     |
+          -------------------------
+             |             |
+        Partition 0    Partition 1
+
+Consumer -------------------------->  Fetch()
+Consumer -------------------------->  OffsetCommit()
+Consumer -------------------------->  JoinGroup()
+Admin    -------------------------->  CreateTopic()
+Producer/Consumer ------------------>  DescribeCluster()</pre>
+
         <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">Produce(topic, partition_key, payload, acks)</span></div>
+          <div class="api-line"><span class="api-method">POST</span><span class="api-path">/produce</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Append a record to a partition, chosen by hashing partition_key.</dd>
+            <dt>Purpose</dt><dd>Write a message into a topic. Without this, no application can write data.</dd>
             <dt>Caller</dt><dd>Any producer service — order-service, nsdl-adapter, nav-ingest-job.</dd>
-            <dt>Payload</dt><dd><code>{topic, key, value, headers, acks: 0|1|all}</code></dd>
-            <dt>Idempotency</dt><dd>Producer attaches a sequence number per (producer_id, partition); broker dedupes retries with the same sequence — safe to retry blindly.</dd>
           </dl>
+          <pre class="sketch">Customer buys a mutual fund unit
+      ↓
+order-service calls Produce(topic=orders, key=customer101, value={...})
+      ↓
+Kafka hashes "customer101"
+      ↓
+Partition 2
+      ↓
+message appended</pre>
+          <div class="analogy"><b>Why the key matters:</b>
+          <pre class="sketch">Customer 101 orders, all hashed the same way:
+
+  Order 1 --> hash(101) --> Partition 4
+  Order 2 --> hash(101) --> Partition 4
+  Order 3 --> hash(101) --> Partition 4
+
+Partition 4 log:  [Order 1][Order 2][Order 3]   <- stays in order</pre></div>
+          <div class="analogy"><b>Why idempotency matters:</b>
+          <pre class="sketch">Producer sends "Order Created" -----> (network blip, no response)
+Producer thinks: "maybe it never landed" -----> retries
+
+WITHOUT idempotency:
+  Partition:  [Order Created][Order Created]     <- duplicate!
+
+WITH idempotency (producer_id=100, sequence=55):
+  Kafka checks memory:  (100,55) already stored?
+     yes -> ignore retry
+  Partition:  [Order Created]                     <- safe</pre></div>
         </div>
 
         <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">Fetch(topic, partition, offset, max_bytes)</span></div>
+          <div class="api-line"><span class="api-method">GET</span><span class="api-path">/fetch</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Long-poll read of records starting at offset.</dd>
-            <dt>Caller</dt><dd>Consumer client library (inside settlement-svc, reporting-pipeline, etc).</dd>
-            <dt>Payload</dt><dd><code>{topic, partition, fetch_offset, max_wait_ms}</code></dd>
-            <dt>Idempotency</dt><dd>Naturally idempotent — a read at a fixed offset always returns the same bytes.</dd>
+            <dt>Purpose</dt><dd>Consumers need a way to read. Kafka never pushes data — the consumer always decides where to start.</dd>
+            <dt>Caller</dt><dd>Consumer client library — settlement-svc, reporting-pipeline.</dd>
           </dl>
+          <pre class="sketch">settlement-svc: "Give me messages starting from offset 200"
+Kafka returns: 200, 201, 202, 203</pre>
+          <div class="analogy"><b>Offset is just a bookmark on a book:</b>
+          <pre class="sketch">Partition (like pages in a book):
+[0][1][2][3][4][5][6][7]
+          ^
+     consumer already read up to page 3
+
+Next fetch --> "start from 4" --> Kafka returns [4][5][6][7]</pre></div>
+          <div class="analogy"><b>Why it's idempotent:</b>
+          <pre class="sketch">Fetch(offset=100) today     --> returns [100][101][102]
+Fetch(offset=100) next week --> returns [100][101][102]   <- identical, nothing changed</pre></div>
         </div>
 
         <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">OffsetCommit(group_id, topic, partition, offset)</span></div>
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">OffsetCommit()</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Persist "this group has processed up to offset" so a restart resumes correctly.</dd>
-            <dt>Caller</dt><dd>Consumer client library, on its own commit cadence (not per-record).</dd>
-            <dt>Payload</dt><dd><code>{group_id, topic, partition, offset, metadata}</code></dd>
-            <dt>Idempotency</dt><dd>Naturally idempotent — committing the same offset twice is a no-op.</dd>
+            <dt>Purpose</dt><dd>One of the most important APIs — persists "this group has processed up to here."</dd>
+            <dt>Caller</dt><dd>Consumer client library, on its own commit cadence — not per record.</dd>
           </dl>
+          <pre class="sketch">Consumer processed offsets 0,1,2,3
+Consumer tells Kafka: "I'm done till 3"</pre>
+          <div class="analogy"><b>The bookmark / crash-resume story:</b>
+          <pre class="sketch">BEFORE crash:
+  processed: [0][1][2][3]  --> OffsetCommit(offset=3) --> stored durably
+
+  *** server crashes ***
+
+AFTER restart:
+  "Where was I?"  --> read stored offset --> "3"
+  "Resume from 4"  --> Fetch(offset=4)</pre></div>
+          <div class="analogy"><b>Why we don't commit every message:</b>
+          <pre class="sketch">1,000,000 messages/sec
+
+Commit EVERY message:
+  msg -> commit -> msg -> commit -> msg -> commit ...
+  = 1,000,000 storage writes/sec   <- too slow
+
+Commit every 1,000 messages (or every 5 sec):
+  msg msg msg ... msg(1000) -> ONE commit
+  = 1,000 storage writes/sec        <- 1000x cheaper</pre></div>
         </div>
 
         <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">JoinGroup / SyncGroup(group_id, member_id)</span></div>
+          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">JoinGroup()</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Register/re-register a consumer instance in a group and receive its partition assignment.</dd>
+            <dt>Purpose</dt><dd>The one that confuses people first — decides who reads which partition.</dd>
             <dt>Caller</dt><dd>Consumer client library, on startup or after a heartbeat timeout.</dd>
-            <dt>Payload</dt><dd><code>{group_id, member_id, subscribed_topics, session_timeout_ms}</code></dd>
-            <dt>Idempotency</dt><dd>Not idempotent by nature — repeated calls can trigger repeated rebalances, which is exactly why session/heartbeat tuning matters (segment 7).</dd>
           </dl>
+          <pre class="sketch">Topic: 8 partitions
+Consumers: A, B, C — group "Payment"</pre>
+          <div class="analogy"><b>Partition assignment:</b>
+          <pre class="sketch">Topic "orders" -- 8 partitions: [0][1][2][3][4][5][6][7]
+
+Consumer A --JoinGroup--> Kafka --assigns--> [1][4][7]
+Consumer B --JoinGroup--> Kafka --assigns--> [2][5]
+Consumer C --JoinGroup--> Kafka --assigns--> [0][3][6]
+
+                (no overlap, every partition owned once)</pre></div>
+          <div class="analogy"><b>Rebalance when B dies:</b>
+          <pre class="sketch">BEFORE:                       AFTER (B dies):
+A -> [1][4][7]                A -> [1][2][4][5][7]
+B -> [2][5]        --dies-->  B -> (gone)
+C -> [0][3][6]                C -> [0][3][6]
+
+               ^ partition 2, 5 reassigned to A</pre></div>
+          <div class="analogy"><b>Why heartbeats exist separately:</b>
+          <pre class="sketch">WITHOUT heartbeat (using JoinGroup to say "I'm alive"):
+  Join -> rebalance -> Join -> rebalance -> Join -> rebalance ...
+  (expensive, disruptive)
+
+WITH heartbeat:
+  Heartbeat -> "still here" -> Heartbeat -> "still here" ...
+  (cheap, no rebalance triggered)
+  JoinGroup only fires on real join/leave/crash</pre></div>
         </div>
 
         <div class="api-card">
-          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">CreateTopic(name, partitions, replication_factor, config)</span></div>
+          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">CreateTopic()</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Control-plane call to register a new topic and allocate partitions across brokers.</dd>
-            <dt>Caller</dt><dd>A human operator or a CI/CD provisioning pipeline — never an application service directly.</dd>
-            <dt>Payload</dt><dd><code>{name, partitions, replication_factor, retention_ms, min_insync_replicas}</code></dd>
-            <dt>Idempotency</dt><dd>Not idempotent — calling twice with different partition counts must be rejected, not merged, or you silently break key-ordering guarantees for existing data.</dd>
+            <dt>Purpose</dt><dd>Admin-only. Application services never call this directly.</dd>
+            <dt>Caller</dt><dd>A human operator or a CI/CD provisioning pipeline.</dd>
           </dl>
+          <pre class="sketch">Operator: "Create topic 'orders', 8 partitions, replication 3"
+Kafka: creates orders → Partition 0...7</pre>
+          <div class="analogy"><b>Why conflicting re-creation is rejected, not merged:</b>
+          <pre class="sketch">Day 1:  orders created with 4 partitions
+        customer101 -> hash(101) % 4 -> Partition 1
+        Partition 1 log: [order-A][order-B]
+
+Day 30: someone tries "orders, 12 partitions"
+        customer101 -> hash(101) % 12 -> Partition 9   <- different!
+
+        Partition 1: [order-A][order-B]   <- old orders, stranded
+        Partition 9: [order-C]            <- new orders, different partition
+
+        Same customer's history now SPLIT across two partitions.
+        Kafka rejects the second CreateTopic call to prevent this.</pre></div>
         </div>
 
         <div class="api-card">
-          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">DescribeCluster() / Metadata(topics)</span></div>
+          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">DescribeCluster()</span></div>
           <dl class="api-grid">
-            <dt>Purpose</dt><dd>Discover current leader/replica assignment for topics — every client library calls this before Produce/Fetch and caches it.</dd>
-            <dt>Caller</dt><dd>Producer and consumer clients, plus operator tooling and monitoring.</dd>
-            <dt>Payload</dt><dd><code>{topics: [...]}</code></dd>
-            <dt>Idempotency</dt><dd>Pure read — trivially idempotent.</dd>
+            <dt>Purpose</dt><dd>Producer can't guess which broker holds a partition — it asks.</dd>
+            <dt>Caller</dt><dd>Producer and consumer clients, plus operator tooling.</dd>
           </dl>
+          <pre class="sketch">Producer: "Where is Partition 0? Who's the leader?"</pre>
+          <div class="analogy"><b>The map:</b>
+          <pre class="sketch">DescribeCluster() ------> Kafka replies:
+
+   orders / Partition 0  --> Broker 2
+   orders / Partition 1  --> Broker 5
+   orders / Partition 2  --> Broker 1
+
+Producer caches this map:
+   Produce(partition 1) --> goes DIRECTLY to Broker 5
+   (no need to ask again next time)</pre></div>
+          <div class="analogy"><b>Why it's necessary at scale:</b>
+          <pre class="sketch">Cluster with 100 brokers, no map:
+  Producer: "???" -----> which of 100 brokers do I even talk to?
+
+Cluster with DescribeCluster():
+  Producer: ask once -----> cache map -----> route directly, every time after</pre></div>
         </div>
 
-        <div class="why"><b>Why blast radius, not ownership:</b> "Who owns this API" tells you who to page. "What's the blast radius if this call is misused" tells you how to scope the token. <code>Produce</code> scoped by ownership means any order-service credential can produce to any topic that team's key happens to also have — but scoped by blast radius, a settlement-topic write credential is deliberately narrower than a low-stakes-topic write credential, because a bad write to <code>mf.order.events</code> costs far more than a bad write to a UI-click topic. <code>CreateTopic</code> and <code>DescribeCluster</code> are asymmetric for the same reason: read access is cheap to grant broadly; the ability to reshape partition layout is not.</div>
+        <div class="why"><b>Bonus — blast radius, not ownership:</b>
+        <pre class="sketch">Team owns 10 topics, including:
+  payment.transactions
+  ui.click.events
+
+Scoped by OWNERSHIP:
+  any team credential --> can write to BOTH topics
+  (a bug in analytics-service could corrupt payment data)
+
+Scoped by BLAST RADIUS:
+  payment-service credential   --> can write ONLY to payment.transactions
+  analytics-service credential --> can write ONLY to ui.click.events
+  (a leaked credential or bug damages only what it was meant to touch)</pre>
+        "Who owns this API" tells you who to page. "What's the blast radius if this call is misused" tells you how to scope the token — and that's the question that actually protects the system.</div>
+
+        <b style="display:block;margin-top:16px;">Summary table</b>
+        <table class="diff-table">
+          <tr><th>Endpoint</th><th>Think of it as</th></tr>
+          <tr><td>Produce()</td><td>Write into Kafka — store new messages</td></tr>
+          <tr><td>Fetch()</td><td>Read from Kafka — consumers retrieve messages</td></tr>
+          <tr><td>OffsetCommit()</td><td>Save a bookmark — resume after restart</td></tr>
+          <tr><td>JoinGroup()</td><td>Register for work — Kafka assigns partitions</td></tr>
+          <tr><td>CreateTopic()</td><td>Create a new table — prepare storage before data arrives</td></tr>
+          <tr><td>DescribeCluster()</td><td>Ask for a map — learn which broker owns what</td></tr>
+        </table>
       </div></div></div>
   </section>
 
