@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design a Distributed Transaction System From Scratch — A Design Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FAF9F5; --panel:#FFFFFF; --panel-2:#F2F0E8;
+    --border:#DEDACC; --text:#242420; --muted:#75736A;
+  }
+  body.dark-theme{
+    --paper:#0F1115; --panel:#161A20; --panel-2:#1C2027;
+    --border:#2A2E37; --text:#E7E3D8; --muted:#8B8F98;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
+    -webkit-font-smoothing:antialiased;transition:background .25s ease,color .25s ease;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:48px 32px 120px;}
+
+  .theme-toggle{
+    position:fixed;top:18px;right:18px;z-index:50;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);color:var(--text);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.12);
+    transition:background .25s ease,color .25s ease;
+  }
+  .theme-toggle:hover{border-color:#9A62D6;}
+  @media(max-width:600px){.theme-toggle{top:auto;bottom:18px;right:18px;}}
+
+  .ledger-strip{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-bottom:28px;border:1px solid var(--border);}
+  .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
+  .ledger-strip span:nth-child(1){background:#C1543A;} .ledger-strip span:nth-child(2){background:#C9871F;}
+  .ledger-strip span:nth-child(3){background:#6B9A44;} .ledger-strip span:nth-child(4){background:#2E8B82;}
+  .ledger-strip span:nth-child(5){background:#3480B0;} .ledger-strip span:nth-child(6){background:#7A63B8;}
+  .ledger-strip span:nth-child(7){background:#B57EDC;} .ledger-strip span:nth-child(8){background:#C1547A;}
+  .ledger-strip span:nth-child(9){background:#B9971F;} .ledger-strip span:nth-child(10){background:#279090;}
+  .ledger-strip span:nth-child(11){background:#4A5FBF;} .ledger-strip span:nth-child(12){background:#C1543A;}
+  .ledger-strip span:nth-child(13){background:#C9871F;} .ledger-strip span:nth-child(14){background:#6B9A44;}
+  .ledger-strip span:nth-child(15){background:#2E8B82;} .ledger-strip span:nth-child(16){background:#3480B0;}
+  .ledger-strip span:nth-child(17){background:#7A63B8;} .ledger-strip span:nth-child(18){background:#B57EDC;}
+  .ledger-strip span:nth-child(19){background:#C1547A;} .ledger-strip span:nth-child(20){background:#B9971F;}
+
+  header h1{font-family:'Fraunces',serif;font-weight:600;font-size:2.3rem;letter-spacing:-.5px;margin:0 0 6px;}
+  header h1 em{color:#C1543A;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 18px;max-width:70ch;}
+  .meta-bar{
+    display:flex;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:26px;
+  }
+  .meta-bar b{color:#2E8B82;}
+
+  .how-to{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
+    padding:16px 18px;margin-bottom:36px;font-size:.9rem;
+  }
+  .how-to b{color:#C1543A;}
+  .cast{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;}
+  .cast-card{
+    display:flex;align-items:center;gap:8px;font-size:.85rem;
+    background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:5px 12px 5px 6px;
+  }
+  .cast-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .cast-avatar.a{background:#C1543A;}
+  .cast-avatar.b{background:#2E8B82;}
+
+  nav{
+    position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
+    padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
+    display:flex;flex-wrap:wrap;gap:6px 12px;z-index:10;
+  }
+  body.dark-theme nav{background:rgba(15,17,21,0.94);}
+  nav a{font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-decoration:none;padding:3px 7px;border-radius:4px;font-weight:600;}
+
+  section.stage{margin-bottom:54px;scroll-margin-top:70px;border-left:3px solid var(--seg,#2E8B82);padding-left:22px;}
+  .stage-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px;}
+  .stage-num{
+    font-family:'IBM Plex Mono',monospace;font-size:.85rem;background:var(--panel-2);
+    border:1px solid var(--border);padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
+  }
+  .stage-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.4rem;margin:0;}
+
+  /* Architect A's opening challenge — always visible */
+  .a-open{
+    background:var(--panel);border:1px solid var(--border);border-left:3px solid #C1543A;
+    border-radius:6px;padding:14px 18px;margin-bottom:14px;
+  }
+  .a-open .who{font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:#C1543A;font-weight:700;margin-bottom:6px;}
+  .a-open p{margin:0;font-size:.96rem;}
+  .a-open p+p{margin-top:8px;}
+
+  .build-box{
+    background:var(--panel);border:1.5px dashed var(--seg,#2E8B82);border-radius:6px;
+    padding:12px 18px;margin-bottom:16px;
+  }
+  .build-box .build-label{
+    font-family:'IBM Plex Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--seg,#2E8B82);font-weight:700;margin-bottom:5px;
+  }
+  .build-box p{margin:0;font-size:.9rem;}
+
+  .q-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.03);}
+  .q-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none;}
+  .q-head .reveal-label{font-size:.94rem;font-weight:600;flex:1;color:var(--seg,#2E8B82);}
+  .q-toggle{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0;white-space:nowrap;border:1px solid var(--border);padding:3px 9px;border-radius:20px;}
+  .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
+  .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
+  .q-card.open .q-answer{border-top:1px solid var(--border);}
+  .q-answer-inner{padding:18px 20px 20px;}
+
+  /* dialogue turns */
+  .turn{border-radius:8px;padding:11px 15px;margin-bottom:9px;font-size:.93rem;}
+  .turn .who{font-family:'IBM Plex Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+  .turn.a{background:rgba(193,84,58,0.07);border-left:3px solid #C1543A;}
+  .turn.a .who{color:#C1543A;}
+  .turn.b{background:var(--panel);border-left:3px solid var(--seg,#2E8B82);}
+  .turn.b .who{color:var(--seg,#2E8B82);}
+  body.dark-theme .turn.a{background:rgba(193,84,58,0.12);}
+  .turn p{margin:0;} .turn p+p{margin-top:6px;}
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--seg,#2E8B82);
+    padding:12px 15px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:8px 0;
+  }
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  .turn.a pre.sketch{border-left-color:#C1543A;}
+
+  .insight{
+    margin-top:8px;padding:11px 15px;border-radius:6px;background:#EAF2ED;border:1px solid #C7DDD0;
+    font-size:.88rem;color:#2E4A3A;
+  }
+  .insight b{color:#2E8B62;}
+  body.dark-theme .insight{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .insight b{color:#5FC28E;}
+
+  .final-q{
+    margin-top:24px;padding:18px 20px;border-radius:6px;background:var(--panel);
+    border:2px solid var(--seg,#4A5FBF);font-size:.98rem;
+  }
+  .final-q b{color:var(--seg,#4A5FBF);}
+
+  .roadmap{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-top:10px;}
+  .roadmap ol{margin:8px 0 0;padding-left:20px;font-size:.88rem;color:var(--muted);columns:2;column-gap:24px;}
+  .roadmap ol li{margin-bottom:4px;break-inside:avoid;}
+
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
+  @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
+<div class="wrap">
+
+  <div class="ledger-strip">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <header>
+    <h1>Design a Distributed Transaction System <em>from scratch</em></h1>
+    <p class="sub">Not "use 2PC or Sagas to keep services consistent." Instead: two Principal Architects trading precise, checkable arguments in a design review — where nothing is allowed to be a definition, and every mechanism has to earn its place by defeating the decision before it.</p>
+    <div class="meta-bar">
+      <span><b>15 stages</b></span>
+      <span>Problem → Constraint → Trade-off → Design Decision → New Problem</span>
+    </div>
+    <div class="how-to">
+      <b>How this works:</b> Architect A is extremely skeptical and never accepts a buzzword — "atomicity," "eventual consistency," "rollback" — without demanding the exact mechanism underneath. Architect B is you, designing from first principles, grounded in a real fintech stack — mutual fund order flow spanning payment, allotment, and NSDL demat; LAMF lien-marking and disbursement; PolicyBazaar premium collection. Read A's challenge, form your own answer, then reveal to compare against the reference dialogue.
+      <div class="cast">
+        <div class="cast-card"><span class="cast-avatar a">A</span> Interviewer — skeptical, never satisfied with a buzzword</div>
+        <div class="cast-card"><span class="cast-avatar b">B</span> You — designing the system from zero, every claim must survive scrutiny</div>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#st0" style="color:#C1543A;">0 Why at all</a>
+    <a href="#st1" style="color:#C9871F;">1 Optimize for what</a>
+    <a href="#st2" style="color:#6B9A44;">2 Try/catch breaks</a>
+    <a href="#st3" style="color:#2E8B82;">3 Two-phase commit</a>
+    <a href="#st4" style="color:#3480B0;">4 The blocking proof</a>
+    <a href="#st5" style="color:#7A63B8;">5 Coordinator crash</a>
+    <a href="#st6" style="color:#B57EDC;">6 Sagas</a>
+    <a href="#st7" style="color:#C1547A;">7 Compensation isn't undo</a>
+    <a href="#st8" style="color:#B9971F;">8 Orchestration vs choreography</a>
+    <a href="#st9" style="color:#279090;">9 Idempotent steps</a>
+    <a href="#st10" style="color:#4A5FBF;">10 The isolation gap</a>
+    <a href="#st11" style="color:#C1543A;">11 Concurrent sagas</a>
+    <a href="#st12" style="color:#C9871F;">12 The outbox pattern</a>
+    <a href="#st13" style="color:#6B9A44;">13 Durable saga state</a>
+    <a href="#st14" style="color:#2E8B82;">14 System 2.0</a>
+  </nav>
+
+  <!-- STAGE 0 -->
+  <section class="stage" id="st0" style="--seg:#C1543A">
+    <div class="stage-head"><span class="stage-num">Stage 0</span><h2>Don't say "distributed transaction"</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>I don't want a distributed transaction system. Put payment, NSDL lien marking, and loan disbursement in one database, one transaction, done. Convince me you can't.</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Payment runs through a PSP. NSDL is a separate, external registry you don't operate. What does "one transaction" even mean when two of the three systems involved aren't yours to open a transaction on?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>A single database transaction requires a single database. The PSP is a separate company's system. NSDL is a separate, regulated registry. Neither exposes "join my transaction" as an API — they expose HTTP calls that either succeed or fail, on their own clock, with no shared commit log.</p>
+        <pre class="sketch">ONE DB TRANSACTION:                   REALITY:
+  BEGIN
+  debit balance                        Our ledger  -- our DB
+  mark lien                            NSDL        -- their registry, HTTP API
+  disburse loan                        PSP         -- their gateway, HTTP API
+  COMMIT (all or nothing, one disk)    THREE separate systems, THREE clocks,
+                                        no shared commit log between them</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Fine — call them one after another in your own service code. Isn't that a transaction in every sense that matters?</p></div>
+        <div class="turn b"><div class="who">B</div><p>No — it's a sequence with no undo. If the lien-marking call to NSDL succeeds and the loan-disbursement call to the bank then times out, the customer's units are now frozen and no money moved. Nothing automatically reverses the first step because there was never a shared transaction to roll back.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So name the actual problem. Not "coordinating multiple services" — the precise mechanical gap.</p></div>
+        <div class="turn b"><div class="who">B</div><p>The gap is this: the moment a business operation crosses a network boundary, there is no longer any mechanism, by default, that guarantees all its steps happen or none of them do. That guarantee has to be built — it doesn't come free the way it does inside one database engine.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> a distributed transaction system isn't a fancier database — it's the machinery that has to be built from scratch to restore a guarantee that a single database gave away for free. Every stage from here is an argument about how much of that guarantee is actually recoverable, and at what price.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 1 -->
+  <section class="stage" id="st1" style="--seg:#C9871F">
+    <div class="stage-head"><span class="stage-num">Stage 1</span><h2>What are we optimizing?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Pick exactly one: speed, availability, or atomicity. Not all three. Defend the one you pick with a consequence, not a preference.</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Compare "the operation is slow but never leaves a half-finished state" against "the operation is fast but can strand a customer's money mid-flight." Which failure would you rather explain to a regulator?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Atomicity. Not speed, not availability. A slow success is an inconvenience. A half-finished money movement — units locked, cash not moved, or the reverse — is an incident that needs a human, a reconciliation team, and possibly a regulatory disclosure.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Careful — "atomicity across systems you don't control" might be a promise you can't keep. Are you claiming true ACID atomicity, or something weaker dressed up in the same word?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Something precise, not weaker: a guarantee that the system will always know, and eventually enforce, that every step either completed or was undone — even if "undone" isn't instant. I'm not promising NSDL and the bank commit in lockstep. I'm promising the overall business operation never gets stuck half-true.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> atomicity-as-a-goal is now defined precisely enough to be checkable — not "nothing ever fails," but "failure is always eventually resolved to a known, complete state." That precise definition is what the next stage's naive attempt gets to fail against.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 2 -->
+  <section class="stage" id="st2" style="--seg:#6B9A44">
+    <div class="stage-head"><span class="stage-num">Stage 2</span><h2>The naive fix: wrap it in try/catch</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Call NSDL, call the bank. If either call throws, catch the exception and call the "undo" API for whatever already succeeded. That's a rollback. Why isn't that enough?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>The undo call is itself a network call to another system. What happens if the undo call fails too?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Then you're stuck with exactly the same unresolved-state problem, one level deeper — except now it's hidden inside a catch block that everyone assumes already "handled" it.</p>
+        <pre class="sketch">TRY:
+  mark lien on NSDL         -- SUCCEEDS
+  disburse loan via bank    -- FAILS, times out
+CATCH:
+  undo lien on NSDL         -- also FAILS (network blip)
+  -- now what? the catch block has no plan B.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So retry the undo in a loop until it works?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Retrying blindly, in-process, dies the moment the service itself crashes or restarts mid-retry — the loop, and the memory of "I still owe an undo," disappears with the process. Whatever tracks "this operation is incomplete" has to survive the failure of the code that's trying to fix it.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So the real gap isn't the rollback logic. It's that nothing durable remembers the operation is unfinished.</p></div>
+        <div class="turn b"><div class="who">B</div><p>Exactly — try/catch treats failure as a momentary exception to handle inline. What we actually need is a durable record of "this multi-step operation is in progress," one that outlives the process, so something can pick it back up no matter what crashes.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> in-memory rollback logic can't survive the failure of the very process running it. Any real solution needs a durable, external record of progress — which is the first honest requirement for a coordination protocol, not an app-code pattern.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 3 -->
+  <section class="stage" id="st3" style="--seg:#2E8B82">
+    <div class="stage-head"><span class="stage-num">Stage 3</span><h2>Two-phase commit — force agreement before anyone commits</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Design the protocol. Not the name — the actual mechanism that forces every participant to either all commit or all abort.</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If you ask every participant to commit in one single round, and one of them says no after another has already committed, can you undo the one that already committed? What does that force you to do instead?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Split it into two rounds. Round one — PREPARE — ask every participant "could you commit this, if asked?" without actually committing. Each one locks its resources and replies yes or no, but takes no irreversible action yet.</p>
+        <pre class="sketch">PHASE 1 -- PREPARE:
+  Coordinator --> NSDL:  "could you mark this lien?"  --> NSDL: "yes, locked"
+  Coordinator --> Bank:  "could you disburse this?"   --> Bank: "yes, locked"
+  Nothing IRREVERSIBLE has happened yet on either side.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>And if one of them says no?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Then round two never becomes COMMIT — it becomes ABORT, sent to everyone, and every participant releases its lock. Nothing was ever committed, so there's nothing to undo. That's the entire trick: defer the irreversible step until every participant has already agreed.</p>
+        <pre class="sketch">PHASE 2, all said YES:              PHASE 2, one said NO:
+  Coordinator --> ALL: COMMIT          Coordinator --> ALL: ABORT
+  every participant commits           every participant releases locks
+  for real, now                       nothing irreversible ever happened</pre></div>
+        <div class="turn a"><div class="who">A</div><p>What's the cost of holding every participant's resource locked through the whole first round?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Every other operation waiting on that same lien or that same account balance is now blocked, for the full round-trip time of the slowest participant. We've bought atomicity by spending availability — and that trade is about to get much worse.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> two-phase commit earns real atomicity by making everyone wait for everyone else's answer before anyone acts. That waiting is not a minor inefficiency — it's the seed of the next stage's proof that this protocol cannot avoid blocking.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 4 -->
+  <section class="stage" id="st4" style="--seg:#3480B0">
+    <div class="stage-head"><span class="stage-num">Stage 4</span><h2>The unavoidable proof: 2PC cannot be non-blocking</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>NSDL has said "yes, prepared." The bank has said "yes, prepared." Both are now holding locks, waiting for the coordinator's final word. The coordinator's network connection drops before it sends COMMIT or ABORT. What does NSDL do?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>NSDL cannot unilaterally commit — the bank might have said no and NSDL never heard about it. NSDL cannot unilaterally abort — the bank might have already committed. What third option does NSDL actually have?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>None. That's the honest, uncomfortable answer. NSDL is stuck holding the lock, unable to safely guess either direction, until the coordinator comes back — however long that takes.</p>
+        <pre class="sketch">NSDL, prepared, waiting:
+  Guess COMMIT --> if bank actually said NO, we just committed alone. WRONG.
+  Guess ABORT  --> if bank actually already COMMITTED, we're now inconsistent. WRONG.
+  Only safe move: WAIT. Lock stays held. Nobody else can touch this resource.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So say it plainly, without hedging: two-phase commit can block a resource indefinitely on a single coordinator failure.</p></div>
+        <div class="turn b"><div class="who">B</div><p>Yes. That's not an implementation bug I can engineer away — it's a structural property of the protocol. The instant you require unanimous agreement before anyone acts, you've made every participant's progress depend on hearing back from one single coordinator. There's no clever fix that removes that dependency while keeping true atomicity.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Then why does anyone still use 2PC?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Inside a single data center, with a fast, reliable network and a coordinator that restarts quickly from a durable log, the blocking window is small and rare enough to tolerate. Across an external registry like NSDL and an external bank, on the open internet, that same blocking window becomes routine, not rare — which is exactly why it stops being the right answer here.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> 2PC isn't wrong, it's mismatched — it was built for a world of fast, trusted, nearby participants, and we're operating in a world of slow, external, sometimes-hostile ones. The next stage has to ask what happens in the specific failure this stage just proved was inevitable.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 5 -->
+  <section class="stage" id="st5" style="--seg:#7A63B8">
+    <div class="stage-head"><span class="stage-num">Stage 5</span><h2>The hardest question in 2PC: does the coordinator's log actually save you?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>You'll say "the coordinator writes its decision to a durable log before crashing, so it can recover." Fine — the coordinator crashes after writing COMMIT to its log but before telling any participant. What do NSDL and the bank experience?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>The durable log protects the coordinator's own memory of the decision. Does it do anything at all for the participants who are still sitting there, blocked, with no way to read that log themselves?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Nothing changes for them in the moment. The durable log guarantees the coordinator, once it recovers, will remember and correctly re-announce COMMIT to everyone. But until that recovery happens, NSDL and the bank are exactly as blocked as before — the log protects the coordinator's memory, not the participants' wait time.</p>
+        <pre class="sketch">Coordinator log: "DECISION = COMMIT"  -- written to durable disk
+Coordinator crashes.
+NSDL:  still blocked, holding lock, no idea the decision exists
+Bank:  still blocked, holding lock, no idea the decision exists
+Coordinator recovers, reads its own log, NOW tells everyone.
+The gap between crash and recovery was pure blocked time.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So the durable log is solving the coordinator's amnesia problem, not the participants' blocking problem. Say that difference out loud — people conflate them constantly.</p></div>
+        <div class="turn b"><div class="who">B</div><p>They're genuinely different problems. Amnesia is "does the coordinator remember what it decided." Blocking is "how long do participants wait to find out." A durable log fixes the first completely. It does nothing for the second — recovery time is still whatever it takes to restart the coordinator process and reconnect to every participant.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> even a perfectly engineered 2PC coordinator, one that never loses its own memory, still leaves participants blocked for the coordinator's full recovery window. That's the real, final verdict on 2PC for this use case — the fix isn't a better coordinator, it's not requiring unanimous agreement before acting at all.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 6 -->
+  <section class="stage" id="st6" style="--seg:#B57EDC">
+    <div class="stage-head"><span class="stage-num">Stage 6</span><h2>Give up atomicity on purpose: the saga</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>If waiting for unanimous agreement is the actual disease, stop waiting for it. What do you do instead — and what do you honestly give up?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If each step commits immediately, for real, on its own — no prepare phase, no lock held for anyone else — what happens the moment a later step fails, and what has to exist to fix it?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>A saga: a sequence of independent local transactions, each one committing for real, immediately, with no cross-service lock ever held. If a later step fails, you don't roll back the earlier ones in the database sense — you run a separate compensating action that semantically undoes them.</p>
+        <pre class="sketch">SAGA (no locks held across steps):
+  Step 1: mark lien on NSDL      --> COMMITS immediately, for real
+  Step 2: disburse loan via bank --> FAILS
+  Step 3 (compensation): release lien on NSDL --> a NEW, separate transaction
+  No lock was EVER held waiting on step 2's outcome.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>You just said the quiet part — "release the lien" is not the same operation as "the lien never happened." What did you actually give up by choosing this?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Isolation, and true rollback. Between step 1 committing and the compensation running, the lien is real and visible — anyone checking that customer's units during that window sees a locked state that will, shortly, be reversed. A saga trades "never visibly inconsistent" for "never permanently stuck."</p></div>
+        <div class="insight"><b>Where this leaves us:</b> the saga isn't a free upgrade over 2PC — it's the opposite trade. 2PC hides inconsistency behind blocking; sagas expose brief, real inconsistency in exchange for never blocking at all. Whether that trade is acceptable depends entirely on whether "compensation" is actually the same as "undo" — which is the next stage's problem.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 7 -->
+  <section class="stage" id="st7" style="--seg:#C1547A">
+    <div class="stage-head"><span class="stage-num">Stage 7</span><h2>Compensation is not undo — and sometimes it can't be</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Step 3 was "send a confirmation email to the customer that their loan was approved." Step 4 fails. What's the compensating action for "the customer already read the email"?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Some actions are reversible in the database — releasing a lock, refunding a charge. Some are irreversible in the real world. Which category does a notification fall into, and what does that force you to do about ordering?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>There isn't one. You can send a follow-up "disregard our earlier message" — but that's damage control, not undo. The honest answer is that a notification is semantically irreversible, and no compensating transaction changes what already happened in the customer's inbox.</p>
+        <pre class="sketch">REVERSIBLE:                        IRREVERSIBLE:
+  lock a resource --> unlock it        send an email --> "un-send" it?
+  reserve funds  --> release them      the customer already read it.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So what's the actual design rule — not a platitude, a rule you can enforce in code review?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Irreversible steps — notifications, external settlement confirmations, anything that leaves the system's boundary permanently — must be ordered last in the saga, only after every reversible step has already succeeded. If it can't be undone, it doesn't get to run until everything undoable already has.</p>
+        <pre class="sketch">SAGA ORDERING RULE:
+  [reversible][reversible][reversible] ... [irreversible, LAST]
+  by the time the irreversible step runs, every other step
+  has already proven it will succeed or the saga never got this far.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>What if the irreversible step itself fails — the email provider times out?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Then it retries, because failing to send is recoverable — the failure mode we can't compensate for is the message actually arriving and then needing to un-arrive. A failed send is just a send that hasn't succeeded yet.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> "compensation" quietly assumed every action was reversible, and that assumption is false for a whole class of real steps. Ordering irreversible actions last isn't a nice-to-have — it's the only way the compensation model in stage 6 stays honest at all.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 8 -->
+  <section class="stage" id="st8" style="--seg:#B9971F">
+    <div class="stage-head"><span class="stage-num">Stage 8</span><h2>Who actually decides the next step?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Right now, who tells step 2 to run after step 1 succeeds — and who decides which compensations to fire when step 3 fails?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If every service listens for events from every other service and decides for itself what to do next, where does the "what's the current state of this saga" answer actually live?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Two shapes, and they fail differently. Choreography — each service publishes an event when it finishes, and listens for events to know when to act — has no single point of failure, but nobody, at any moment, can answer "what's the overall status of this loan disbursement?"</p>
+        <pre class="sketch">CHOREOGRAPHY:
+  Payment svc  --publishes--> "lien.marked"
+  Loan svc     --listens, then publishes--> "loan.disbursed"
+  Notify svc   --listens, then publishes--> "customer.notified"
+  Nobody holds the full picture. Debugging means reconstructing
+  the story from scattered logs across three services.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So centralize it. What does that cost?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Orchestration — one saga coordinator explicitly calls each step in order and explicitly triggers compensations on failure. It's fully visible and debuggable, but that coordinator is now a piece of shared infrastructure every saga depends on — a new component that can itself have bugs, and needs its own durability story.</p>
+        <pre class="sketch">ORCHESTRATION:
+  Saga Coordinator: step1 --> OK --> step2 --> FAILS
+                    --> explicitly calls compensate(step1)
+  ONE place holds "here's exactly where this saga is."</pre></div>
+        <div class="turn a"><div class="who">A</div><p>For a loan disbursement — money, compliance, audit trail — which do you actually ship, and why does that context matter?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Orchestration, because auditability isn't optional here — a regulator asking "what exactly happened to this loan and in what order" needs one authoritative timeline, not a reconstruction exercise across five services' logs. Choreography's decoupling is a genuine strength, just not the one this specific workload needs most.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> orchestration buys a single source of truth for a saga's state, at the cost of a new central component. That component now needs everything the coordinator in stage 4 needed — durability, recovery — but this time without 2PC's blocking, which is the whole reason we're here.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 9 -->
+  <section class="stage" id="st9" style="--seg:#279090">
+    <div class="stage-head"><span class="stage-num">Stage 9</span><h2>The orchestrator retries a step. Did it already run?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>The orchestrator calls "disburse loan," the response times out, and it retries. Did the first call actually fail, or did it succeed and only the response got lost? What happens if you disburse twice?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What's the minimum information the bank's disbursement API needs from the orchestrator to tell "this is a retry of a call I already processed" apart from "this is a genuinely new disbursement request"?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Every step and every compensation needs a unique, stable idempotency key — tied to the saga instance and the step, not generated fresh on each call. The bank's API stores which keys it's already processed and returns the original result instead of disbursing again.</p>
+        <pre class="sketch">Orchestrator calls disburse(saga_id=S991, step=2, idem_key="S991-step2")
+  Call 1: times out on the response, but the bank actually processed it
+  Call 2 (retry): SAME idem_key --> bank recognizes it, returns cached result
+  Money moves ONCE, no matter how many times the orchestrator retries.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Does the compensation side need the same treatment, or is "undo" naturally safe to repeat?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Same treatment, for the same reason — a retried "release the lien" compensation without its own idempotency key could double-release a lien that a different, later saga had already legitimately re-acquired. Idempotency isn't just a forward-path concern; every action a saga can take, forward or backward, needs it.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> the network's ability to lose a response but still deliver the request means every action in this design has to be safe to receive twice. That single requirement now applies uniformly to steps, compensations, and — as the next stage reveals — to anyone reading a saga's state mid-flight.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 10 -->
+  <section class="stage" id="st10" style="--seg:#4A5FBF">
+    <div class="stage-head"><span class="stage-num">Stage 10</span><h2>The isolation you gave up in stage 6 just bit a real customer</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Mid-saga, the lien is marked but the loan isn't disbursed yet. The customer opens the app and checks their mutual fund units. What do they see, and is it true?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If what they see is "technically accurate right now, but about to change," is that a bug, or an unavoidable consequence of a decision made two stages ago? What would actually fix it?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>They see their units as locked against a loan that, as far as they can tell, doesn't exist yet — no disbursed cash, no visible loan account. That's not a bug in the read path. It's the exact isolation gap stage 6 admitted to when it chose sagas over 2PC.</p>
+        <pre class="sketch">Mid-saga, real customer state:
+  NSDL: units LOCKED (lien marked, step 1 done)
+  Loan ledger: no loan record yet (step 2 not done)
+  Customer sees: "why are my units locked with no loan to show for it?"</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So fix the read path — hide locked units until the saga completes?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Hiding the lock would be worse — it would let the customer place another order against units that are, in fact, already encumbered. The honest fix is a semantic lock: the read path shows the units as "pending — loan application in progress," an explicit, named intermediate state, not silence and not a lie.</p>
+        <pre class="sketch">WITHOUT semantic state:      WITH semantic state:
+  "units: LOCKED" (why?)        "units: pending loan disbursement"
+  customer confused             customer informed, and other systems
+                                 know not to also touch these units</pre></div>
+        <div class="insight"><b>Where this leaves us:</b> a saga can't hide the intermediate state it necessarily passes through — it can only choose to name it honestly. That named "pending" state turns out to matter even more the moment a second, independent saga tries to touch the same resource — which is exactly the next stage's problem.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 11 -->
+  <section class="stage" id="st11" style="--seg:#C1543A">
+    <div class="stage-head"><span class="stage-num">Stage 11</span><h2>The hardest question: two sagas, one resource, at the same time</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>A customer starts a LAMF loan against their mutual fund units. Before that saga finishes, they also submit a redemption request for the same units, through a completely different saga. Both are in flight. What stops both from succeeding?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>The semantic "pending" state from stage 10 told readers what was happening. Does it stop a second writer from acting on the same resource, or only inform it?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Informs, not stops — a "pending" label is just a status field unless something enforces it. Without an explicit rule, the redemption saga could run its own local checks, see units that appear present, and proceed, completely unaware the loan saga has already claimed them.</p>
+        <pre class="sketch">WITHOUT enforcement:
+  Loan saga:       step1 marks lien --> units "pending loan"
+  Redemption saga: reads units --> sees them, proceeds to redeem
+  BOTH saw a valid-looking state. BOTH proceeded. Conflict.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So what actually enforces it — another distributed transaction to coordinate two sagas?</p></div>
+        <div class="turn b"><div class="who">B</div><p>No — that just reintroduces stage 4's blocking problem one layer up. The fix is a semantic lock that any saga touching a given resource must acquire as its own first, reversible step, before doing anything else — the resource itself refuses a second claim while one is already active, the same way a database row lock would, but scoped to the saga's lifetime instead of a transaction's.</p>
+        <pre class="sketch">Loan saga:       step0: ACQUIRE semantic lock on units --> granted
+Redemption saga: step0: ACQUIRE semantic lock on units --> DENIED, already held
+                 --> redemption saga fails FAST, at step 0, cleanly
+                 -- no wasted work, no silent conflict</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Isn't a semantic lock just 2PC's locking, renamed, with the same blocking risk you spent three stages escaping?</p></div>
+        <div class="turn b"><div class="who">B</div><p>The difference is scope and ownership, not the existence of a lock — 2PC held locks across a coordinator waiting on unanimous agreement from strangers; here, the resource itself owns and enforces its one lock, released the instant its own saga finishes or compensates, with no external coordinator anyone else has to wait on. Locking didn't disappear from this design. It got pushed down to exactly the one place — the contested resource — where it actually belongs.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> sagas don't eliminate the need for locking — they relocate it, from a cross-service coordinator that blocks everyone, to the resource itself, which blocks only the specific thing actually in conflict. That's a narrower, cheaper lock, not a different philosophy.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 12 -->
+  <section class="stage" id="st12" style="--seg:#C9871F">
+    <div class="stage-head"><span class="stage-num">Stage 12</span><h2>Your own database write and your own event aren't atomic either</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Step 1 writes "lien marked" to your database, then publishes a "lien.marked" event to the queue that step 2 listens on. The process crashes between the write and the publish. What happened?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>You've spent eleven stages solving atomicity between external services. Is your own database write and your own message publish somehow exempt from the exact same problem?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>No exemption — I nearly gave myself one by accident. The database write and the event publish are two separate systems, exactly like NSDL and the bank were. A crash between them leaves the database saying "lien marked" while the event that should trigger step 2 never goes out. The saga silently stalls.</p>
+        <pre class="sketch">DB write "lien marked" --> COMMITS
+*** process crashes ***
+publish "lien.marked" event --> NEVER SENT
+Saga is now stuck, forever, with no step 2 ever triggered.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So you're back to needing atomicity between two systems. Are we starting this whole argument over?</p></div>
+        <div class="turn b"><div class="who">B</div><p>No — this specific case has a narrower fix, because both writes are ours. The outbox pattern: write the event into an "outbox" table in the same local database transaction as the state change itself. One database, one real ACID transaction, so both rows commit together or neither does.</p>
+        <pre class="sketch">ONE local DB transaction:
+  UPDATE lien SET status='marked'
+  INSERT INTO outbox (event='lien.marked', payload=...)
+  COMMIT -- both rows exist, or NEITHER does. Real ACID, same DB.
+
+Separate background process reads the outbox table,
+publishes each row to the queue, marks it published.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>The background publisher can still crash after publishing but before marking the row as sent. Doesn't that create duplicates?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Yes — and that's fine, because we already solved duplicates in stage 9. The publisher can safely re-publish an outbox row it's unsure about, because every downstream consumer is required to be idempotent. The outbox guarantees at-least-once delivery; idempotency, already built, turns that into effectively-once processing.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> the outbox pattern only works because the state change and the event live in the same local database — it's a narrow, honest exploitation of real ACID where it's actually available, not a workaround for the cross-service case. And it only stays safe because idempotency, built back in stage 9, is already standing guard on the other end.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 13 -->
+  <section class="stage" id="st13" style="--seg:#6B9A44">
+    <div class="stage-head"><span class="stage-num">Stage 13</span><h2>Who remembers where every saga actually is?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>The orchestrator from stage 8 is itself just a service. It crashes mid-saga, taking down the only record of "step 2 completed, step 3 in progress." Restart it. What does it know?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If the orchestrator's saga state lived only in that process's memory, what's actually lost when it restarts — and where should that state have lived instead?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>If state lived only in memory, it knows nothing — every in-flight saga simply vanishes from the orchestrator's awareness, even though NSDL still has a lien marked and is waiting for a next step that will now never come.</p>
+        <pre class="sketch">In-memory orchestrator state:
+  saga S991: step2 done, step3 pending  -- lives in RAM
+  *** process crashes and restarts ***
+  saga S991: -- GONE. Orchestrator has no memory this saga ever existed.
+  NSDL is still holding a lien for a saga nobody is driving anymore.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So persist it to a database. Isn't that just moving the same single-point-of-failure problem you diagnosed for the 2PC coordinator back in stage 4?</p></div>
+        <div class="turn b"><div class="who">B</div><p>It's the same shape of problem, with a materially different consequence — a crashed orchestrator with durable state can restart, read its own saga log, and resume exactly where it left off, driving every step forward or backward on its own. Nothing else in the system is blocked waiting for it in the meantime, because sagas, unlike 2PC participants, never held a lock waiting on the coordinator's word.</p>
+        <pre class="sketch">Durable saga log (its own DB table):
+  saga S991: step1=DONE, step2=DONE, step3=PENDING
+  Orchestrator crashes, restarts, reads the log:
+  "resume S991 at step3" -- picks up exactly where it stopped.
+  Meanwhile: NOTHING else was blocked waiting for this recovery.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Doesn't the orchestrator's own database now need to be replicated, or you've just built a new single point of failure with extra steps?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Correct, and that's an honest final cost, not a hidden one — the saga log needs the same replication and durability discipline as any other critical store in this platform. The difference from 2PC is what happens during the gap before that durability kicks in: participants keep making local, independent progress instead of freezing in place.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> the orchestrator earns the right to be a single logical coordinator only because its state is durable and its absence never blocks anyone else — which is the one property 2PC's coordinator, back in stage 4, never had.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 14 -->
+  <section class="stage" id="st14" style="--seg:#2E8B82">
+    <div class="stage-head"><span class="stage-num">Stage 14</span><h2>System 2.0 — what would you redesign?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Last question. If you were starting today, with everything you now know, what's the one decision from this conversation you'd revisit — and what would you knowingly give up to change it?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ this one has no reference answer</div><p>This is deliberately open. Pick one stage's decision — sagas over 2PC, orchestration over choreography, semantic locking, anything — and argue what you'd change and what it costs. A real answer defends a trade-off; it doesn't just criticize.</p></div>
+
+    <div class="final-q">
+      <b>No answer key.</b> Notice what this whole conversation never did: it never said "a distributed transaction system has a coordinator, compensations, and idempotency keys" as a starting fact. Every mechanism showed up because a previous decision was caught, in the very next line, being insufficient —
+      <pre class="sketch">Problem → Constraint → Trade-off → Design Decision → New Problem → Next Design Decision</pre>
+      — not <code>Feature → Definition → Next Feature</code>. That's the real difference between reciting a saga framework's checklist and understanding why it has to look the way it does. Your answer to this last question is the actual test of which one you did.
+    </div>
+
+    <div class="roadmap">
+      <b style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Stages not covered here — extend this same format into them yourself:</b>
+      <ol>
+        <li>TCC (Try-Confirm/Cancel) as a middle ground between 2PC and sagas</li>
+        <li>Saga timeouts — how long is "still in progress" allowed to last before it's treated as failed</li>
+        <li>Cross-saga deadlock — two sagas each waiting on a semantic lock the other holds</li>
+        <li>Observability — reconstructing a saga's full timeline for a regulator, on demand</li>
+        <li>Testing sagas — simulating partial failure at every single step deliberately</li>
+        <li>Event sourcing as an alternative foundation for saga state, instead of a status table</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    // the whole conversation, compressed: crossing a network boundary erases the free atomicity a single database gave you -->
+    atomicity means failure is always eventually resolved, not that failure never happens -->
+    in-memory rollback dies with the process that's running it -->
+    two-phase commit forces agreement by making everyone wait, and waiting is what makes it block on a single coordinator's failure -->
+    a durable coordinator log fixes its own amnesia, never the participants' wait time -->
+    sagas trade blocking for brief, real, honestly-named inconsistency -->
+    compensation is not undo, and irreversible steps must run last, always -->
+    orchestration buys one true saga timeline at the cost of a new component needing its own durability -->
+    every action must survive being received twice -->
+    a saga's intermediate state has to be named, not hidden -->
+    locking didn't disappear, it moved to the resource that's actually contested -->
+    the outbox pattern only works because it exploits real ACID where real ACID still exists -->
+    a coordinator earns the right to be central only if nobody else ever has to block on its recovery -->
+    every "feature" here was a forced move, not a choice made in a vacuum.
+  </footer>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const body = document.body; const btn = document.getElementById('themeBtn');
+  body.classList.toggle('dark-theme');
+  btn.innerHTML = body.classList.contains('dark-theme') ? '☀&nbsp; Light mode' : '☾&nbsp; Dark mode';
+}
+function toggle(headEl){
+  const card = headEl.closest('.q-card');
+  const answer = card.querySelector('.q-answer');
+  const isOpen = card.classList.contains('open');
+  if(isOpen){
+    card.classList.remove('open'); answer.style.maxHeight = null;
+    headEl.querySelector('.q-toggle').textContent = 'reveal';
+  } else {
+    card.classList.add('open'); answer.style.maxHeight = answer.scrollHeight + 'px';
+    headEl.querySelector('.q-toggle').textContent = 'hide';
+  }
+}
+</script>
+</body>
+</html>
