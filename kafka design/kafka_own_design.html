@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Design Your Own Kafka — A Build Session</title>
+<title>Design Kafka From Scratch — A Design Review</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -20,10 +20,10 @@
     font-family:'IBM Plex Sans',sans-serif;line-height:1.55;
     -webkit-font-smoothing:antialiased;transition:background .25s ease,color .25s ease;
   }
-  .wrap{max-width:1040px;margin:0 auto;padding:48px 32px 120px;}
+  .wrap{max-width:920px;margin:0 auto;padding:48px 32px 120px;}
 
   .theme-toggle{
-    position:fixed;top:152px;right:14px;z-index:50;display:flex;align-items:center;gap:8px;
+    position:fixed;top:18px;right:18px;z-index:50;display:flex;align-items:center;gap:8px;
     background:var(--panel);border:1px solid var(--border);color:var(--text);
     font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
     padding:8px 14px;border-radius:20px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.12);
@@ -34,124 +34,110 @@
 
   .ledger-strip{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-bottom:28px;border:1px solid var(--border);}
   .ledger-strip span{flex:1;border-right:1px solid var(--paper);}
-  .ledger-strip span:nth-child(1){background:#C9871F;} .ledger-strip span:nth-child(2){background:#2E8B82;}
-  .ledger-strip span:nth-child(3){background:#C1543A;} .ledger-strip span:nth-child(4){background:#7A63B8;}
-  .ledger-strip span:nth-child(5){background:#3480B0;} .ledger-strip span:nth-child(6){background:#6B9A44;}
-  .ledger-strip span:nth-child(7){background:#C1547A;} .ledger-strip span:nth-child(8){background:#B9971F;}
-  .ledger-strip span:nth-child(9){background:#279090;} .ledger-strip span:nth-child(10){background:#9A62D6;}
-  .ledger-strip span:nth-child(11){background:#4A5FBF;} .ledger-strip span:nth-child(12){background:#C9871F;}
-  .ledger-strip span:nth-child(13){background:#2E8B82;} .ledger-strip span:nth-child(14){background:#C1543A;}
-  .ledger-strip span:nth-child(15){background:#7A63B8;} .ledger-strip span:nth-child(16){background:#3480B0;}
-  .ledger-strip span:nth-child(17){background:#6B9A44;} .ledger-strip span:nth-child(18){background:#C1547A;}
-  .ledger-strip span:nth-child(19){background:#B9971F;} .ledger-strip span:nth-child(20){background:#279090;}
+  .ledger-strip span:nth-child(1){background:#C1543A;} .ledger-strip span:nth-child(2){background:#C9871F;}
+  .ledger-strip span:nth-child(3){background:#6B9A44;} .ledger-strip span:nth-child(4){background:#2E8B82;}
+  .ledger-strip span:nth-child(5){background:#3480B0;} .ledger-strip span:nth-child(6){background:#7A63B8;}
+  .ledger-strip span:nth-child(7){background:#B57EDC;} .ledger-strip span:nth-child(8){background:#C1547A;}
+  .ledger-strip span:nth-child(9){background:#B9971F;} .ledger-strip span:nth-child(10){background:#279090;}
+  .ledger-strip span:nth-child(11){background:#4A5FBF;} .ledger-strip span:nth-child(12){background:#C1543A;}
+  .ledger-strip span:nth-child(13){background:#C9871F;} .ledger-strip span:nth-child(14){background:#6B9A44;}
+  .ledger-strip span:nth-child(15){background:#2E8B82;} .ledger-strip span:nth-child(16){background:#3480B0;}
+  .ledger-strip span:nth-child(17){background:#7A63B8;} .ledger-strip span:nth-child(18){background:#B57EDC;}
+  .ledger-strip span:nth-child(19){background:#C1547A;} .ledger-strip span:nth-child(20){background:#B9971F;}
 
-  header h1{font-family:'Fraunces',serif;font-weight:600;font-size:2.4rem;letter-spacing:-.5px;margin:0 0 6px;}
-  header h1 em{color:#C9871F;font-style:normal;}
-  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 20px;max-width:70ch;}
+  header h1{font-family:'Fraunces',serif;font-weight:600;font-size:2.3rem;letter-spacing:-.5px;margin:0 0 6px;}
+  header h1 em{color:#C1543A;font-style:normal;}
+  header p.sub{color:var(--muted);font-size:1rem;margin:0 0 18px;max-width:70ch;}
   .meta-bar{
-    display:flex;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--muted);
-    border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:30px;
+    display:flex;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:var(--muted);
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:26px;
   }
   .meta-bar b{color:#2E8B82;}
+
   .how-to{
     background:var(--panel-2);border:1px solid var(--border);border-radius:6px;
-    padding:16px 18px;margin-bottom:36px;font-size:.9rem;color:var(--text);
+    padding:16px 18px;margin-bottom:36px;font-size:.9rem;
   }
   .how-to b{color:#C1543A;}
+  .cast{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap;}
+  .cast-card{
+    display:flex;align-items:center;gap:8px;font-size:.85rem;
+    background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:5px 12px 5px 6px;
+  }
+  .cast-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;}
+  .cast-avatar.a{background:#C1543A;}
+  .cast-avatar.b{background:#2E8B82;}
 
   nav{
     position:sticky;top:0;background:rgba(250,249,245,0.94);backdrop-filter:blur(6px);
     padding:14px 0;margin:0 0 40px;border-bottom:1px solid var(--border);
-    display:flex;flex-wrap:wrap;gap:8px 14px;z-index:10;
+    display:flex;flex-wrap:wrap;gap:6px 12px;z-index:10;
   }
   body.dark-theme nav{background:rgba(15,17,21,0.94);}
-  nav a{font-family:'IBM Plex Mono',monospace;font-size:.7rem;text-decoration:none;padding:4px 8px;border-radius:4px;font-weight:600;}
+  nav a{font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-decoration:none;padding:3px 7px;border-radius:4px;font-weight:600;}
 
-  section.segment{margin-bottom:60px;scroll-margin-top:70px;border-left:3px solid var(--seg,#2E8B82);padding-left:22px;}
-  .segment-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
-  .segment-offset{
+  section.stage{margin-bottom:54px;scroll-margin-top:70px;border-left:3px solid var(--seg,#2E8B82);padding-left:22px;}
+  .stage-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px;}
+  .stage-num{
     font-family:'IBM Plex Mono',monospace;font-size:.85rem;background:var(--panel-2);
     border:1px solid var(--border);padding:2px 8px;border-radius:4px;color:var(--seg,#2E8B82);font-weight:600;
   }
-  .segment-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.5rem;margin:0;}
-  .segment-note{color:var(--muted);font-size:.92rem;margin:8px 0 18px;max-width:70ch;}
-  .segment-note code,p code{
-    font-family:'IBM Plex Mono',monospace;background:var(--panel-2);padding:1px 6px;
-    border-radius:3px;color:var(--seg,#C9871F);font-size:.88em;
-  }
+  .stage-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.4rem;margin:0;}
 
-  /* BUILD-IT-YOURSELF CALLOUT */
+  /* Architect A's opening challenge — always visible */
+  .a-open{
+    background:var(--panel);border:1px solid var(--border);border-left:3px solid #C1543A;
+    border-radius:6px;padding:14px 18px;margin-bottom:14px;
+  }
+  .a-open .who{font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.5px;color:#C1543A;font-weight:700;margin-bottom:6px;}
+  .a-open p{margin:0;font-size:.96rem;}
+  .a-open p+p{margin-top:8px;}
+
   .build-box{
     background:var(--panel);border:1.5px dashed var(--seg,#2E8B82);border-radius:6px;
-    padding:14px 18px;margin-bottom:20px;position:relative;
+    padding:12px 18px;margin-bottom:16px;
   }
   .build-box .build-label{
-    font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;
-    color:var(--seg,#2E8B82);font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;
+    font-family:'IBM Plex Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--seg,#2E8B82);font-weight:700;margin-bottom:5px;
   }
-  .build-box p{margin:0;font-size:.93rem;color:var(--text);}
-
-  pre.sketch{
-    background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--seg,#2E8B82);
-    padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:.76rem;color:#4A4A44;
-    overflow-x:auto;border-radius:4px;margin:0 0 20px;
-  }
-  body.dark-theme pre.sketch{color:#B7BAC2;}
+  .build-box p{margin:0;font-size:.9rem;}
 
   .q-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.03);}
-  .q-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;cursor:pointer;user-select:none;}
-  .q-tag{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:#fff;background:var(--seg,#C9871F);padding:2px 7px;border-radius:3px;flex-shrink:0;margin-top:3px;font-weight:600;}
-  .q-text{font-size:1rem;color:var(--text);flex:1;}
-  .q-toggle{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--muted);flex-shrink:0;white-space:nowrap;border:1px solid var(--border);padding:3px 9px;border-radius:20px;margin-top:1px;}
+  .q-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;user-select:none;}
+  .q-head .reveal-label{font-size:.94rem;font-weight:600;flex:1;color:var(--seg,#2E8B82);}
+  .q-toggle{font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--muted);flex-shrink:0;white-space:nowrap;border:1px solid var(--border);padding:3px 9px;border-radius:20px;}
   .q-card.open .q-toggle{color:var(--seg,#2E8B82);border-color:var(--seg,#2E8B82);}
   .q-answer{max-height:0;overflow:hidden;transition:max-height .3s ease;background:var(--panel-2);}
   .q-card.open .q-answer{border-top:1px solid var(--border);}
-  .q-answer-inner{padding:16px 18px 18px 46px;font-size:.94rem;color:#3A3934;}
-  body.dark-theme .q-answer-inner{color:#C7C2B4;}
-  .q-answer-inner b{color:var(--seg,#C9871F);}
-  .q-answer-inner .why{
-    margin-top:12px;padding:10px 14px;border-radius:4px;background:#EAF2ED;border:1px solid #C7DDD0;
+  .q-answer-inner{padding:18px 20px 20px;}
+
+  /* dialogue turns */
+  .turn{border-radius:8px;padding:11px 15px;margin-bottom:9px;font-size:.93rem;}
+  .turn .who{font-family:'IBM Plex Mono',monospace;font-size:.66rem;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+  .turn.a{background:rgba(193,84,58,0.07);border-left:3px solid #C1543A;}
+  .turn.a .who{color:#C1543A;}
+  .turn.b{background:var(--panel);border-left:3px solid var(--seg,#2E8B82);}
+  .turn.b .who{color:var(--seg,#2E8B82);}
+  body.dark-theme .turn.a{background:rgba(193,84,58,0.12);}
+  .turn p{margin:0;} .turn p+p{margin-top:6px;}
+
+  pre.sketch{
+    background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--seg,#2E8B82);
+    padding:12px 15px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:#4A4A44;
+    overflow-x:auto;border-radius:4px;margin:8px 0;
+  }
+  body.dark-theme pre.sketch{color:#B7BAC2;}
+  .turn.a pre.sketch{border-left-color:#C1543A;}
+
+  .insight{
+    margin-top:8px;padding:11px 15px;border-radius:6px;background:#EAF2ED;border:1px solid #C7DDD0;
     font-size:.88rem;color:#2E4A3A;
   }
-  .q-answer-inner .why b{color:#2E8B62;}
-  body.dark-theme .q-answer-inner .why{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
-  body.dark-theme .q-answer-inner .why b{color:#5FC28E;}
-  .q-answer-inner .analogy{
-    margin-top:10px;padding:10px 14px;border-radius:4px;background:#EEF2FA;border:1px solid #CBD8EE;
-    font-size:.88rem;color:#2A3B57;
-  }
-  .q-answer-inner .analogy b{color:#3A63B8;}
-  body.dark-theme .q-answer-inner .analogy{background:#141B28;border-color:#233350;color:#C4D0E8;}
-  body.dark-theme .q-answer-inner .analogy b{color:#6E96E0;}
-
-  /* API CARD */
-  .api-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;padding:14px 16px;}
-  .api-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
-  .api-method{font-family:'IBM Plex Mono',monospace;font-size:.72rem;font-weight:700;color:#fff;padding:2px 9px;border-radius:3px;background:var(--seg,#2E8B82);}
-  .api-path{font-family:'IBM Plex Mono',monospace;font-size:.9rem;color:var(--text);}
-  .api-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.85rem;}
-  .api-grid dt{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding-top:2px;}
-  .api-grid dd{margin:0;color:var(--text);}
-  .api-grid dd code{font-family:'IBM Plex Mono',monospace;background:var(--panel-2);padding:1px 5px;border-radius:3px;font-size:.85em;}
-
-  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 22px;}
-  .stat-card{background:var(--panel);border:1px solid var(--border);border-top:3px solid var(--seg,#C9871F);border-radius:6px;padding:14px 14px 12px;}
-  .stat-card .label{font-family:'IBM Plex Mono',monospace;font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
-  .stat-card .value{font-family:'Fraunces',serif;font-size:1.4rem;font-weight:600;margin-top:4px;}
-  .stat-card .value span{font-size:.85rem;color:var(--seg,#C9871F);font-family:'IBM Plex Mono',monospace;}
-
-  .diff-table,.topic-table{width:100%;border-collapse:collapse;font-size:.88rem;margin:10px 0 20px;}
-  .diff-table th,.topic-table th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px;}
-  .diff-table td,.topic-table td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
-  .diff-table td:first-child{color:#C1543A;width:32%;}
-  .diff-table td:last-child{color:var(--seg,#2E8B82);}
-  .topic-table td{font-family:'IBM Plex Mono',monospace;font-size:.8rem;}
-  .topic-table td:first-child{color:var(--seg,#2E8B82);}
-
-  .error-card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px 16px;margin-bottom:10px;border-left:3px solid var(--seg,#C1543A);}
-  .error-card .err-name{font-weight:600;font-size:.94rem;margin-bottom:4px;}
-  .error-card .err-fix{color:var(--muted);font-size:.87rem;}
-  .error-card .err-fix b{color:var(--seg,#2E8B82);}
+  .insight b{color:#2E8B62;}
+  body.dark-theme .insight{background:#16261E;border-color:#2A4536;color:#C7E0D2;}
+  body.dark-theme .insight b{color:#5FC28E;}
 
   .final-q{
     margin-top:24px;padding:18px 20px;border-radius:6px;background:var(--panel);
@@ -159,76 +145,15 @@
   }
   .final-q b{color:var(--seg,#4A5FBF);}
 
-  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
-  @media(max-width:600px){header h1{font-size:1.8rem;} .q-answer-inner{padding-left:18px;} section.segment{padding-left:14px;}}
+  .roadmap{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-top:10px;}
+  .roadmap ol{margin:8px 0 0;padding-left:20px;font-size:.88rem;color:var(--muted);columns:2;column-gap:24px;}
+  .roadmap ol li{margin-bottom:4px;break-inside:avoid;}
 
-  /* POMODORO TIMER */
-  .pomo-widget{
-    position:fixed;top:14px;right:14px;z-index:100;
-    display:flex;flex-direction:column;align-items:center;gap:4px;
-    background:var(--panel);border:1px solid var(--border);border-radius:14px;
-    padding:10px 12px 8px;box-shadow:0 2px 14px rgba(0,0,0,0.14);
-    transition:background .25s ease,border-color .3s ease;
-    min-width:84px;
-  }
-  .pomo-ring-wrap{position:relative;width:64px;height:64px;flex-shrink:0;}
-  .pomo-ring-wrap svg{width:64px;height:64px;display:block;}
-  .pomo-ring-time{
-    position:absolute;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:1px;pointer-events:none;
-  }
-  .pomo-ring-time .t{
-    font-family:'IBM Plex Mono',monospace;font-size:.82rem;font-weight:600;
-    color:var(--text);letter-spacing:-.5px;line-height:1;
-  }
-  .pomo-ring-time .emoji{font-size:.65rem;line-height:1;}
-  .pomo-controls{display:flex;gap:5px;margin-top:2px;}
-  .pomo-btn{
-    background:none;border:1px solid var(--border);color:var(--text);
-    font-size:.6rem;padding:3px 7px;border-radius:5px;cursor:pointer;
-    font-family:'IBM Plex Mono',monospace;font-weight:600;
-    transition:border-color .15s,color .15s;line-height:1.3;
-  }
-  .pomo-btn:hover{border-color:#2E8B82;color:#2E8B82;}
-  .pomo-status{
-    font-family:'IBM Plex Mono',monospace;font-size:.55rem;
-    color:var(--muted);letter-spacing:.8px;text-transform:uppercase;
-    transition:color .3s ease;
-  }
-  .pomo-widget.pomo-urgent .pomo-status{color:#C1543A;animation:pomoBlinkLabel 1s ease-in-out infinite;}
-  @keyframes pomoBlinkLabel{0%,100%{opacity:1}50%{opacity:.3}}
-  @keyframes pomoGlowRed{0%,100%{filter:drop-shadow(0 0 2px #C1543A)}50%{filter:drop-shadow(0 0 8px #C1543A)}}
-  @keyframes pomoPulseWidget{0%,100%{transform:scale(1)}50%{transform:scale(1.013)}}
-  @keyframes pomoShake{0%,100%{transform:translateX(0)}15%{transform:translateX(-4px)}30%{transform:translateX(4px)}45%{transform:translateX(-4px)}60%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
-  .pomo-widget.pomo-running{animation:pomoPulseWidget 2s ease-in-out infinite;}
-  .pomo-widget.pomo-urgent #pomoArc,.pomo-widget.pomo-urgent #pomoDot{animation:pomoGlowRed 1.2s ease-in-out infinite;}
-  .pomo-widget.pomo-done{border-color:#C9871F;animation:pomoShake .5s ease-in-out;}
-  @media(max-width:600px){.pomo-widget{top:auto;bottom:60px;right:14px;}}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
+  @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
 </style>
 </head>
 <body>
-<!-- POMODORO TIMER -->
-<div id="pomo" class="pomo-widget">
-  <div class="pomo-ring-wrap">
-    <svg viewBox="0 0 64 64" fill="none">
-      <circle cx="32" cy="32" r="26" stroke="var(--border)" stroke-width="4"/>
-      <circle id="pomoArc" cx="32" cy="32" r="26"
-        stroke="#2E8B82" stroke-width="4.5" stroke-linecap="round"
-        stroke-dasharray="163.36" stroke-dashoffset="0"
-        transform="rotate(-90 32 32)"/>
-      <circle id="pomoDot" cx="32" cy="6" r="3.5" fill="#2E8B82"/>
-    </svg>
-    <div class="pomo-ring-time">
-      <span class="t" id="pomoTime">25:00</span>
-      <span class="emoji" id="pomoEmoji">🍅</span>
-    </div>
-  </div>
-  <div class="pomo-controls">
-    <button class="pomo-btn" onclick="pomoToggle()" id="pomoPlayBtn">▶ start</button>
-    <button class="pomo-btn" onclick="pomoReset()">↺</button>
-  </div>
-  <div class="pomo-status" id="pomoStatus">FOCUS</div>
-</div>
 <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">☾&nbsp; Dark mode</button>
 <div class="wrap">
 
@@ -238,1116 +163,488 @@
   </div>
 
   <header>
-    <h1>Design your <em>own</em> Kafka</h1>
-    <p class="sub">Not an explainer — a build session. You design a distributed, partitioned, replicated log system from a blank page, one decision at a time, for your own wealth/mutual-fund platform's scale. Every segment starts with a callout telling you exactly what to draw or decide before you're allowed to look at the reference design.</p>
+    <h1>Design Kafka <em>from scratch</em></h1>
+    <p class="sub">Not "Kafka has brokers, topics, partitions." Instead: two Principal Architects in a design review, where nothing is allowed to be a definition — every concept has to earn its place by solving a problem the previous decision created.</p>
     <div class="meta-bar">
-      <span><b>10 segments</b></span>
-      <span>requirements → decisions → components → APIs → data → internals → subsystem → failure → scaling → assembly</span>
+      <span><b>15 stages</b></span>
+      <span>Problem → Constraint → Trade-off → Design Decision → New Problem</span>
     </div>
-    <div class="how-to"><b>How to use this:</b> Every segment opens with a dashed "build it yourself first" box. Stop there — write, sketch, or say your answer out loud before clicking reveal. The reveal is a reference design from a staff-engineer design review, not "the" answer. If your design differs but you can defend the tradeoff, you're doing this right.</div>
+    <div class="how-to">
+      <b>How this works:</b> Architect A is extremely skeptical and challenges every assumption — never accepts a buzzword ("tight coupling," "high availability") without making you explain the actual mechanism. Architect B is you, designing from first principles. Read A's challenge, form your own answer, then reveal to compare against the reference dialogue.
+      <div class="cast">
+        <div class="cast-card"><span class="cast-avatar a">A</span> Interviewer — skeptical, never satisfied with a buzzword</div>
+        <div class="cast-card"><span class="cast-avatar b">B</span> You — designing Kafka from zero, every choice must survive scrutiny</div>
+      </div>
+    </div>
   </header>
 
   <nav>
-    <a href="#s1" style="color:#C9871F;">01 Requirements</a>
-    <a href="#s2" style="color:#2E8B82;">02 Core Decision</a>
-    <a href="#s3" style="color:#C1543A;">03 Components</a>
-    <a href="#s4" style="color:#7A63B8;">04 APIs</a>
-    <a href="#s5" style="color:#3480B0;">05 Data & Sizing</a>
-    <a href="#s6" style="color:#6B9A44;">06 Core Algorithm</a>
-    <a href="#s7" style="color:#C1547A;">07 Subsystem</a>
-    <a href="#s8" style="color:#B9971F;">08 Failure & States</a>
-    <a href="#s9" style="color:#279090;">09 Scaling Itself</a>
-    <a href="#s10" style="color:#9A62D6;">10 Assembly</a>
+    <a href="#st0" style="color:#C1543A;">0 Why at all</a>
+    <a href="#st1" style="color:#C9871F;">1 Optimize for what</a>
+    <a href="#st2" style="color:#6B9A44;">2 Append-only</a>
+    <a href="#st3" style="color:#2E8B82;">3 Offsets</a>
+    <a href="#st4" style="color:#3480B0;">4 Scaling</a>
+    <a href="#st5" style="color:#7A63B8;">5 Ordering</a>
+    <a href="#st6" style="color:#B57EDC;">6 Replication</a>
+    <a href="#st7" style="color:#C1547A;">7 Duplicates</a>
+    <a href="#st8" style="color:#B9971F;">8 ISR</a>
+    <a href="#st9" style="color:#279090;">9 Leader election</a>
+    <a href="#st10" style="color:#4A5FBF;">10 Acks</a>
+    <a href="#st11" style="color:#C1543A;">11 Rebalancing</a>
+    <a href="#st12" style="color:#C9871F;">12 Pull vs push</a>
+    <a href="#st13" style="color:#6B9A44;">13 Storage internals</a>
+    <a href="#st14" style="color:#2E8B82;">14 Kafka 2.0</a>
   </nav>
 
-  <!-- SEGMENT 1 -->
-  <section class="segment" id="s1" style="--seg:#C9871F">
-    <div class="segment-head"><span class="segment-offset">step 01</span><h2>Functional & non-functional requirements</h2></div>
-    <p class="segment-note">Imagine you're building your own Kafka for a banking/wealth platform. Functional requirements say <b>what it must do</b>. Non-functional requirements say <b>how well it must do it</b>. Everything downstream will be judged against these.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Write your own FR list (5–7 bullets) and NFR targets with real numbers — throughput, latency, your durability/availability trade-off — for this log system inside your domain. Then write one line on what you're explicitly scoping OUT, and why leaving it out is itself a design decision.</p>
+  <!-- STAGE 0 -->
+  <section class="stage" id="st0" style="--seg:#C1543A">
+    <div class="stage-head"><span class="stage-num">Stage 0</span><h2>Don't say "Kafka"</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>I don't want Kafka. I want a distributed event streaming platform. Convince me we even need one.</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>An e-commerce company generates orders, payments, inventory updates, notifications, analytics events, audit logs — and every service wants these events. How would you connect them? Form your own answer before revealing.</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R1</span><span class="q-text">Reference: the functional requirements, sketched out one at a time.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Option 1: every service directly calls every other service.</p>
+        <pre class="sketch">Order
+ |------ Payment
+ |------ Analytics
+ |------ Email
+ |------ Inventory
+ |------ Fraud
+ |------ Recommendation</pre></div>
 
-        <b>1. Producers should be able to send messages</b>
-        <pre class="sketch">Order Service        \
-NSDL Adapter    -------> Kafka
-NAV Ingest            /
-MOFSL Webhook        /
+        <div class="turn a"><div class="who">A</div><p>What's wrong with that? Don't say "tight coupling." Everyone says that. Explain.</p></div>
 
-Each one writes into a Topic:
-  Topic: orders
-    Order #101
-    Order #102
-    Order #103</pre>
-        <div class="analogy"><b>Simple meaning:</b> any application can send data into Kafka.</div>
+        <div class="turn b"><div class="who">B</div><p>Order service produces one event. Today, 5 consumers. Tomorrow, 50. Now Order service is suddenly responsible for retries, failures, back pressure, consumer availability, delivery guarantees. The producer has accidentally become a messaging platform — that violates single responsibility.</p></div>
 
-        <b>2. Messages inside one partition should never change order</b>
-        <pre class="sketch">WRITTEN order:
-  Order Created --> Payment Received --> Order Completed
+        <div class="turn a"><div class="who">A</div><p>So producers shouldn't know consumers. Why?</p></div>
 
-MUST be READ in the same order:
-  Order Created --> Payment Received --> Order Completed
+        <div class="turn b"><div class="who">B</div><p>Producers create events. Consumers decide what to do with events. Those responsibilities evolve independently. If the producer knows its consumers, every new consumer requires a producer deployment. That's architectural debt.</p></div>
 
-NEVER like this:
-  Order Completed --> Payment Received --> Order Created   ✗</pre>
-        <div class="analogy"><b>Simple meaning:</b> whatever order messages are written in, they must be read in that same order.</div>
+        <div class="turn a"><div class="who">A</div><p>So introduce a broker. Why?</p></div>
 
-        <b>3. Different consumers should read independently</b>
-        <pre class="sketch">                     Order Created
-                          |
-        -----------------------------------------
-        |            |            |             |
-   Settlement    Reporting      Audit      Notification
-   read till 100  read till 80  read till 20  read till 60
+        <div class="turn b"><div class="who">B</div><p>A broker separates <em>time</em>. Producer says "I've produced something." Consumer says "I'll process it whenever I'm ready." Neither waits for the other.</p>
+        <pre class="sketch">Producer --> [Broker] --> Consumer
 
-   Nobody waits for anybody else. Nobody blocks anybody else.</pre>
-        <div class="analogy"><b>Simple meaning:</b> every consumer reads at its own speed.</div>
+Producer doesn't wait for consumer.
+Consumer doesn't wait for producer.
+Time coupling disappears.</pre></div>
 
-        <b>4. Consumer should continue after restart</b>
-        <pre class="sketch">Consumer processed: [1][2][3][4][5]
-        *** crash ***
-Restart --> "where was I?" --> offset says 5 --> resume from [6]
+        <div class="turn a"><div class="who">A</div><p>Good. But you've only solved decoupling. Now convince me this isn't just RabbitMQ.</p></div>
 
-NOT from [1]. NOT from some random spot.</pre>
-        <div class="analogy"><b>Simple meaning:</b> after a crash, continue where you stopped.</div>
+        <div class="insight"><b>Where this leaves us:</b> the broker is earned, not assumed — it exists to remove time coupling between producers and consumers. But "a broker" alone doesn't explain Kafka; it explains any message queue. Stage 1 is where the two start to diverge.</div>
+      </div></div></div>
+  </section>
 
-        <b>5. New consumers should be able to read old messages</b>
-        <pre class="sketch">Jan --- Feb --- Mar --- ... --- Jul
-                                  |
-                          New Audit Service
-                          created in July
-                                  |
-                     "give me everything from Jan"
-                                  |
-                    Kafka still has it (within retention)</pre>
-        <div class="analogy"><b>Simple meaning:</b> new applications can replay old data.</div>
+  <!-- STAGE 1 -->
+  <section class="stage" id="st1" style="--seg:#C9871F">
+    <div class="stage-head"><span class="stage-num">Stage 1</span><h2>What are we optimizing?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>What is the primary optimization goal? Choose only one: latency, memory, CPU, storage, network, throughput, durability, consistency, availability. You cannot optimize everything.</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Pick one. Then justify from hardware, not from a feature list, why that architecture naturally follows.</p></div>
 
-        <b>6. Every client should know where data is stored</b>
-        <pre class="sketch">Producer: "Where is Orders Partition 2?"
-                    |
-                    v
-Kafka: "Broker 3"
-                    |
-                    v
-Producer sends DIRECTLY to Broker 3 (no guessing)</pre>
-        <div class="analogy"><b>Simple meaning:</b> clients can discover which broker owns which partition.</div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Throughput. Not latency.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Why? Latency sounds more important.</p></div>
+        <div class="turn b"><div class="who">B</div><p>At 1 million messages/sec, saving 2 milliseconds is meaningless if your architecture can't sustain the load in the first place. Kafka was designed for massive event pipelines, not request-response systems. Throughput dominates; latency becomes secondary.</p></div>
+        <div class="turn a"><div class="who">A</div><p>If throughput is king, what architecture naturally gives maximum throughput? Don't say partitions. Think lower.</p></div>
+        <div class="turn b"><div class="who">B</div><p>Sequential writes.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Why? Explain from hardware.</p></div>
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">RANDOM WRITE:
+  find location -> move disk head/pointer -> update metadata -> maybe touch indexes
+  (expensive, unpredictable)
 
-        <b>7. Don't say "success" until data is safely stored</b>
-        <pre class="sketch">Producer sends "Order Created"
+SEQUENTIAL WRITE:
+  [existing data][NEW DATA APPENDED HERE]
+  (just append — cheap, predictable)</pre>
+        <p>Hard disks, SSDs, OS page cache, CPU caches — everything prefers sequential access. Modern SSDs are also far more efficient with sequential writes, due to lower write amplification and simpler internal management.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Then why does every database perform random writes?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Because databases optimize <em>queries</em> — "how do I find a record quickly?" Kafka optimizes <em>appends</em> — "how do I write the next record as fast as possible?" Two different goals.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> throughput-first, sequential-write-native — this single choice is the seed of almost everything that follows: append-only storage, no in-place updates, and eventually, why Kafka looks nothing like a database internally even though people compare them constantly.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 2 -->
+  <section class="stage" id="st2" style="--seg:#6B9A44">
+    <div class="stage-head"><span class="stage-num">Stage 2</span><h2>Why append-only?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Suppose every message is stored forever: M1, M2, M3, M4, M5. Why not update messages instead of just appending?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What's fundamentally different about an "event" compared to a row in a database table?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Events represent history. History should never change. "Order placed," "payment completed," "refund issued" — those are facts. Facts should be immutable.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Why is immutability important?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Because history becomes reproducible — analytics, auditing, reprocessing, disaster recovery, machine learning, all of it depends on replaying the exact same history. If history changes, truth changes.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So Kafka stores history, not state.</p></div>
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">DATABASE: stores current truth
+  Account balance: ₹40,000     <- one row, overwritten each update
+
+KAFKA: stores how truth evolved
+  [Deposit ₹10,000][Withdraw ₹5,000][Deposit ₹35,000]     <- the whole story, never overwritten</pre>
+        <p>Exactly. Databases store current truth. Kafka stores how truth evolved.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> once you accept "history, not state," append-only isn't a storage optimization anymore — it's the only model consistent with what an event actually is. This is also the moment "database vs Kafka" stops being a fair comparison; they're answering different questions.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 3 -->
+  <section class="stage" id="st3" style="--seg:#2E8B82">
+    <div class="stage-head"><span class="stage-num">Stage 3</span><h2>Why don't consumers delete messages?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Consumer finishes reading — delete the message. Simple. Why doesn't Kafka do that?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If deleting-after-read seems obviously wrong, name the exact scenario that breaks it.</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Question back: which consumer? Analytics? Audit? Fraud? Backup? A new consumer joining tomorrow?</p>
+        <pre class="sketch">Event: "Order Placed"
         |
-Broker 1 receives it --> crashes immediately
-
-IF Kafka already said "SUCCESS"  --> data is LOST, producer thinks it's safe ✗
-
-INSTEAD, Kafka waits:
-  Broker 1 ✓ --> Broker 2 ✓ --> Broker 3 ✓ --> NOW reply "SUCCESS"</pre>
-        <div class="analogy"><b>Simple meaning:</b> tell the producer "success" only after the data is safely replicated.</div>
-
-        <div class="why"><b>Why this matters:</b> Kafka doesn't have one durability setting for the whole cluster — it's per-topic. Writing out each FR like this, one small scene at a time, is what makes you notice that "the system" doesn't have one behavior; your <em>topics</em> do. That realization drives almost everything downstream.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R2</span><span class="q-text">Reference: the non-functional requirements, sketched out.</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-
-        <b>1. Throughput</b>
-        <pre class="sketch">Normal day:         500 msgs/sec     [====------------------]
-Busy market hours: 3,500 msgs/sec   [==============--------]
-Future growth:      10,000 msgs/sec  [======================]</pre>
-        <div class="analogy"><b>Simple meaning:</b> handle lots of messages without slowing down.</div>
-
-        <b>2. Latency</b>
-        <pre class="sketch">9:00:00.000  producer sends
-9:00:00.030  Kafka stores it        (30 ms)
-9:00:00.250  consumer receives it   (250 ms end-to-end)</pre>
-        <div class="analogy"><b>Simple meaning:</b> messages should move through Kafka very quickly.</div>
-
-        <b>3. Critical topics should never lose data</b>
-        <pre class="sketch">Topic: money.transfer
-
-Replicas available?  NO
-        |
-        v
-REJECT the write, return an error   (not: silently accept and risk loss)</pre>
-        <div class="analogy"><b>Simple meaning:</b> for important data, it's better to reject writes than lose data.</div>
-
-        <b>4. Less important topics can prioritize availability</b>
-        <pre class="sketch">Topic: ui.click.events
-
-One message lost? --> shrug, keep going, app stays online</pre>
-        <div class="analogy"><b>Simple meaning:</b> for non-critical data, staying online matters more than perfect durability.</div>
-
-        <b>Why different settings per topic?</b>
-        <pre class="sketch">Topic                    Importance     Preferred behavior
---------------------------------------------------------------------
-payment.transactions     Very High      never lose data, even reject writes
-orders                   High           strong durability
-notifications            Medium         small delays/rare loss OK
-ui.click.events          Low            keep accepting, occasional loss OK</pre>
-        <div class="why"><b>Why this matters:</b> not one rule for the whole cluster — each topic gets its own dial. That's the concrete mechanism behind "durability &gt; availability for money, availability &gt; durability for clicks" — it's a per-topic config (<code>acks</code>, <code>min.insync.replicas</code>), not a cluster-wide switch.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">What should you explicitly scope OUT — and why does that matter as much as what's in scope?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        Scope out: <b>stream processing / joins / windowed aggregation</b> (that's a layer built <em>on</em> this system, e.g. Kafka Streams/Flink — not the log itself), <b>schema enforcement</b> (that's a registry sitting beside the broker, not inside it), and <b>exactly-once cross-topic transactions</b> (a significant added protocol on top of the base replication model).
-        <div class="why"><b>Why this matters:</b> every one of those is a legitimate, common ask — and every one of them, if you try to build it into segment 1, will silently bend your component boundaries in segment 3 before you've even validated the core log works. Scoping out isn't laziness — it's protecting the shape of the core design from feature creep disguised as a requirement.</div>
+   -----+------+------+---------+
+   |     |      |      |        |
+Analytics Audit Fraud Backup  (new consumer, joins next month)</pre>
+        <p>Different consumers move at different speeds. Deleting after the first read destroys history for everyone else.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So who owns progress?</p></div>
+        <div class="turn b"><div class="who">B</div><p>The consumer. Not the broker. Broker owns data. Consumer owns position. That's why offsets belong to consumers, not to Kafka.</p></div>
+        <div class="turn a"><div class="who">A</div><p>That decision changes everything.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> this single reframing — "position is the consumer's problem, not the broker's" — is what makes replay, multiple independent consumer groups, and late-joining consumers all fall out for free, instead of needing to be bolted on as separate features.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 2 -->
-  <section class="segment" id="s2" style="--seg:#2E8B82">
-    <div class="segment-head"><span class="segment-offset">step 02</span><h2>Scope & the core design decision</h2></div>
-    <p class="segment-note">One or two decisions here will shape every segment after this. Get them wrong and you'll be fighting your own architecture by segment 6.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Commit, in writing, to: (1) your ordering guarantee scope — global or per-partition-key? (2) your delivery semantics — at-least-once, at-most-once, or exactly-once, and where the cost of that choice lands. Justify both against your own segment-1 numbers before revealing.</p>
+  <!-- STAGE 4 -->
+  <section class="stage" id="st4" style="--seg:#3480B0">
+    <div class="stage-head"><span class="stage-num">Stage 4</span><h2>The real scaling problem</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>One log. One machine. Can we scale forever?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What exactly does "partitions" solve — and what's the hidden cost of having too many of them?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R3</span><span class="q-text">Reference decision — ordering scope.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>Per-partition-key ordering only.</b> No global order across a whole topic.
-        <pre class="sketch">GLOBAL ORDER (one writer for the whole topic):
-  Topic: [msg1][msg2][msg3][msg4][msg5]   <- single line, single writer
-  Throughput capped at ONE partition's worth of I/O
+        <div class="turn b"><div class="who">B</div><p>No. Eventually CPU, disk, NIC, memory all saturate. We need horizontal scaling.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Most people immediately say "partitions." I don't want that answer. Tell me what problem partitions actually solve.</p></div>
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">BEFORE:                        AFTER:
+  1 log                          100 logs
+  1 writer                       100 writers
 
-PER-PARTITION-KEY ORDER (what we pick):
-  Partition 0 (key=folio_A): [A1][A2][A3]     <- always in order for folio_A
-  Partition 1 (key=folio_B): [B1][B2][B3]     <- always in order for folio_B
-  Partition 2 (key=folio_C): [C1][C2]         <- always in order for folio_C
+Concurrency appears naturally — each log is independent.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Now challenge yourself. If partitions increase parallelism, why not create 100,000 partitions?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Because partitions aren't free. Every partition carries:</p>
+        <pre class="sketch">per partition:
+  - metadata
+  - leader election state
+  - replication state
+  - network connections
+  - open files
+  - page cache usage
+  - memory overhead
 
-  Many partitions write in PARALLEL -> throughput scales
-  But there's no single line across all of them -> no global order</pre>
-        <div class="why"><b>Why this matters:</b> global order needs one writer for the whole topic — that single-lane bottleneck directly breaks segment 1's throughput target. Routing every event for a key to the same partition gives you order exactly where it's needed (per folio, per account) without paying for order where it isn't (across unrelated customers).</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R4</span><span class="q-text">Reference decision — delivery semantics.</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <b>At-least-once everywhere, by default.</b> Exactly-once only opt-in, for the narrow slice that truly can't tolerate a duplicate (settlement writes).
-        <pre class="sketch">AT-LEAST-ONCE (default, cheap):
-  message sent -> maybe delivered twice on retry -> consumer must dedupe
-  cost: consumer does idempotent writes            speed: fast
-
-EXACTLY-ONCE (opt-in, expensive):
-  message sent -> transactional producer + read-committed consumer
-  cost: extra coordination on EVERY write           speed: slower
-
-  Applying exactly-once to EVERY topic:
-    ui.click.events   <- pays exactly-once tax it never needed  ✗
-    settlement.writes <- actually needs it                       ✓</pre>
-        <div class="why"><b>Why this matters:</b> making exactly-once the platform default means every topic — including low-stakes ones like UI clicks — pays extra latency for a guarantee most of them never asked for. Opt-in per topic keeps the platform's baseline fast and lets the rare, genuinely expensive requirement pay for itself.</div>
+100,000 partitions -> 100,000x this overhead
+Eventually coordination cost EXCEEDS throughput gain.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Exactly. Architecture is always balancing one bottleneck against another.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> partitions aren't a free scaling dial — they're a trade of coordination overhead for parallelism. Every later stage that touches partition count (sizing, rebalancing, controller load) is really just this same trade-off showing up again in a new place.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 3 -->
-  <section class="segment" id="s3" style="--seg:#C1543A">
-    <div class="segment-head"><span class="segment-offset">step 03</span><h2>Component breakdown</h2></div>
-    <p class="segment-note">Think of this as designing the building blocks of your own mini-Kafka, and how data flows through them. Draw your own boxes before you see the reference — the interesting question isn't what the components are, it's why some of them are <em>not allowed</em> to be the same component.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Sketch 5–7 boxes for your system. Then answer: why can't the hot-path append logic live in the same component as the durable replication/sync path? Write your reasoning before revealing.</p>
+  <!-- STAGE 5 -->
+  <section class="stage" id="st5" style="--seg:#7A63B8">
+    <div class="stage-head"><span class="stage-num">Stage 5</span><h2>Ordering</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>The CEO says "I want perfect ordering." Can you give it?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Can you have both perfect global ordering and massive parallel throughput? If not, why not — in one sentence?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R5</span><span class="q-text">Reference: the overall picture, and each box walked through one at a time.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Yes — one partition.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Can you still do 5 million messages/sec?</p></div>
+        <div class="turn b"><div class="who">B</div><p>No. One ordered stream means one serialization point.</p>
+        <pre class="sketch">GLOBAL ORDER:               MASSIVE PARALLELISM:
+  [1 log][1 writer]           [log][log][log]...[log]
+  perfectly ordered           100 independent writers
+  throughput capped              no single global order
 
-        <b>Overall picture</b>
-        <pre class="sketch">                 PRODUCER
-                     |
-                     v
-             Append Path (Leader)
-                     |
-                     v
-          Replication Manager
-             |             |
-             v             v
-      Follower A      Follower B
-
-
-                 CONSUMER
-                     ^
-                     |
-               Fetch Path
-                     ^
-                     |
-             Log Segment Storage
-
-
-      Controller / Metadata
-               |
-               v
-    Consumer Group Coordinator</pre>
-
-        <b>1. Producer Client</b>
-        <pre class="sketch">Order Service
-NSDL Adapter    ----> "Customer bought a mutual fund" ----> Produce()
-NAV Service</pre>
-        <div class="analogy">Think of a producer as: <b>"I have data. Please save it."</b></div>
-
-        <b>2. Append Path (Leader Broker)</b>
-        <pre class="sketch">Producer --> "Order Created" --> Append Path --> writes to local disk
-
-Disk:
-  [Message 101][Message 102][Message 103]</pre>
-        <div class="analogy"><b>Analogy:</b> a cashier. Customer arrives, cashier enters the order, done — the cashier doesn't worry about delivery. Its only job: save the message as fast as possible. Nothing else.</div>
-
-        <b>3. Replication Manager</b>
-        <pre class="sketch">Leader (has message 101)
-    |
-    +---copy---> Follower A (now has message 101)
-    |
-    +---copy---> Follower B (now has message 101)
-
-If Leader crashes --> Followers already have a copy --> nothing lost</pre>
-        <div class="analogy"><b>Analogy:</b> making photocopies. Original → Copy 1 → Copy 2 → Copy 3. Its only job: make sure copies exist on other brokers.</div>
-
-        <b>4. Follower Brokers</b>
-        <pre class="sketch">Leader: [Message 101]
-   |
-   v (replicated)
-Follower A: [Message 101]
-Follower B: [Message 101]
-
-Leader dies --> Follower A promoted --> becomes new Leader</pre>
-        <div class="analogy"><b>Analogy:</b> backup hard disks.</div>
-
-        <b>5. Log Segment Storage</b>
-        <pre class="sketch">One giant notebook, never edited, only ever extended:
-
-[Offset 0][Offset 1][Offset 2][Offset 3][Offset 4] --> next write goes to [Offset 5]
-
-Old pages NEVER change. New entries only go at the end.</pre>
-        <div class="analogy"><b>Analogy:</b> a school attendance register — every new student added to the next empty line, nobody erases previous entries. This is the <b>append-only log</b>.</div>
-
-        <b>6. Fetch Path</b>
-        <pre class="sketch">Consumer --> Fetch() --> Log Storage --> returns [Message 200][201][202]</pre>
-        <div class="analogy">Consumers never read directly from producers — only from storage. Its job: read from disk, send to consumers.</div>
-
-        <b>7. Consumer Client</b>
-        <pre class="sketch">Settlement Service  --> "give me messages from offset 500" --> Kafka returns [500][501][502]
-Reporting Service   --> reads at its own pace, independently
-Audit Service        --> reads at its own pace, independently</pre>
-
-        <b>8. Controller / Metadata</b>
-        <pre class="sketch">Broker 1, Broker 2, Broker 3 ... someone has to remember:
-  - which topics exist?
-  - which partitions exist?
-  - who is Leader, who are Followers?
-
-Example:
-  orders / Partition 0 --> Leader: Broker 2, Followers: Broker 1, Broker 3</pre>
-        <div class="analogy"><b>Analogy:</b> the brain of Kafka.</div>
-
-        <b>9. Consumer Group Coordinator</b>
-        <pre class="sketch">Topic: 8 partitions
-Consumer A, B, C start
-
-Coordinator assigns:
-  A --> [0][1]
-  B --> [2][3]
-  C --> [4][5][6][7]
-
-If B crashes --> Coordinator redistributes B's partitions to A and C</pre>
-        <div class="analogy"><b>Analogy:</b> a manager assigning work to employees.</div>
-
-        <b>Complete flow</b>
-        <pre class="sketch">Producer --> Append Path --> Replication Manager --> Followers --> Log Storage --> Fetch Path --> Consumer</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Why are Append Path and Replication Manager separate? (the most important decision in this whole segment)</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <b>If they were combined:</b>
-        <pre class="sketch">Producer
-   |
-   v
-Write locally (1 ms)
-   |
-   v
-Wait for Follower A ack (30 ms over network)
-   |
-   v
-Wait for Follower B ack (30 ms over network)
-   |
-   v
-Return Success
-
-TOTAL: 31+ ms, EVERY single write, blocked on network round-trips</pre>
-        <b>Separated instead:</b>
-        <pre class="sketch">STEP 1 (fast, hot path):
-Producer --> Append Path --> write to local disk --> Done   (~1 ms)
-
-STEP 2 (in parallel, independent):
-Leader --> copy to Follower A
-Leader --> copy to Follower B
-(this happens WHILE the next producer write is already being appended)</pre>
-        <table class="diff-table">
-          <tr><th>Append Path</th><th>Replication Manager</th></tr>
-          <tr><td>Writes to local disk</td><td>Talks to other brokers over network</td></tr>
-          <tr><td>Microseconds to a few ms</td><td>Tens of ms, depends on network</td></tr>
-          <tr><td>Performance-critical ("hot path")</td><td>Reliability-focused</td></tr>
-          <tr><td>Goal: write as fast as possible</td><td>Goal: keep replicas in sync</td></tr>
-        </table>
-        <div class="analogy"><b>Easy analogy — Amazon warehouse:</b>
-        <pre class="sketch">1. Truck arrives with packages.
-2. Worker scans and shelves each package immediately.        <- Append Path
-3. Another team later copies inventory to backup warehouses.  <- Replication Manager
-4. Customers order, staff pick items from shelves.             <- Fetch Path
-5. Manager tracks which warehouse stores which products.       <- Controller / Metadata
-6. Supervisor assigns picking work to different employees.     <- Consumer Group Coordinator</pre>
-        If the same worker had to scan the package, personally drive it to every backup warehouse, and only then accept the next package — the whole warehouse grinds to a halt.</div>
-        <div class="why"><b>Why this matters:</b> separating them is what lets Kafka get <b>both</b> high throughput and high durability, instead of picking one. This is also exactly why segment 1's sub-50ms latency target and 3.5k msgs/sec throughput target are both achievable at once — they'd directly conflict if append and replication were the same blocking call.</div>
+You get ONE of these. Not both.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Exactly. That's the first unavoidable trade-off in Kafka. You don't "implement" your way around it — you choose one side.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> Kafka's actual answer is neither extreme — order within a partition, parallelism across partitions — but that compromise only makes sense once you've accepted there's no design that avoids this trade-off entirely.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 4 -->
-  <section class="segment" id="s4" style="--seg:#7A63B8">
-    <div class="segment-head"><span class="segment-offset">step 04</span><h2>Low-level API design</h2></div>
-    <p class="segment-note">Think of Kafka like a database — a database has INSERT, SELECT, UPDATE, DELETE. Kafka needs its own doors too, so producers, consumers, and admins know exactly how to talk to the broker. Six doors, each solving one problem.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Write 5–6 API cards of your own: method/path, purpose, caller, payload, idempotency behavior. Then decide: should authorization be scoped by team ownership, or by blast radius? Write your answer before revealing.</p>
+  <!-- STAGE 6 -->
+  <section class="stage" id="st6" style="--seg:#B57EDC">
+    <div class="stage-head"><span class="stage-num">Stage 6</span><h2>Replication</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Why replicate? Don't say "high availability." Everyone says that.</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If three replicas exist, who should be allowed to accept writes — all three, or one? Justify it.</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R6</span><span class="q-text">Reference: the six doors into Kafka, one at a time.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Replication exists because hardware eventually fails. The real question isn't <em>if</em> a broker dies — it's <em>when</em>. The architecture has to treat failure as normal, not exceptional.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Good. Three replicas — who should accept writes? All three?</p></div>
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">ALL THREE ACCEPT WRITES:
+  Replica 1: [A][B]         <- network partition happens
+  Replica 2: [A][C]         <- diverged history!
+  Replica 3: [A][B]
 
-        <pre class="sketch">                 PRODUCER
-                     |
-                Produce()
-                     |
-          -------------------------
-          |      Kafka Broker     |
-          -------------------------
-             |             |
-        Partition 0    Partition 1
+  Which one is "correct"? No good answer once histories diverge.
 
-Consumer -------------------------->  Fetch()
-Consumer -------------------------->  OffsetCommit()
-Consumer -------------------------->  JoinGroup()
-Admin    -------------------------->  CreateTopic()
-Producer/Consumer ------------------>  DescribeCluster()</pre>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">POST</span><span class="api-path">/produce</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>Write a message into a topic. Without this, no application can write data.</dd>
-            <dt>Caller</dt><dd>Any producer service — order-service, nsdl-adapter, nav-ingest-job.</dd>
-          </dl>
-          <pre class="sketch">Customer buys a mutual fund unit
-      ↓
-order-service calls Produce(topic=orders, key=customer101, value={...})
-      ↓
-Kafka hashes "customer101"
-      ↓
-Partition 2
-      ↓
-message appended</pre>
-          <div class="analogy"><b>Why the key matters:</b>
-          <pre class="sketch">Customer 101 orders, all hashed the same way:
-
-  Order 1 --> hash(101) --> Partition 4
-  Order 2 --> hash(101) --> Partition 4
-  Order 3 --> hash(101) --> Partition 4
-
-Partition 4 log:  [Order 1][Order 2][Order 3]   <- stays in order</pre></div>
-          <div class="analogy"><b>Why idempotency matters:</b>
-          <pre class="sketch">Producer sends "Order Created" -----> (network blip, no response)
-Producer thinks: "maybe it never landed" -----> retries
-
-WITHOUT idempotency:
-  Partition:  [Order Created][Order Created]     <- duplicate!
-
-WITH idempotency (producer_id=100, sequence=55):
-  Kafka checks memory:  (100,55) already stored?
-     yes -> ignore retry
-  Partition:  [Order Created]                     <- safe</pre></div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">GET</span><span class="api-path">/fetch</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>Consumers need a way to read. Kafka never pushes data — the consumer always decides where to start.</dd>
-            <dt>Caller</dt><dd>Consumer client library — settlement-svc, reporting-pipeline.</dd>
-          </dl>
-          <pre class="sketch">settlement-svc: "Give me messages starting from offset 200"
-Kafka returns: 200, 201, 202, 203</pre>
-          <div class="analogy"><b>Offset is just a bookmark on a book:</b>
-          <pre class="sketch">Partition (like pages in a book):
-[0][1][2][3][4][5][6][7]
-          ^
-     consumer already read up to page 3
-
-Next fetch --> "start from 4" --> Kafka returns [4][5][6][7]</pre></div>
-          <div class="analogy"><b>Why it's idempotent:</b>
-          <pre class="sketch">Fetch(offset=100) today     --> returns [100][101][102]
-Fetch(offset=100) next week --> returns [100][101][102]   <- identical, nothing changed</pre></div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">OffsetCommit()</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>One of the most important APIs — persists "this group has processed up to here."</dd>
-            <dt>Caller</dt><dd>Consumer client library, on its own commit cadence — not per record.</dd>
-          </dl>
-          <pre class="sketch">Consumer processed offsets 0,1,2,3
-Consumer tells Kafka: "I'm done till 3"</pre>
-          <div class="analogy"><b>The bookmark / crash-resume story:</b>
-          <pre class="sketch">BEFORE crash:
-  processed: [0][1][2][3]  --> OffsetCommit(offset=3) --> stored durably
-
-  *** server crashes ***
-
-AFTER restart:
-  "Where was I?"  --> read stored offset --> "3"
-  "Resume from 4"  --> Fetch(offset=4)</pre></div>
-          <div class="analogy"><b>Why we don't commit every message:</b>
-          <pre class="sketch">1,000,000 messages/sec
-
-Commit EVERY message:
-  msg -> commit -> msg -> commit -> msg -> commit ...
-  = 1,000,000 storage writes/sec   <- too slow
-
-Commit every 1,000 messages (or every 5 sec):
-  msg msg msg ... msg(1000) -> ONE commit
-  = 1,000 storage writes/sec        <- 1000x cheaper</pre></div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">RPC</span><span class="api-path">JoinGroup()</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>The one that confuses people first — decides who reads which partition.</dd>
-            <dt>Caller</dt><dd>Consumer client library, on startup or after a heartbeat timeout.</dd>
-          </dl>
-          <pre class="sketch">Topic: 8 partitions
-Consumers: A, B, C — group "Payment"</pre>
-          <div class="analogy"><b>Partition assignment:</b>
-          <pre class="sketch">Topic "orders" -- 8 partitions: [0][1][2][3][4][5][6][7]
-
-Consumer A --JoinGroup--> Kafka --assigns--> [1][4][7]
-Consumer B --JoinGroup--> Kafka --assigns--> [2][5]
-Consumer C --JoinGroup--> Kafka --assigns--> [0][3][6]
-
-                (no overlap, every partition owned once)</pre></div>
-          <div class="analogy"><b>Rebalance when B dies:</b>
-          <pre class="sketch">BEFORE:                       AFTER (B dies):
-A -> [1][4][7]                A -> [1][2][4][5][7]
-B -> [2][5]        --dies-->  B -> (gone)
-C -> [0][3][6]                C -> [0][3][6]
-
-               ^ partition 2, 5 reassigned to A</pre></div>
-          <div class="analogy"><b>Why heartbeats exist separately:</b>
-          <pre class="sketch">WITHOUT heartbeat (using JoinGroup to say "I'm alive"):
-  Join -> rebalance -> Join -> rebalance -> Join -> rebalance ...
-  (expensive, disruptive)
-
-WITH heartbeat:
-  Heartbeat -> "still here" -> Heartbeat -> "still here" ...
-  (cheap, no rebalance triggered)
-  JoinGroup only fires on real join/leave/crash</pre></div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">CreateTopic()</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>Admin-only. Application services never call this directly.</dd>
-            <dt>Caller</dt><dd>A human operator or a CI/CD provisioning pipeline.</dd>
-          </dl>
-          <pre class="sketch">Operator: "Create topic 'orders', 8 partitions, replication 3"
-Kafka: creates orders → Partition 0...7</pre>
-          <div class="analogy"><b>Why conflicting re-creation is rejected, not merged:</b>
-          <pre class="sketch">Day 1:  orders created with 4 partitions
-        customer101 -> hash(101) % 4 -> Partition 1
-        Partition 1 log: [order-A][order-B]
-
-Day 30: someone tries "orders, 12 partitions"
-        customer101 -> hash(101) % 12 -> Partition 9   <- different!
-
-        Partition 1: [order-A][order-B]   <- old orders, stranded
-        Partition 9: [order-C]            <- new orders, different partition
-
-        Same customer's history now SPLIT across two partitions.
-        Kafka rejects the second CreateTopic call to prevent this.</pre></div>
-        </div>
-
-        <div class="api-card">
-          <div class="api-line"><span class="api-method">ADMIN</span><span class="api-path">DescribeCluster()</span></div>
-          <dl class="api-grid">
-            <dt>Purpose</dt><dd>Producer can't guess which broker holds a partition — it asks.</dd>
-            <dt>Caller</dt><dd>Producer and consumer clients, plus operator tooling.</dd>
-          </dl>
-          <pre class="sketch">Producer: "Where is Partition 0? Who's the leader?"</pre>
-          <div class="analogy"><b>The map:</b>
-          <pre class="sketch">DescribeCluster() ------> Kafka replies:
-
-   orders / Partition 0  --> Broker 2
-   orders / Partition 1  --> Broker 5
-   orders / Partition 2  --> Broker 1
-
-Producer caches this map:
-   Produce(partition 1) --> goes DIRECTLY to Broker 5
-   (no need to ask again next time)</pre></div>
-          <div class="analogy"><b>Why it's necessary at scale:</b>
-          <pre class="sketch">Cluster with 100 brokers, no map:
-  Producer: "???" -----> which of 100 brokers do I even talk to?
-
-Cluster with DescribeCluster():
-  Producer: ask once -----> cache map -----> route directly, every time after</pre></div>
-        </div>
-
-        <div class="why"><b>Bonus — blast radius, not ownership:</b>
-        <pre class="sketch">Team owns 10 topics, including:
-  payment.transactions
-  ui.click.events
-
-Scoped by OWNERSHIP:
-  any team credential --> can write to BOTH topics
-  (a bug in analytics-service could corrupt payment data)
-
-Scoped by BLAST RADIUS:
-  payment-service credential   --> can write ONLY to payment.transactions
-  analytics-service credential --> can write ONLY to ui.click.events
-  (a leaked credential or bug damages only what it was meant to touch)</pre>
-        "Who owns this API" tells you who to page. "What's the blast radius if this call is misused" tells you how to scope the token — and that's the question that actually protects the system.</div>
-
-        <b style="display:block;margin-top:16px;">Summary table</b>
-        <table class="diff-table">
-          <tr><th>Endpoint</th><th>Think of it as</th></tr>
-          <tr><td>Produce()</td><td>Write into Kafka — store new messages</td></tr>
-          <tr><td>Fetch()</td><td>Read from Kafka — consumers retrieve messages</td></tr>
-          <tr><td>OffsetCommit()</td><td>Save a bookmark — resume after restart</td></tr>
-          <tr><td>JoinGroup()</td><td>Register for work — Kafka assigns partitions</td></tr>
-          <tr><td>CreateTopic()</td><td>Create a new table — prepare storage before data arrives</td></tr>
-          <tr><td>DescribeCluster()</td><td>Ask for a map — learn which broker owns what</td></tr>
-        </table>
+ONE LEADER ACCEPTS WRITES:
+  Leader:     [A][B][C]  <- one authoritative order
+  Follower 1: [A][B][C]  <- copies leader's order
+  Follower 2: [A][B][C]  <- copies leader's order</pre>
+        <p>If multiple replicas independently accept writes, they can diverge during a network partition — reconciling conflicting histories while preserving one ordered log becomes extremely hard. A single leader gives one authoritative write order; followers just replicate it.</p></div>
+        <div class="turn a"><div class="who">A</div><p>What did we sacrifice?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Write availability during leader transitions. We traded some availability for a consistent, ordered log.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> "one leader" isn't a Kafka quirk — it's the direct, unavoidable consequence of refusing to let history diverge. Stage 9 (leader election) is where we find out what happens the moment that one leader actually dies.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 5 -->
-  <section class="segment" id="s5" style="--seg:#3480B0">
-    <div class="segment-head"><span class="segment-offset">step 05</span><h2>Data model & sizing</h2></div>
-    <p class="segment-note">Sketch your own schema and estimate real numbers for your platform's scale before revealing.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Sketch what's actually stored on disk per partition, and estimate: how many topics, partitions, and bytes/day across your 80+ microservices? Then answer the gut-check: is this actually a "big data" storage problem, or not? Decide what's durable config vs. ephemeral in-memory derived state, and why mixing them up would be a mistake.</p>
+  <!-- STAGE 7 -->
+  <section class="stage" id="st7" style="--seg:#C1547A">
+    <div class="stage-head"><span class="stage-num">Stage 7</span><h2>The hardest question: duplicates</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Producer sends a message. Leader writes it. Leader crashes. Producer times out. Producer retries. Did we create a duplicate?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If the answer is "possibly," what's the minimum piece of information the broker needs to tell a retry apart from a genuinely new message?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R7</span><span class="q-text">Reference: what's on disk, and rough sizing.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>On disk, per partition — like a notebook split into chapters:</b>
-        <pre class="sketch">partition-3/
-  00000000000000000000.log      <- segment (records, append-only)
-  00000000000000000000.index    <- offset -> byte-position lookup ("go to page X")
-  00000000000000000000.timeindex
-  00000000000045210000.log      <- next segment, starts once the first one fills up
-  ...
+        <div class="turn b"><div class="who">B</div><p>Possibly.</p></div>
+        <div class="turn a"><div class="who">A</div><p>How do we fix it?</p></div>
+        <div class="turn b"><div class="who">B</div><p>The broker must recognize that a retry is the <em>same logical send</em>, not a new one.</p>
+        <pre class="sketch">Producer sends "Order Created" -----> Leader writes it -----> *** crashes before ACK ***
+Producer times out -----> retries -----> "is this new, or the same one again?"
 
-Old segments get deleted or compacted once they age past the topic's retention policy.</pre>
-        <b>Sizing, across the wealth platform (illustrative):</b>
-        <div class="stat-grid">
-          <div class="stat-card"><div class="label">Topics</div><div class="value">~40 <span>active</span></div></div>
-          <div class="stat-card"><div class="label">Total partitions</div><div class="value">~420 <span>cluster-wide</span></div></div>
-          <div class="stat-card"><div class="label">Peak write rate</div><div class="value">3.5k <span>msgs/sec</span></div></div>
-          <div class="stat-card"><div class="label">Avg record size</div><div class="value">~800 <span>bytes</span></div></div>
-          <div class="stat-card"><div class="label">Daily volume</div><div class="value">~190 <span>GB/day pre-replication</span></div></div>
-          <div class="stat-card"><div class="label">Replicated footprint</div><div class="value">~570 <span>GB/day (RF=3)</span></div></div>
-        </div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R8</span><span class="q-text">What's durable vs. ephemeral — and why mixing them up is a mistake?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">DURABLE (on disk, survives a restart, the real source of truth):
-  - log segments
-  - offset indexes
-  - committed consumer offsets
-
-EPHEMERAL (in-memory, just a fast cache, rebuilt on restart):
-  - "which broker is leader for this partition, right now"
-  - consumer group's current in-memory assignment
-  - ISR membership snapshot</pre>
-        <div class="why"><b>Why conflating them is a mistake:</b> if a broker restart accidentally treats its in-memory ISR snapshot as truth instead of re-checking with the controller, it can either wrongly distrust a replica that was actually fine (wasted re-catch-up) or wrongly trust a stale one (real data-loss risk). The controller is the only durable source of "who's really in sync" — everything else is a disposable cache of that fact, not truth itself.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R9</span><span class="q-text">Gut check — is this actually a "big data" problem?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">~570 GB/day replicated x 7-day retention
-  = ~4 TB steady-state per replicated topic set
-
-That's comfortably single-digit-node storage.
-NOT a "shard across 200 machines" problem.</pre>
-        <div class="why"><b>Why this matters:</b> the actual hard part here isn't volume — it's throughput + ordering + durability under concurrent access. That's a systems problem, not a big-data problem. Don't let the word "Kafka" trick you into over-building for scale you don't actually have yet.</div>
+Fix: give the producer an IDENTITY + a SEQUENCE NUMBER
+  producer_id=100, sequence=55  --> broker remembers this pair
+  retry arrives with the SAME (100,55) --> broker recognizes it, discards the duplicate</pre></div>
+        <div class="turn a"><div class="who">A</div><p>Now you've entered the realm of exactly-once semantics. Notice how we arrived there naturally, from failure analysis — not because it was a feature on a slide.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> this is the pattern across the whole conversation — every "feature" (offsets, leaders, sequence numbers) showed up because a previous decision created a problem that needed solving, never because it was on a spec sheet.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 6 -->
-  <section class="segment" id="s6" style="--seg:#6B9A44">
-    <div class="segment-head"><span class="segment-offset">step 06</span><h2>Core algorithm: the append + ISR replication protocol</h2></div>
-    <p class="segment-note">This is the heart of Kafka. Everything about durability depends on one question: <b>when should Kafka tell the producer "your message is safely stored"?</b></p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Sketch the flow yourself first: leader receives a message → what happens step by step before the producer gets an ACK? Then answer: what happens if the ISR shrinks to zero in-sync replicas mid-write?</p>
+  <!-- STAGE 8 -->
+  <section class="stage" id="st8" style="--seg:#B9971F">
+    <div class="stage-head"><span class="stage-num">Stage 8</span><h2>Why does ISR exist?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>You have a leader and two followers. One follower is on a slow disk and consistently lags. Should the leader wait for it before acking a producer with <code>acks=all</code>?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>If "wait for everyone" is too slow and "wait for no one" is too risky, what's the actual rule that should decide who counts?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R10</span><span class="q-text">Reference: the overall flow, one step at a time.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">Producer
-    │
-    │ Produce(Order Created)
-    ▼
-+------------------+
-| Leader Broker    |
-+------------------+
-        │
-        │ 1. Save locally
-        ▼
-    Local Log
-        │
-        │ 2. Copy to followers
-        ▼
-+-----------+    +-----------+
-|Follower A |    |Follower B |
-+-----------+    +-----------+
-        │              │
-        └──────┬───────┘
-               │
-     All copies completed?
-               │
-        Yes → ACK Producer</pre>
-
-        <b>Step 1 — Leader receives a message:</b>
-        <pre class="sketch">Producer --> "Order Created" --> Leader writes it to its own disk immediately
-
-Leader Log: [100][101][102][103]     <- very fast, local only</pre>
-
-        <b>Step 2 — Leader tells followers:</b>
-        <pre class="sketch">Leader --> Follower A: "copy message 103"
-Leader --> Follower B: "copy message 103"</pre>
-
-        <b>Step 3 — Followers reply:</b>
-        <pre class="sketch">Follower A: ✓ done
-Follower B: ✓ done
-        --> Leader now knows everyone has the message</pre>
-
-        <b>Step 4 — Leader sends ACK:</b>
-        <pre class="sketch">Producer receives: SUCCESS   --> safe to continue</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R11</span><span class="q-text">What is ISR (In-Sync Replicas), and what happens when a follower falls behind?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <b>ISR = the followers fully caught up with the leader.</b>
-        <pre class="sketch">Leader:     offset 100
-Follower A: offset 100
-Follower B: offset 100
-
-ISR = { Leader, Follower A, Follower B }    <- everyone healthy</pre>
-        <b>If one follower falls behind:</b>
+        <div class="turn b"><div class="who">B</div><p>No — not forever. If the leader always waits for every replica, one permanently slow disk caps the throughput of the entire partition for everyone.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So drop the requirement to replicate to it at all?</p></div>
+        <div class="turn b"><div class="who">B</div><p>No — that's the other extreme, and it silently weakens durability. The real answer is a dynamic set: replicas that are <em>currently</em> caught up count; the ones that fall behind temporarily stop counting, without being abandoned.</p>
         <pre class="sketch">Leader:     offset 105
-Follower A: offset 105
-Follower B: offset 98      <- too far behind
+Follower A: offset 105   <- caught up
+Follower B: offset 60    <- far behind (slow disk)
 
-ISR = { Leader, Follower A }     <- B removed, not trusted yet
-      (B keeps copying in the background, just not counted for acks)</pre>
-        <b>How it comes back:</b>
-        <pre class="sketch">Follower B: 98 -> 99 -> 100 -> 101 -> ... -> 105   <- catches up
+ISR (In-Sync Replicas) = { Leader, Follower A }
+  acks=all only waits for THESE two, not for B
 
-Kafka: "Welcome back!"
-ISR = { Leader, Follower A, Follower B }</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R12</span><span class="q-text">The three ACK modes — what's the tradeoff of each?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">acks = 0  (fastest, riskiest)
-  Producer --> send --> continue immediately, doesn't wait at all
-
-acks = 1  (safer)
-  Producer --> Leader Disk --> ACK
-  (followers may not have copied yet)
-
-acks = all  (slowest, safest)
-  Producer --> Leader --> Follower A --> Follower B --> ACK
-  (leader waits for every replica in the ISR)</pre>
-        <div class="why"><b>Why this matters:</b> this one setting is the concrete dial behind segment 1's "durability &gt; availability for money, availability &gt; durability for clicks" — <code>acks=all</code> for settlement topics, <code>acks=0</code> or <code>1</code> for low-stakes ones like UI clicks.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R13</span><span class="q-text">What if the followers disappear entirely — leader alone, min.insync.replicas=2, acks=all?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">Leader:     ✓ up
-Follower A: ❌ down
-Follower B: ❌ down
-
-Only the Leader remains. Setting: min.insync.replicas=2, acks=all
-
-Kafka: ❌ "Not Enough Replicas — Write Rejected"</pre>
-        <b>Why reject instead of just accepting it anyway?</b>
-        <pre class="sketch">IF Kafka accepted the write anyway:
-  Leader saves message --> Leader crashes immediately after
-  --> no copy exists anywhere --> money transaction lost forever
-
-INSTEAD, Kafka is honest:
-  "Sorry, I cannot safely store your message. Please retry later."</pre>
-        <div class="why"><b>Why this matters:</b> refusing the write is a worse experience in the moment, but a strictly better guarantee for the business — this is exactly what protects a settlement pipeline from silently lying about durability.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R14</span><span class="q-text">Bonus, for the technically curious: what does this look like as actual pseudocode?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">// Leader-side state per partition
-struct PartitionState {
-  log: AppendOnlyLog          // local durable segment writer
-  isr: Set&lt;ReplicaId&gt;         // currently in-sync replicas, includes self
-  high_watermark: Offset      // highest offset acked by ALL of isr
-  lock: SingleWriterLock       // one append at a time, this partition only
-}
-
-// 1. Append (hot path — must stay fast)
-function append(record, acks_mode):
-  lock.acquire()
-  offset = log.write(record)       // sequential disk write, local only
-  lock.release()
-  if acks_mode == "all":
-    return wait_until(offset &lt;= high_watermark)   // blocks until ISR catches up
-  return ack_immediately()
-
-// 2. Follower replication loop (async, off the hot path)
-function follower_replicate_loop(follower):
-  while true:
-    records = leader.log.read_from(follower.last_replicated_offset + 1)
-    follower.log.write(records)
-    follower.last_replicated_offset += len(records)
-
-// 3. ISR membership check (leader-side, periodic — NOT inside the append lock)
-function recompute_high_watermark_and_isr():
-  for replica in isr:
-    if replica.lag_ms() &gt; threshold_ms: isr.remove(replica)
-  high_watermark = min(replica.last_replicated_offset for replica in isr)</pre>
-        <div class="why"><b>Why append and ISR-recompute are separate functions:</b> the append path needs to stay a fast local write held under lock for microseconds. If ISR bookkeeping (network checks, lag calculation) happened inside that same lock, every append would serialize behind the slowest follower's heartbeat — exactly the coupling segment 3 said to avoid.</div>
+Follower B keeps replicating in the background.
+Once it catches up -> rejoins the ISR -> counts again.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So ISR isn't a fixed replication factor — it's a moving target?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Exactly. Replication factor is "how many copies exist, eventually." ISR is "how many of those copies can I actually trust <em>right now</em> to define durability." Those are two different numbers, and conflating them is a common mistake.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> ISR is what happens when you refuse both extremes — "wait for everyone" (too slow) and "wait for no one" (too risky) — and instead make the durability contract track reality instead of a static config number.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 7 -->
-  <section class="segment" id="s7" style="--seg:#C1547A">
-    <div class="segment-head"><span class="segment-offset">step 07</span><h2>Supporting subsystem: the consumer group coordinator</h2></div>
-    <p class="segment-note">This has only one job: <b>decide which consumer reads which partition.</b> Simpler than it looks once you see it as a classroom, not a protocol.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Design the coordinator's heartbeat/timeout/rebalance loop as precisely as you can — when does it trigger, what does it do. Then decide: should this coordinator be one centralized process per group, or a distributed protocol among the consumers themselves? Justify before revealing.</p>
+  <!-- STAGE 9 -->
+  <section class="stage" id="st9" style="--seg:#279090">
+    <div class="stage-head"><span class="stage-num">Stage 9</span><h2>Leader election under failure</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>The leader dies. Follower A was in the ISR. Follower B was not — it was lagging. Who becomes the new leader?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What breaks if you let the lagging follower become leader? What breaks if you refuse to?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R15</span><span class="q-text">Reference: normal working — who assigns what.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">Orders Topic: Partition 0, 1, 2, 3
-Three consumers start: Consumer A, B, C
+        <div class="turn b"><div class="who">B</div><p>Follower A — the one that was actually in the ISR. Electing B risks losing every message B never replicated.</p>
+        <pre class="sketch">Leader (dead):  [100][101][102][103][104][105]
+Follower A (ISR):        [100][101][102][103][104][105]   <- fully caught up
+Follower B (lagging):    [100][101][102]                    <- missing 103,104,105
 
-               Coordinator
-                    │
-      ┌─────────────┼─────────────┐
-      │             │             │
-      ▼             ▼             ▼
-Consumer A    Consumer B    Consumer C
-
-Coordinator says:
-  A → P0
-  B → P1
-  C → P2, P3</pre>
-        <b>Consumers keep saying "I'm alive":</b>
-        <pre class="sketch">Consumer A: ❤️ ... ❤️ ... ❤️  (every few seconds)
-Coordinator updates: "last heartbeat = now"</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R16</span><span class="q-text">What happens when a consumer crashes, or a new one joins?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <b>Consumer B crashes:</b>
-        <pre class="sketch">Consumer B stops sending heartbeats
-Coordinator waits: 5 sec ... 10 sec ... 15 sec ... still nothing
-Coordinator: "Consumer B is dead" --> removes it --> REBALANCE
-
-BEFORE:                AFTER:
-  A → P0                 A → P0, P1
-  B → P1     --dies-->    C → P2, P3
-  C → P2, P3
-
-Nobody reads Partition 1 twice. Nobody misses Partition 1.</pre>
-        <b>A new consumer D joins:</b>
-        <pre class="sketch">A, B, C already running --> D joins
-Coordinator: "let's redistribute work"
-
-New assignment:
-  A → P0
-  B → P1
-  C → P2
-  D → P3      <- everyone gets less work</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R17</span><span class="q-text">Why heartbeats — and why only ONE coordinator, not consumers deciding among themselves?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <b>Without heartbeats:</b>
-        <pre class="sketch">Consumer crashes --> Coordinator has no way to know
---> Partition becomes unread FOREVER</pre>
-        <b>Without a single coordinator — consumers deciding among themselves:</b>
-        <pre class="sketch">A: "I own P1"
-B: "No, I own P1"
-C: "I think A owns P1"
-
-CHAOS -- two consumers might read the same partition,
-or nobody reads it at all.
-
-Instead: ONE coordinator --> ONE decision --> everyone follows it.</pre>
-        <div class="analogy"><b>Classroom analogy:</b> Teacher = Coordinator, Students = Consumers, Homework = Partitions.
-        <pre class="sketch">Teacher assigns:  Ankur → Math,  Rahul → Science,  Amit → English
-
-Rahul leaves --> Teacher: "Ankur, you also take Science"
-New student arrives --> Teacher redistributes the work
-
-Students don't argue among themselves. The teacher decides once, everyone follows.</pre></div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R18</span><span class="q-text">Why doesn't a single, centralized coordinator become a bottleneck?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">The Coordinator does NOT process messages.
-It only acts when:
-  - a consumer joins
-  - a consumer leaves
-  - a consumer crashes
-
-These events are RARE.
-
-Actual message flow:
-  Producer --> Broker --> Consumer     (Coordinator is NOT in this path)</pre>
-        <div class="why"><b>Why this matters:</b> the coordinator never moves data — it only decides who reads what. That's exactly why it can stay centralized without becoming a performance bottleneck; centralizing a rare, infrequent decision is cheap, while centralizing the hot data path would not be.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R19</span><span class="q-text">Bonus, for the technically curious: the coordinator loop as pseudocode.</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">// Runs on one broker elected as coordinator for this group_id
-function coordinator_loop(group):
-  loop every heartbeat_check_interval:
-    for member in group.members:
-      if now() - member.last_heartbeat &gt; member.session_timeout_ms:
-        group.members.remove(member)
-        trigger_rebalance(group)          // member presumed dead
-
-  on receive JoinGroup(member_id):
-    group.members.add(member_id)
-    trigger_rebalance(group)              // new member -> reassign
-
-  on receive Heartbeat(member_id):
-    group.members[member_id].last_heartbeat = now()
-
-function trigger_rebalance(group):
-  group.state = REBALANCING
-  partitions = all_partitions(group.subscribed_topics)
-  assignment = partition_assignor(partitions, group.members)  // e.g. sticky/round-robin
-  broadcast_assignment(assignment)
-  group.state = STABLE</pre>
-        <div class="why"><b>Centralized per group, not distributed consensus:</b> one broker acts as coordinator for a given <code>group_id</code>, chosen deterministically. A fully distributed protocol among consumers (gossip/voting) trades this for network-partition-tolerant consensus — solving a much harder problem for a decision that's rare and just needs to converge fast, not sustain high QPS. The real risk isn't centralization, it's a <em>rebalance storm</em> — too many join/leave events too close together — which is a tuning problem (session timeout, static membership), not an architecture problem.</div>
+Elect A --> no data lost, those messages survive
+Elect B --> messages 103,104,105 are GONE, silently</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So you'd never elect B, under any circumstances?</p></div>
+        <div class="turn b"><div class="who">B</div><p>That's the "clean" vs "unclean" leader election choice. Clean election refuses to elect anyone outside the ISR — if no ISR member is available, the partition simply goes offline until one comes back. Unclean election allows electing an out-of-ISR replica to restore availability, accepting silent data loss.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Which one does a payments system choose?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Clean, always. An offline partition is a visible, debuggable outage. Silently losing transactions is a hidden one — and hidden failures are far more dangerous in a financial system than visible ones.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> this is availability vs. durability again, at a different layer than stage 6 — and it's a config choice (<code>unclean.leader.election.enable</code>), not a fixed architectural answer, precisely because different topics can reasonably choose differently.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 8 -->
-  <section class="segment" id="s8" style="--seg:#B9971F">
-    <div class="segment-head"><span class="segment-offset">step 08</span><h2>Failure handling & state machine</h2></div>
-    <p class="segment-note">Pull every state you've mentioned so far — partition, replica, consumer group — into one diagram you draw yourself.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Draw the state machine: partition states, replica states, consumer group states, and the transitions between them. Then find the "stuck forever" risk — is there any state your design could enter and never leave without a timeout forcing an exit? Write your answer before revealing.</p>
+  <!-- STAGE 10 -->
+  <section class="stage" id="st10" style="--seg:#4A5FBF">
+    <div class="stage-head"><span class="stage-num">Stage 10</span><h2>Producer acknowledgements, revisited</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>You've now built ISR and leader election. Given that, why does Kafka expose three different <code>acks</code> settings instead of just always waiting for the full ISR?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Name one real workload where waiting for the full ISR would be actively the wrong choice.</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R20</span><span class="q-text">Reference: three state machines, one at a time.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>A partition, from a broker's point of view:</b>
-        <pre class="sketch">[Offline] --controller assigns--> [Becoming-Leader] --logs recovered--> [Leader]
-[Offline] --controller assigns--> [Follower] --catches up--> [In-Sync Follower]
-[Leader]/[Follower] --broker unreachable--> [Offline] --> controller re-elects</pre>
+        <div class="turn b"><div class="who">B</div><p>Because not every message is worth the latency cost of waiting for the ISR. A UI click-tracking event and a money-transfer event have completely different loss tolerances.</p>
+        <pre class="sketch">acks=0:   producer fires and forgets, doesn't even check    (fastest, riskiest)
+acks=1:   leader writes locally, acks immediately             (leader-durable only)
+acks=all: leader waits for the full ISR before acking          (slowest, safest)
 
-        <b>A replica, from the leader's point of view (this is the ISR dance from segment 6):</b>
-        <pre class="sketch">[Catching-Up] --lag below threshold--> [In-Sync, ISR member]
-[In-Sync] --lag exceeds threshold--> [Catching-Up] --removed from ISR--
-[Catching-Up] --never catches up (timeout)--> [Considered Dead]</pre>
-
-        <b>A consumer group (this is the rebalance loop from segment 7):</b>
-        <pre class="sketch">[Stable] --member join/leave/crash--> [Rebalancing]
-[Rebalancing] --new assignment broadcast + acked--> [Stable]
-[Rebalancing] --rebalance timeout exceeded--> [Rebalancing]  (retry, with backoff)</pre>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R21</span><span class="q-text">Where's the "stuck forever" risk, and how do you close it?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">RISK 1: [Rebalancing] loops forever
-  if members keep joining/leaving faster than assignment can stabilize
-  (a "rebalance storm")
-
-RISK 2: [Becoming-Leader] stalls forever
-  if log recovery hangs on a corrupted segment</pre>
-        <b>The fix, same shape both times — a timeout that forces an exit no matter what:</b>
-        <pre class="sketch">[Becoming-Leader] --timeout--> "mark partition unavailable, alert operator"
-  (instead of hanging forever waiting for recovery to "succeed")
-
-[Rebalancing] --backoff + max-attempts ceiling--> kick the flapping member out
-  (instead of blocking the whole group's progress indefinitely)</pre>
-        <div class="why"><b>Why this matters:</b> a state machine that only moves forward on "success" events has no way out of a state where success never comes. Every forced exit above is only safe because the operation being retried afterward — fetch, produce with a sequence number, offset commit — is idempotent. A forced retry after a timeout never double-applies an effect; that's the retry/idempotency plug-in point.</div>
+click-tracking event  --> acks=0 or 1, losing one is fine
+money-transfer event  --> acks=all, non-negotiable</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So this isn't a broker setting — it's a producer decision, made per message?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Per producer, typically scoped per topic. The broker enforces a floor (<code>min.insync.replicas</code>) — the producer chooses how hard to push against that floor. Neither side alone decides the durability contract; it's negotiated.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> this is the same "not one NFR for the whole system" idea from requirements-gathering, now showing up as a literal wire-protocol parameter — proof that a good early design decision keeps paying off many stages later.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 9 -->
-  <section class="segment" id="s9" style="--seg:#279090">
-    <div class="segment-head"><span class="segment-offset">step 09</span><h2>Scaling this component itself</h2></div>
-    <p class="segment-note">Not the systems this log serves — this log system. How do more brokers and a bigger controller stay coordinated without becoming the bottleneck.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Decide: as broker count grows, what keeps controller/metadata decisions from becoming a coordination bottleneck? Then write one concrete metric, tied back to your segment-1 NFRs, that would tell you "it's time to scale out."</p>
+  <!-- STAGE 11 -->
+  <section class="stage" id="st11" style="--seg:#C1543A">
+    <div class="stage-head"><span class="stage-num">Stage 11</span><h2>Consumer group rebalancing</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Multiple consumers read the same topic in parallel, each owning a subset of partitions. A consumer crashes. Who decides how to reassign its partitions — and why does that question even need a dedicated answer?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What goes wrong if the surviving consumers negotiate the reassignment among themselves, with no single decision-maker?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R22</span><span class="q-text">Reference: what stops the controller from becoming the bottleneck as brokers grow?</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <b>Move 1 — a small quorum, not one node:</b>
-        <pre class="sketch">ONE controller node:
-  fast, but a single point of failure
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">Consumer A: "I think I own partition 2 now"
+Consumer C: "No, I already claimed partition 2"
+Consumer A: "Are you sure?"
 
-Quorum of 3-5 nodes (Raft-style — what KRaft replaced ZooKeeper with):
-  fault-tolerant, without needing "everyone votes on everything"</pre>
-
-        <b>Move 2 — treat metadata itself as a log, don't push it synchronously:</b>
-        <pre class="sketch">NAIVE (synchronous push, doesn't scale):
-  every metadata change --> controller waits for ALL brokers to confirm
-  420 partitions --> 420x the chatter on every leadership change   ✗
-
-BETTER (metadata as its own log, brokers tail it):
-  controller writes change --> metadata log
-  each broker --> reads/caches, re-fetches only on a version bump
-  metadata update becomes an O(1) "check my cached version" read   ✓</pre>
-        <div class="why"><b>Why this matters:</b> this is the exact same trick the data plane uses — append-only log + independent readers — just applied to the control plane instead of order data. The naive synchronous design turns partition count into a coordination-cost multiplier; the log-based design doesn't.</div>
-      </div></div></div>
-
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R23</span><span class="q-text">What's the one metric that tells you "it's time to scale out"?</span><span class="q-toggle">reveal</span></div>
-      <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">Watch for:
-  under-replicated partition count > 0, sustained for 2+ minutes
-  OR
-  controller request queue depth trending up across 3+ monitoring windows
-
-NOT:
-  raw CPU / disk usage alone
-  (a cluster can look "healthy" on CPU right up until replication falls behind)</pre>
-        <div class="why"><b>Why this matters:</b> under-replicated partitions is causally close to your actual durability guarantee breaking — it gives you lead time to act, instead of a lagging confirmation that something already went wrong after your segment-1 latency target has already been breached.</div>
+Two consumers reading the same partition -- double processing.
+Or: nobody claims it -- partition goes unread.</pre>
+        <p>Without one decision-maker, you get exactly this — a distributed agreement problem, solved badly, ad hoc, by the consumers themselves.</p></div>
+        <div class="turn a"><div class="who">A</div><p>So centralize it. Doesn't that become a bottleneck?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Only if it sat on the hot path — and it doesn't. It only acts on join, leave, or crash. Those are rare events. The actual message flow (produce, fetch) never touches this coordinator at all.</p>
+        <pre class="sketch">Hot path (constant):     Producer --> Broker --> Consumer
+Rare path (occasional):  Consumer join/leave/crash --> Coordinator reassigns</pre></div>
+        <div class="turn a"><div class="who">A</div><p>What's the actual risk, then?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Not centralization — a <em>rebalance storm</em>: if consumers join and leave faster than assignment can stabilize, the group spends more time reassigning than actually reading. That's a tuning problem (session timeouts, static membership), not a reason to abandon centralization.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> the same shape as stage 6's leader — centralize the decision that's rare and needs one answer, keep it off the path that's constant and needs to be fast.</div>
       </div></div></div>
   </section>
 
-  <!-- SEGMENT 10 -->
-  <section class="segment" id="s10" style="--seg:#9A62D6">
-    <div class="segment-head"><span class="segment-offset">step 10</span><h2>End-to-end assembly</h2></div>
-    <p class="segment-note">Draw the whole thing from memory — both the hot/data path and the control/config path in one diagram.</p>
-
-    <div class="build-box">
-      <div class="build-label">✎ build it yourself first</div>
-      <p>Draw your complete system from memory: producer → broker → replication → consumer group → offset commit, and separately, the control-plane path: topic creation → controller → metadata propagation → client discovery. Do this before looking at the reference.</p>
+  <!-- STAGE 12 -->
+  <section class="stage" id="st12" style="--seg:#C9871F">
+    <div class="stage-head"><span class="stage-num">Stage 12</span><h2>Backpressure: pull vs. push</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Why does the consumer ask the broker for messages, instead of the broker pushing messages to the consumer as they arrive?</p>
     </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>What happens to a slow consumer under a push model that can't happen under a pull model?</p></div>
 
-    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">R13</span><span class="q-text">Reference: full assembly, both paths.</span><span class="q-toggle">reveal</span></div>
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">
-        <pre class="sketch">DATA / HOT PATH
-order-service --Produce(key=folio_id)--> Leader Broker (partition N)
-   --local append (fast)--> ack per acks-mode
-   --async replicate--> Follower Brokers --update ISR/high-watermark--
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">PUSH MODEL:
+  Broker --> fires messages at consumer as fast as they arrive
+  Slow consumer --> messages pile up somewhere (broker buffer? consumer memory?)
+  Broker now has to guess every consumer's capacity, per consumer
 
-settlement-svc --Fetch(offset)--> Leader/Follower Broker --read log segment-->
-   --process record--> OffsetCommit(group, partition, offset) --stored durably--
-
-CONTROL / CONFIG PATH
-operator/CI --CreateTopic(name, partitions, RF)--> Controller Quorum
-   --allocate partitions across brokers--> write to internal metadata log
-   --brokers tail metadata log--> update local cache (leader/replica assignment)
-
-producer/consumer client --DescribeCluster/Metadata()--> any broker
-   --returns cached leader/replica info--> client routes Produce/Fetch directly to leader</pre>
-        Both paths share one idea: <b>the log pattern isn't just the product — it's the internal implementation strategy.</b> Data replication is a log. Metadata propagation is a log. Even consumer group state changes are logged. Once you see that, "distributed log system" stops being a special-purpose messaging tool and starts being a general pattern for keeping many independent readers eventually consistent with one append-only source of truth — which is also, not coincidentally, the exact thing your segment-1 requirements asked for.
+PULL MODEL:
+  Consumer --> "give me the next batch, when I'm ready"
+  Broker --> just serves what's asked, never guesses
+  Slow consumer simply pulls less often -- no special handling needed</pre>
+        <p>Under push, the broker has to actively manage backpressure for every consumer — a genuinely hard, per-consumer problem. Under pull, backpressure is just... the natural consequence of the consumer asking less often. It's not solved; it's avoided.</p></div>
+        <div class="turn a"><div class="who">A</div><p>Doesn't pull mean higher latency — the consumer has to keep asking?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Only if it's a naive poll-in-a-tight-loop. Kafka's fetch is a long-poll — the broker holds the request open until either data arrives or a timeout hits, so pull doesn't have to mean "ask constantly." You get pull's simplicity without paying the naive-polling latency tax.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> pull isn't a minor API style choice — it's what lets the broker stay simple and dumb about per-consumer speed, consistent with the whole "consumer owns its own progress" decision from stage 3.</div>
       </div></div></div>
+  </section>
+
+  <!-- STAGE 13 -->
+  <section class="stage" id="st13" style="--seg:#6B9A44">
+    <div class="stage-head"><span class="stage-num">Stage 13</span><h2>Storage internals: why is this actually fast?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>You've said "sequential writes" three times now. That explains fast writes. What makes reads fast — a consumer fetching data that was written five minutes ago?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ think first</div><p>Where does data actually live between "written to disk" and "sent over the network to a consumer" — and how many times does it get copied along the way?</p></div>
+
+    <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="reveal-label">Reveal the dialogue</span><span class="q-toggle">reveal</span></div>
+      <div class="q-answer"><div class="q-answer-inner">
+        <div class="turn b"><div class="who">B</div><p>Two things: the OS page cache, and zero-copy transfer.</p>
+        <pre class="sketch">NAIVE read path (multiple copies):
+  Disk -> kernel buffer -> application memory -> socket buffer -> NIC
+         (copy 1)          (copy 2)              (copy 3)
+
+Every copy costs CPU cycles and memory bandwidth -- for data
+the application never actually needed to touch or transform.</pre></div>
+        <div class="turn a"><div class="who">A</div><p>So avoid the copies?</p></div>
+        <div class="turn b"><div class="who">B</div>
+        <pre class="sketch">ZERO-COPY read path (sendfile-style):
+  Disk -> kernel buffer -----------------------> NIC
+         (data never enters application memory at all)</pre>
+        <p>Kafka doesn't deserialize, transform, or touch the bytes on the read path — it just moves them. That means the OS can transfer straight from the page cache to the network socket, skipping the application-memory hop entirely.</p></div>
+        <div class="turn a"><div class="who">A</div><p>And the page cache — why does that matter separately from zero-copy?</p></div>
+        <div class="turn b"><div class="who">B</div><p>Recently-written segments are still sitting in the OS's page cache in RAM — most "reads" for recent data never actually touch the physical disk at all. Combined with zero-copy, a consumer reading data from a few seconds ago is close to a pure memory-to-network operation, not a disk operation.</p></div>
+        <div class="insight"><b>Where this leaves us:</b> "just append to disk" from stage 1 was only half the story — the other half is refusing to touch the bytes on the way back out, which is exactly what makes both directions of the pipe fast for the same underlying reason: doing less work per byte.</div>
+      </div></div></div>
+  </section>
+
+  <!-- STAGE 14 -->
+  <section class="stage" id="st14" style="--seg:#2E8B82">
+    <div class="stage-head"><span class="stage-num">Stage 14</span><h2>Kafka 2.0 — what would you redesign?</h2></div>
+    <div class="a-open">
+      <div class="who">Architect A</div>
+      <p>Last question. If you were starting today, with everything you now know, what's the one decision from this conversation you'd revisit?</p>
+    </div>
+    <div class="build-box"><div class="build-label">✎ this one has no reference answer</div><p>This is deliberately open. Pick one stage's decision — ordering, ISR, leader election, pull vs. push, anything — and argue what you'd change and what you'd give up by changing it. A real answer defends a trade-off; it doesn't just criticize.</p></div>
 
     <div class="final-q">
-      <b>Final question — no answer key.</b> Trace your own design, end to end, back against your own segment-1 FR/NFR list. Where's the gap? Is there a requirement you wrote on day one that your segment-6 algorithm or segment-8 state machine quietly doesn't actually satisfy? Find it yourself — that gap is worth more than anything in this document.
+      <b>No answer key.</b> Notice what this whole conversation never did: it never said "Kafka has brokers," "Kafka has topics," "Kafka has partitions" as a starting fact. Every concept showed up because a previous decision became insufficient —
+      <pre class="sketch">Problem → Constraint → Trade-off → Design Decision → New Problem → Next Design Decision</pre>
+      — not <code>Feature → Definition → Next Feature</code>. That's the actual difference between memorizing Kafka and understanding it. Your answer to this last question is the real test of which one you did.
+    </div>
+
+    <div class="roadmap">
+      <b style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Stages not covered here — extend this same format into them yourself:</b>
+      <ol>
+        <li>Cross-rack / cross-region replication</li>
+        <li>Performance tuning under real production load</li>
+        <li>Exactly-once semantics end-to-end (producer + consumer transactions)</li>
+        <li>Log compaction as a design choice, not just a feature</li>
+        <li>Controller quorum design (KRaft) from first principles</li>
+        <li>Schema evolution as an organizational, not technical, problem</li>
+      </ol>
     </div>
   </section>
 
   <footer>
-    // the whole system, compressed: append-only, partitioned, replicated logs for data → the same pattern for metadata →
-    consumers track their own position → durability is a per-topic contract, not a platform-wide promise →
-    every "stuck" state needs a timeout-forced exit → and the log pattern, once you see it, is the implementation strategy, not just the product.
+    // the whole conversation, compressed: throughput over latency → sequential writes → append-only history →
+    consumer-owned offsets → partitions trade coordination for parallelism → order is per-partition, never global →
+    one leader prevents diverged history → ISR makes durability track reality, not a static number →
+    every "feature" here was a forced move, not a choice made in a vacuum.
   </footer>
 
 </div>
 
 <script>
-// POMODORO
-const POMO_TOTAL=25*60,POMO_CIRC=163.36;
-let pomoSecondsLeft=POMO_TOTAL,pomoInterval=null,pomoRunning=false;
-
-function updatePomoDisplay(){
-  const m=Math.floor(pomoSecondsLeft/60),s=pomoSecondsLeft%60;
-  document.getElementById('pomoTime').textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-  const frac=pomoSecondsLeft/POMO_TOTAL;
-  const arc=document.getElementById('pomoArc'),dot=document.getElementById('pomoDot');
-  arc.style.strokeDashoffset=POMO_CIRC*(1-frac);
-  const angle=-Math.PI/2+2*Math.PI*(1-frac);
-  dot.setAttribute('cx',(32+26*Math.cos(angle)).toFixed(2));
-  dot.setAttribute('cy',(32+26*Math.sin(angle)).toFixed(2));
-  const color=pomoSecondsLeft>750?'#2E8B82':pomoSecondsLeft>300?'#C9871F':'#C1543A';
-  arc.style.stroke=color;dot.style.fill=color;
-  const w=document.getElementById('pomo');
-  (pomoSecondsLeft<=300&&pomoSecondsLeft>0&&pomoRunning)
-    ?w.classList.add('pomo-urgent'):w.classList.remove('pomo-urgent');
-}
-
-function pomoToggle(){
-  const btn=document.getElementById('pomoPlayBtn'),w=document.getElementById('pomo');
-  if(pomoRunning){
-    clearInterval(pomoInterval);pomoRunning=false;
-    btn.textContent='▶ start';w.classList.remove('pomo-running','pomo-urgent');
-  } else {
-    if(pomoSecondsLeft===0)return;
-    pomoRunning=true;btn.textContent='⏸ pause';w.classList.add('pomo-running');
-    pomoInterval=setInterval(()=>{
-      pomoSecondsLeft--;updatePomoDisplay();
-      if(pomoSecondsLeft===0){
-        clearInterval(pomoInterval);pomoRunning=false;
-        w.classList.remove('pomo-running','pomo-urgent');w.classList.add('pomo-done');
-        btn.textContent='▶ start';
-        document.getElementById('pomoStatus').textContent='DONE!';
-        document.getElementById('pomoEmoji').textContent='🎉';
-        setTimeout(()=>w.classList.remove('pomo-done'),600);
-        try{
-          const ctx=new(window.AudioContext||window.webkitAudioContext)();
-          [880,1108,1318].forEach((freq,i)=>{
-            const o=ctx.createOscillator(),g=ctx.createGain();
-            o.connect(g);g.connect(ctx.destination);
-            o.frequency.value=freq;o.type='sine';
-            const t=ctx.currentTime+i*.25;
-            g.gain.setValueAtTime(.25,t);g.gain.exponentialRampToValueAtTime(.001,t+.8);
-            o.start(t);o.stop(t+.8);
-          });
-        }catch(e){}
-      }
-    },1000);
-  }
-}
-
-function pomoReset(){
-  clearInterval(pomoInterval);pomoRunning=false;pomoSecondsLeft=POMO_TOTAL;
-  document.getElementById('pomoPlayBtn').textContent='▶ start';
-  document.getElementById('pomoStatus').textContent='FOCUS';
-  document.getElementById('pomoEmoji').textContent='🍅';
-  document.getElementById('pomo').classList.remove('pomo-running','pomo-urgent','pomo-done');
-  updatePomoDisplay();
-}
-updatePomoDisplay();
-
 function toggleTheme(){
   const body = document.body; const btn = document.getElementById('themeBtn');
   body.classList.toggle('dark-theme');
