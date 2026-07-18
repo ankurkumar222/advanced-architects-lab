@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Index Ledger — A Deep Dive Into SQL Indexes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --ink-black:#0b0e12;
+    --panel:#12161d;
+    --panel-raised:#171c24;
+    --card:#1b212b;
+    --hairline:#2a3140;
+    --paper:#e9e4d8;
+    --paper-dim:#a8a294;
+    --amber:#d9a441;
+    --amber-dim:#8f6f30;
+    --teal:#5fb8ad;
+    --red-flag:#c26a5b;
+    --text-body:#c9cdd6;
+    --text-dim:#767d8a;
+  }
+
+  *{box-sizing:border-box; margin:0; padding:0;}
+
+  body{
+    background:var(--ink-black);
+    color:var(--text-body);
+    font-family:'Inter', sans-serif;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  ::selection{ background:var(--amber-dim); color:var(--paper); }
+
+  /* ---------- Ledger texture background ---------- */
+  .ledger-bg{
+    position:fixed; inset:0; z-index:-1;
+    background-image:
+      repeating-linear-gradient(180deg, transparent, transparent 38px, rgba(217,164,65,0.035) 39px),
+      radial-gradient(ellipse at 20% -10%, rgba(95,184,173,0.06), transparent 55%),
+      radial-gradient(ellipse at 90% 10%, rgba(217,164,65,0.05), transparent 45%);
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:100px 8vw 70px;
+    border-bottom:1px solid var(--hairline);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.24em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-bottom:22px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .hero-tag::before{
+    content:''; width:22px; height:1px; background:var(--amber-dim);
+  }
+  h1.hero-title{
+    font-family:'Newsreader', serif;
+    font-weight:600;
+    font-size:clamp(38px, 6vw, 74px);
+    color:var(--paper);
+    line-height:1.03;
+    letter-spacing:-0.01em;
+    max-width:16ch;
+  }
+  h1.hero-title em{
+    font-style:italic;
+    color:var(--amber);
+    font-weight:500;
+  }
+  .hero-sub{
+    margin-top:26px;
+    max-width:640px;
+    font-size:17px;
+    color:var(--paper-dim);
+    font-family:'Newsreader', serif;
+    font-style:italic;
+    font-size:19px;
+  }
+  .hero-meta{
+    margin-top:44px;
+    display:flex; gap:40px; flex-wrap:wrap;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .hero-meta b{ color:var(--paper); display:block; font-size:20px; font-weight:600; margin-bottom:4px;}
+
+  /* card catalog drawer strip */
+  .catalog-nav{
+    display:flex; overflow-x:auto;
+    border-bottom:1px solid var(--hairline);
+    background:var(--panel);
+    position:sticky; top:0; z-index:50;
+    scrollbar-width:thin;
+  }
+  .catalog-nav a{
+    flex:0 0 auto;
+    padding:16px 22px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--text-dim);
+    text-decoration:none;
+    border-right:1px solid var(--hairline);
+    white-space:nowrap;
+    transition:all 0.2s ease;
+    position:relative;
+  }
+  .catalog-nav a:hover{ color:var(--amber); background:var(--panel-raised); }
+  .catalog-nav a .num{ color:var(--amber-dim); margin-right:8px; }
+
+  /* ---------- Section shell ---------- */
+  section.topic{
+    padding:80px 8vw;
+    border-bottom:1px solid var(--hairline);
+    max-width:1180px;
+    margin:0 auto;
+  }
+  .topic-head{
+    display:flex; align-items:baseline; gap:20px;
+    margin-bottom:8px;
+  }
+  .topic-num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px;
+    color:var(--amber-dim);
+    border:1px solid var(--hairline);
+    padding:4px 10px;
+    border-radius:3px;
+  }
+  h2.topic-title{
+    font-family:'Newsreader', serif;
+    font-weight:600;
+    font-size:clamp(26px, 3.4vw, 40px);
+    color:var(--paper);
+  }
+  .topic-dek{
+    font-family:'Newsreader', serif;
+    font-style:italic;
+    font-size:18px;
+    color:var(--paper-dim);
+    max-width:70ch;
+    margin:18px 0 44px;
+    padding-left:24px;
+    border-left:2px solid var(--amber-dim);
+  }
+
+  .grid-2{
+    display:grid; grid-template-columns:1.05fr 0.95fr; gap:48px;
+    align-items:start;
+  }
+  @media(max-width:900px){ .grid-2{ grid-template-columns:1fr; } }
+
+  .core-facts{ list-style:none; }
+  .core-facts li{
+    display:flex; gap:14px;
+    padding:14px 0;
+    border-bottom:1px solid var(--hairline);
+    font-size:15px;
+  }
+  .core-facts li:last-child{ border-bottom:none; }
+  .core-facts .bullet{
+    color:var(--amber); font-family:'IBM Plex Mono', monospace; font-size:13px; margin-top:3px;
+  }
+  .core-facts code{
+    font-family:'IBM Plex Mono', monospace;
+    background:rgba(217,164,65,0.1);
+    color:var(--amber);
+    padding:1px 6px; border-radius:3px; font-size:13px;
+  }
+
+  .diagram-frame{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:8px;
+    padding:22px;
+  }
+  .diagram-frame .caption{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.08em;
+    margin-bottom:14px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .diagram-frame .caption button{
+    background:none; border:1px solid var(--hairline);
+    color:var(--teal); font-family:'IBM Plex Mono', monospace;
+    font-size:10px; padding:4px 10px; border-radius:12px; cursor:pointer;
+    text-transform:none; letter-spacing:0;
+  }
+  .diagram-frame .caption button:hover{ border-color:var(--teal); background:rgba(95,184,173,0.08); }
+
+  /* ---------- Q&A cards ---------- */
+  .qa-section-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--teal);
+    margin:56px 0 22px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .qa-section-label::after{ content:''; flex:1; height:1px; background:var(--hairline); }
+
+  .qa-card{
+    background:var(--card);
+    border:1px solid var(--hairline);
+    border-left:3px solid var(--amber-dim);
+    border-radius:6px;
+    margin-bottom:14px;
+    overflow:hidden;
+    transition:border-left-color 0.25s ease;
+  }
+  .qa-card.scenario{ border-left-color:var(--teal); }
+  .qa-card.open{ border-left-color:var(--amber); }
+  .qa-card.scenario.open{ border-left-color:var(--teal); }
+
+  .qa-q{
+    padding:18px 22px;
+    display:flex; justify-content:space-between; align-items:center;
+    gap:20px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .qa-q .qtext{
+    font-family:'Newsreader', serif;
+    font-size:17px;
+    color:var(--paper);
+    font-weight:500;
+  }
+  .qa-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--amber);
+    border:1px solid var(--amber-dim);
+    padding:2px 7px; border-radius:10px;
+    flex:0 0 auto;
+    margin-right:10px;
+  }
+  .qa-card.scenario .qa-tag{ color:var(--teal); border-color:var(--teal); }
+
+  .qa-plus{
+    flex:0 0 auto;
+    width:24px; height:24px;
+    border:1px solid var(--hairline);
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--text-dim);
+    transition:transform 0.3s ease;
+    font-size:14px;
+  }
+  .qa-card.open .qa-plus{ transform:rotate(45deg); color:var(--amber); border-color:var(--amber); }
+
+  .qa-a{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height 0.4s cubic-bezier(.4,0,.2,1);
+    background:var(--panel);
+  }
+  .qa-a-inner{
+    padding:4px 22px 24px;
+    font-size:15px;
+    color:var(--text-body);
+    border-top:1px solid var(--hairline);
+    padding-top:18px;
+  }
+  .qa-a-inner p{ margin-bottom:12px; }
+  .qa-a-inner p:last-child{ margin-bottom:0; }
+  .qa-a-inner code, .qa-a-inner pre{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+  }
+  .qa-a-inner pre{
+    background:var(--ink-black);
+    border:1px solid var(--hairline);
+    padding:14px 16px;
+    border-radius:5px;
+    overflow-x:auto;
+    margin:12px 0;
+    color:var(--teal);
+  }
+  .qa-a-inner .verdict{
+    display:inline-block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    font-weight:600;
+    padding:3px 9px;
+    border-radius:4px;
+    margin-bottom:10px;
+  }
+  .verdict.yes{ background:rgba(95,184,173,0.15); color:var(--teal); }
+  .verdict.no{ background:rgba(194,106,91,0.15); color:var(--red-flag); }
+  .verdict.partial{ background:rgba(217,164,65,0.15); color:var(--amber); }
+
+  /* ---------- Plain-terms simplified callout ---------- */
+  .plain-box{
+    background:rgba(95,184,173,0.06);
+    border:1px solid rgba(95,184,173,0.25);
+    border-radius:6px;
+    padding:14px 18px;
+    margin-bottom:16px;
+  }
+  .plain-box .plain-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+    color:var(--teal);
+    margin-bottom:8px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .plain-box p{
+    font-size:14px;
+    color:var(--text-body);
+    margin-bottom:10px;
+  }
+  .plain-box p:last-of-type{ margin-bottom:10px; }
+  .rough-sketch{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    line-height:1.5;
+    color:var(--teal);
+    background:var(--ink-black);
+    border:1px solid var(--hairline);
+    border-radius:5px;
+    padding:12px 14px;
+    overflow-x:auto;
+    white-space:pre;
+    margin:0;
+  }
+
+  /* ---------- Comparison table ---------- */
+  table.compare{
+    width:100%; border-collapse:collapse;
+    margin:30px 0;
+    font-size:14px;
+  }
+  table.compare th{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--amber);
+    text-align:left;
+    padding:12px 16px;
+    border-bottom:2px solid var(--amber-dim);
+  }
+  table.compare td{
+    padding:13px 16px;
+    border-bottom:1px solid var(--hairline);
+    color:var(--text-body);
+  }
+  table.compare tr:hover td{ background:var(--panel-raised); }
+  table.compare td:first-child{ color:var(--paper); font-weight:500; }
+
+  /* ---------- Footer ---------- */
+  footer{
+    padding:60px 8vw 100px;
+    text-align:center;
+  }
+  footer .sign{
+    font-family:'Newsreader', serif;
+    font-style:italic;
+    font-size:20px;
+    color:var(--paper-dim);
+  }
+  footer .stamp{
+    margin-top:20px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:0.1em;
+  }
+
+  /* progress ring */
+  #progress-wrap{
+    position:fixed; bottom:26px; right:26px; z-index:60;
+    width:56px; height:56px;
+  }
+  #progress-wrap svg{ transform:rotate(-90deg); }
+  #progress-wrap circle{ fill:none; stroke-width:3; }
+  #progress-wrap .bg{ stroke:var(--hairline); }
+  #progress-wrap .fg{ stroke:var(--amber); stroke-linecap:round; transition:stroke-dashoffset 0.2s; }
+  #progress-wrap .pct{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--paper);
+  }
+
+  /* animations for diagrams */
+  @keyframes travel{
+    0%{ opacity:0; }
+    10%{ opacity:1; }
+    90%{ opacity:1; }
+    100%{ opacity:0; }
+  }
+  @keyframes pulse-node{
+    0%,100%{ filter:drop-shadow(0 0 0px var(--amber)); }
+    50%{ filter:drop-shadow(0 0 6px var(--amber)); }
+  }
+  .traverse-dot{
+    animation:travel 3s ease-in-out infinite;
+  }
+  .pulse{ animation:pulse-node 2s ease-in-out infinite; }
+
+  .flow-svg text{ font-family:'IBM Plex Mono', monospace; fill:var(--paper); }
+  .flow-svg .dim{ fill:var(--text-dim); }
+  .flow-svg .amber{ fill:var(--amber); stroke:var(--amber); }
+  .flow-svg .teal{ fill:var(--teal); stroke:var(--teal); }
+  .flow-svg line, .flow-svg path{ stroke:var(--hairline); }
+
+  /* ---------- Audio panel ---------- */
+  .audio-panel{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:8px;
+    padding:18px 20px;
+    margin:22px 0 36px;
+  }
+  .audio-panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .audio-panel-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--amber);
+  }
+  .audio-count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--text-dim);
+    border:1px solid var(--hairline); border-radius:10px; padding:1px 8px;
+  }
+  .audio-empty{
+    font-size:13px; color:var(--text-dim); font-style:italic; padding:2px 0 14px;
+  }
+  .audio-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .audio-item{
+    background:var(--panel-raised);
+    border:1px solid var(--hairline);
+    border-radius:6px;
+    padding:12px 14px;
+  }
+  .audio-item-top{
+    display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;
+  }
+  .audio-title-input{
+    flex:1; min-width:120px;
+    background:none; border:none; border-bottom:1px dashed var(--hairline);
+    color:var(--paper); font-family:'Newsreader', serif; font-size:15px; font-weight:500;
+    padding:2px 2px 4px;
+  }
+  .audio-title-input:focus{ outline:none; border-bottom-color:var(--amber); }
+  .audio-item-actions{ display:flex; gap:6px; flex:0 0 auto; }
+  .ai-btn{
+    background:none; border:1px solid var(--hairline); color:var(--text-dim);
+    width:26px; height:26px; border-radius:5px; cursor:pointer; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ai-btn:hover:not(:disabled){ border-color:var(--teal); color:var(--teal); }
+  .ai-btn.danger:hover{ border-color:var(--red-flag); color:var(--red-flag); }
+  .ai-btn:disabled{ opacity:0.3; cursor:default; }
+
+  .audio-controls{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .ac-btn{
+    background:none; border:1px solid var(--hairline); color:var(--paper);
+    width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:12px;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .ac-btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .ac-time{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim); flex:0 0 auto; }
+  .ac-seek{ flex:1 1 120px; accent-color:var(--amber); min-width:80px; }
+  .ac-vol{ width:70px; accent-color:var(--teal); flex:0 0 auto; }
+  .ac-icon{ font-size:12px; color:var(--text-dim); flex:0 0 auto; }
+  .ac-speed{
+    background:var(--panel); border:1px solid var(--hairline); color:var(--text-body);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; border-radius:4px; padding:4px 6px; flex:0 0 auto;
+  }
+  .audio-fallback{
+    margin-top:8px; font-size:12px; color:var(--text-dim);
+  }
+  .audio-fallback a{ color:var(--teal); }
+
+  .audio-add{
+    display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--hairline); padding-top:14px;
+  }
+  .audio-add-title, .audio-add-url{
+    background:var(--ink-black); border:1px solid var(--hairline); color:var(--text-body);
+    font-size:13px; padding:8px 10px; border-radius:5px; font-family:'Inter', sans-serif;
+  }
+  .audio-add-title{ flex:0 1 180px; }
+  .audio-add-url{ flex:1 1 220px; }
+  .audio-add-title:focus, .audio-add-url:focus{ outline:none; border-color:var(--amber-dim); }
+  .audio-add-btn{
+    background:none; border:1px solid var(--amber-dim); color:var(--amber);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; padding:8px 14px; border-radius:5px; cursor:pointer;
+    flex:0 0 auto;
+  }
+  .audio-add-btn:hover{ background:rgba(217,164,65,0.1); }
+
+  /* ---------- Sync bar ---------- */
+  #sync-bar{
+    position:fixed; bottom:26px; left:26px; z-index:60;
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel-raised); border:1px solid var(--hairline);
+    padding:10px 14px; border-radius:30px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.35);
+  }
+  #sync-btn{
+    background:var(--amber-dim); border:none; color:var(--ink-black);
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:11px;
+    padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;
+  }
+  #sync-btn:hover{ background:var(--amber); }
+  #sync-btn:disabled{ opacity:0.6; cursor:default; }
+  .sync-status{ color:var(--text-dim); white-space:nowrap; }
+  .sync-status.dirty{ color:var(--amber); }
+  #sync-settings-btn{
+    background:none; border:1px solid var(--hairline); color:var(--text-dim);
+    width:26px; height:26px; border-radius:50%; cursor:pointer; flex:0 0 auto;
+  }
+  #sync-settings-btn:hover{ color:var(--teal); border-color:var(--teal); }
+
+  /* ---------- GitHub settings modal ---------- */
+  .gh-modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gh-modal{
+    background:var(--card); border:1px solid var(--hairline); border-radius:10px;
+    padding:26px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  }
+  .gh-modal h3{
+    font-family:'Newsreader', serif; color:var(--paper); font-size:20px; margin-bottom:16px;
+  }
+  .gh-modal label{
+    display:block; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;
+  }
+  .gh-modal label input[type=text], .gh-modal label input[type=password]{
+    display:block; width:100%; margin-top:6px;
+    background:var(--ink-black); border:1px solid var(--hairline); color:var(--text-body);
+    font-family:'Inter', sans-serif; font-size:13px; padding:9px 10px; border-radius:5px;
+  }
+  .gh-modal label.gh-remember{
+    display:flex; align-items:center; gap:8px; text-transform:none; font-size:12px;
+  }
+  .gh-modal label.gh-remember input{ width:auto; margin:0; }
+  .gh-note{ font-size:11px; color:var(--text-dim); line-height:1.5; margin-bottom:16px; }
+  .gh-modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .gh-modal-actions button{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:9px 16px; border-radius:5px; cursor:pointer;
+    background:none; border:1px solid var(--hairline); color:var(--text-body);
+  }
+  .gh-modal-actions button.primary{
+    background:var(--amber-dim); border-color:var(--amber-dim); color:var(--ink-black); font-weight:600;
+  }
+  .gh-modal-actions button.primary:hover{ background:var(--amber); }
+  .gh-modal-msg{ margin-top:10px; font-size:12px; color:var(--teal); min-height:16px; }
+
+  @media(max-width:640px){
+    #sync-bar{ left:14px; right:14px; bottom:14px; }
+    .ac-seek{ flex-basis:100%; order:5; }
+  }
+</style>
+</head>
+<body>
+
+<div class="ledger-bg"></div>
+
+<div id="progress-wrap">
+  <svg width="56" height="56">
+    <circle class="bg" cx="28" cy="28" r="24"></circle>
+    <circle class="fg" id="progress-circle" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="150.8"></circle>
+  </svg>
+  <div class="pct" id="progress-pct">0%</div>
+</div>
+
+<div id="sync-bar">
+  <button id="sync-btn" onclick="handleSyncClick()">⇪ Sync to GitHub</button>
+  <span id="sync-status" class="sync-status">no local changes</span>
+  <button id="sync-settings-btn" title="GitHub sync settings" onclick="openGithubSettings()">⚙</button>
+</div>
+
+<div id="gh-modal-overlay" class="gh-modal-overlay" style="display:none;">
+  <div class="gh-modal">
+    <h3>GitHub Sync Settings</h3>
+    <label>Owner
+      <input id="gh-owner" type="text" placeholder="e.g. ankur-xyz">
+    </label>
+    <label>Repo
+      <input id="gh-repo" type="text" placeholder="e.g. architects-lab">
+    </label>
+    <label>Branch
+      <input id="gh-branch" type="text" value="creative">
+    </label>
+    <label>File path
+      <input id="gh-path" type="text" placeholder="audio-data/sql_indexes_deep_dive.json">
+    </label>
+    <label>Personal Access Token
+      <input id="gh-token" type="password" placeholder="ghp_...">
+    </label>
+    <label class="gh-remember"><input id="gh-remember" type="checkbox"> Remember token on this device (localStorage)</label>
+    <p class="gh-note">This token is used only from this page to call the GitHub API directly from your browser to commit to the branch above — it's never sent anywhere else. Use a token scoped to just this repo's contents. If "remember" is unchecked, the token is kept only for this browser tab session.</p>
+    <div class="gh-modal-actions">
+      <button onclick="closeGithubSettings()">Cancel</button>
+      <button class="primary" onclick="saveGithubSettings()">Save</button>
+    </div>
+    <p id="gh-modal-msg" class="gh-modal-msg"></p>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="hero-tag">Architects Lab — Internals Series</div>
+  <h1 class="hero-title">The Index <em>Ledger</em></h1>
+  <p class="hero-sub">Ten entries — seven on SQL, three on the fault line between SQL and NoSQL indexing. Same question asked every way: where does the data actually sit, and what does the engine have to do to find it. Expand each card — don't just read the answer, argue with it first.</p>
+  <div class="hero-meta">
+    <div><b>10</b>topics</div>
+    <div><b>40+</b>questions to expand</div>
+    <div><b>~55 min</b>first pass</div>
+  </div>
+</header>
+
+<nav class="catalog-nav" id="catalog-nav">
+  <a href="#t1"><span class="num">01</span>Clustered vs Non-Clustered</a>
+  <a href="#t2"><span class="num">02</span>B-Tree Internals</a>
+  <a href="#t3"><span class="num">03</span>Composite &amp; Leftmost Prefix</a>
+  <a href="#t4"><span class="num">04</span>When Indexes Get Ignored</a>
+  <a href="#t5"><span class="num">05</span>Primary Key vs Unique Key</a>
+  <a href="#t6"><span class="num">06</span>Covering Index</a>
+  <a href="#t7"><span class="num">07</span>Foreign Key Indexing</a>
+  <a href="#t8"><span class="num">08</span>The NoSQL Index Landscape</a>
+  <a href="#t9"><span class="num">09</span>Only SQL Can Do This</a>
+  <a href="#t10"><span class="num">10</span>Only NoSQL Can Do This</a>
+</nav>
+
+<!-- ============================================================ -->
+<!-- TOPIC 1 — CLUSTERED VS NON-CLUSTERED -->
+<!-- ============================================================ -->
+<section class="topic" id="t1">
+  <div class="topic-head">
+    <span class="topic-num">01</span>
+    <h2 class="topic-title">Clustered vs Non-Clustered</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t1"></div>
+
+  <p class="topic-dek">One of these <em>is</em> the table. The other just points at it. That single distinction explains almost every follow-up question you'll get asked.</p>
+
+  <div class="grid-2">
+    <ul class="core-facts">
+      <li><span class="bullet">→</span><div>A <code>clustered index</code> determines the physical order rows are stored on disk. The leaf level of the index <em>is</em> the actual row data — there's no separate table to go fetch.</div></li>
+      <li><span class="bullet">→</span><div>Because physical order can only be one thing at a time, a table can have exactly <b>one</b> clustered index (usually built on the primary key).</div></li>
+      <li><span class="bullet">→</span><div>A <code>non-clustered index</code> is a separate structure. Its leaf nodes hold the indexed column(s) plus a <b>pointer</b> — either the row's physical location (heap) or the clustering key (InnoDB).</div></li>
+      <li><span class="bullet">→</span><div>You can have <b>many</b> non-clustered indexes on one table, because each is just an independent lookup structure sitting beside the real data.</div></li>
+      <li><span class="bullet">→</span><div>In InnoDB (MySQL), every secondary index stores the <code>PRIMARY KEY</code> value as its pointer — not a disk address. That's why a wide, unstable primary key is expensive everywhere, not just at the clustered level.</div></li>
+    </ul>
+
+    <div class="diagram-frame">
+      <div class="caption"><span>Fig 1 — Lookup path comparison</span><button onclick="replay('svg1')">▸ replay</button></div>
+      <svg id="svg1" class="flow-svg" viewBox="0 0 460 320" width="100%">
+        <text x="10" y="20" font-size="11" class="amber">CLUSTERED — index IS the table</text>
+        <rect x="10" y="34" width="200" height="26" fill="none" stroke="#d9a441" rx="3"/>
+        <text x="18" y="51" font-size="11">B-Tree leaf → full row data</text>
+        <line x1="60" y1="10" x2="60" y2="34" stroke-dasharray="3,3"/>
+        <circle cx="60" cy="20" r="4" class="amber" fill="#d9a441">
+          <animate attributeName="cy" values="10;34;10" dur="2.4s" repeatCount="indefinite"/>
+        </circle>
+        <text x="10" y="90" font-size="10" class="dim">1 seek → data found. Done.</text>
+
+        <text x="10" y="150" font-size="11" class="teal">NON-CLUSTERED — index POINTS to table</text>
+        <rect x="10" y="164" width="150" height="26" fill="none" stroke="#5fb8ad" rx="3"/>
+        <text x="16" y="181" font-size="10">index leaf: key + PK ptr</text>
+        <line x1="160" y1="177" x2="250" y2="177" stroke-dasharray="3,3"/>
+        <path d="M160,177 L250,177" stroke="#5fb8ad" fill="none" marker-end="url(#arrow)"/>
+        <rect x="255" y="164" width="150" height="26" fill="none" stroke="#d9a441" rx="3"/>
+        <text x="262" y="181" font-size="10">clustered table row</text>
+        <circle cx="30" cy="177" r="3" fill="#5fb8ad">
+          <animate attributeName="cx" values="30;250;30" dur="2.8s" repeatCount="indefinite"/>
+        </circle>
+        <text x="10" y="230" font-size="10" class="dim">2 seeks → index, then table.</text>
+        <text x="10" y="248" font-size="10" class="dim">This is the "bookmark lookup" cost.</text>
+
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 z" fill="#5fb8ad"/>
+          </marker>
+        </defs>
+
+        <line x1="10" y1="270" x2="410" y2="270" stroke="#2a3140"/>
+        <text x="10" y="292" font-size="10" class="dim">On insert: clustered may trigger a</text>
+        <text x="10" y="306" font-size="10" class="dim">page split; non-clustered just adds an entry.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can a table have only one clustered index but unlimited non-clustered ones?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Clustered = the actual physical order of rows on disk. Only one order is possible at a time, like a bookshelf. Non-clustered = separate little card catalogs pointing at those books — you can make as many catalogs as you want.</p><pre class="rough-sketch">CLUSTERED (the shelf itself):
+  [Book A][Book B][Book C]   <- only ONE physical order possible
+
+NON-CLUSTERED (card catalogs beside the shelf):
+  Catalog 1 (by author) --> points to shelf position
+  Catalog 2 (by title)  --> points to shelf position
+  Catalog 3 (by year)   --> points to shelf position
+  (as many catalogs as you want — the shelf itself never changes)</pre></div>
+      <p>Because "clustered" isn't really a property of the index — it's a property of the <em>table's physical layout</em>. Rows on disk (or in InnoDB's case, in pages) can only be sorted in one order at any given time. If you tried to have two clustered indexes, you'd be asking the engine to physically store the same rows in two different sequences simultaneously — which is a contradiction, not a feature.</p>
+      <p>Non-clustered indexes sidestep this entirely: they don't touch physical row order. They're just separate, independently-sorted lookup structures that carry a pointer back to wherever the real row lives. That's why you can stack as many as you want — each one is its own self-contained B-Tree with no claim on how the table itself is arranged.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">What actually happens, physically, when you insert a row into a clustered index vs a non-clustered one?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Clustered insert has to make room on the shelf itself (may split a full shelf into two). Non-clustered insert just adds a new card to a catalog — nothing on the shelf moves.</p><pre class="rough-sketch">CLUSTERED insert (row must go in exact sorted disk position):
+  Shelf full? --> SPLIT the shelf into two, move half the books
+  (expensive — real data moves)
+
+NON-CLUSTERED insert (index entry only):
+  Just add one new card to the catalog, pointing at the row
+  (cheap — no real data moves)</pre></div>
+      <p><b>Clustered:</b> the engine has to find the exact physical page where this row belongs based on the clustering key's sort order, and slot it in. If that page is full, it triggers a <b>page split</b> — the page divides in two, roughly half the rows move to a new page, and pointers get updated. This is I/O-expensive and causes fragmentation over time, especially if your clustering key isn't sequential (a random UUID being the classic offender).</p>
+      <p><b>Non-clustered:</b> the engine just finds the right leaf position in that index's own B-Tree (sorted by the indexed column) and adds an entry — the key value plus a pointer. It doesn't move any actual row data. Still possible to trigger a page split within the <em>index structure itself</em> if that leaf page is full, but it's far cheaper because no real row data is being shuffled.</p>
+      <p>This is exactly why an ever-increasing key (auto-increment ID, or a time-ordered ID) makes a great clustering key — new rows always land at the end, no mid-page splits.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">If a table has no clustered index at all (a heap table), how does a non-clustered index find the row?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>With no shelf order at all, books just sit wherever there's space. So the catalog card has to write the exact physical address instead of a shelf position.</p><pre class="rough-sketch">HEAP TABLE (no sorted shelf, rows just wherever there's space):
+  Row lives at: file 2, page 14, slot 3
+
+Catalog card must store the EXACT physical address:
+  catalog entry --> "file 2, page 14, slot 3"
+
+Problem: if the row physically moves (rebuild/compaction),
+every catalog card pointing to it must be updated too.</pre></div>
+      <p>In a heap (no clustered index — this is the default in Postgres, and possible in SQL Server if you skip defining one), rows don't live in any particular sorted order. So the non-clustered index instead stores a direct physical address — a <b>Row ID (RID)</b> or <b>ctid</b> in Postgres terms — pointing to the exact file/page/slot where the row sits.</p>
+      <p>This is actually a slightly cheaper pointer than the InnoDB approach (which stores the whole PK value), but it comes with a catch: if the row ever physically moves — say, during a table rebuild or heap compaction — every non-clustered index pointing to it via RID has to be updated. InnoDB's approach (pointing via PK) avoids this because the PK value doesn't change even if the row's physical page does.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Your <code style="background:none;color:inherit;padding:0;">transactions</code> table grows by lakhs of rows a day and uses a random UUID as primary key. What breaks?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A random UUID means every new order lands in a random spot on the shelf, not at the end — constant splitting, constant mess.</p><pre class="rough-sketch">Sequential ID (1,2,3,4...): new rows always at the END
+  [1][2][3][4][5] --> insert 6 --> [1][2][3][4][5][6]   (easy, no split)
+
+Random UUID: new rows land ANYWHERE
+  [..][..][new!][..][..][new!][..]   <- constant splitting, fragmentation
+
+Fix: sequential surrogate key for clustering,
+     keep the UUID as a separate unique (non-clustered) column</pre></div>
+      <span class="verdict no">problem</span>
+      <p>If the PK (and therefore the clustered index) is a random UUID, every single insert lands at a random point in the middle of the sorted structure — never at the end. That means constant, unpredictable page splits, rapidly increasing fragmentation, and worse cache locality, because "recent" rows that logically belong together end up scattered across unrelated physical pages.</p>
+      <p>On top of that, since every secondary index in InnoDB carries the full PK value as its pointer, a 16-byte random UUID makes <em>every</em> non-clustered index on that table wider and slower than it needs to be.</p>
+      <p><b>Better approach:</b> use a monotonically increasing surrogate key — an auto-increment integer, or a time-sortable ID like ULID/Snowflake — as the clustering key, and keep the UUID as a separate unique (non-clustered) column if you need it for external references. New rows then always append at the tail, splits become rare, and secondary indexes stay lean.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">On your demat platform's <code style="background:none;color:inherit;padding:0;">holdings</code> table — cluster on <code style="background:none;color:inherit;padding:0;">holding_id</code> or on <code style="background:none;color:inherit;padding:0;">demat_account_id</code>?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Think about what you read most often, not what "feels like" the natural key.</p><pre class="rough-sketch">Cluster by holding_id:
+  [h1][h2][h3][h4]...   <- one customer's holdings scattered everywhere
+
+Cluster by demat_account_id:
+  [acct A: h1,h5,h9][acct B: h2,h6]...  <- one customer's holdings TOGETHER
+  "all holdings for this account" = ONE fast read, not scattered reads
+
+Better: cluster on (demat_account_id, holding_id) together
+  -- keeps per-account grouping AND append-mostly inserts per account</pre></div>
+      <p>Think about the dominant read pattern first, not the "natural" primary key. If 90% of your queries are "fetch all holdings for this demat account" (portfolio view, statement generation), clustering physically by <code style="background:none;color:inherit;padding:0;">demat_account_id</code> means all of one customer's holdings sit on the same or adjacent disk pages — one sequential read instead of scattered random reads across the table.</p>
+      <p>But if you cluster on <code style="background:none;color:inherit;padding:0;">demat_account_id</code> alone, inserts for a growing account (buying new securities) can still cause mid-table splits if other accounts' data sits between rows sorted purely by account. A common real-world compromise: cluster on a composite <code style="background:none;color:inherit;padding:0;">(demat_account_id, holding_id)</code> where <code style="background:none;color:inherit;padding:0;">holding_id</code> is itself sequential — you get per-account locality <em>and</em> append-mostly inserts within each account's range.</p>
+      <p>The lesson: clustering key choice should follow your query pattern, not habit.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 2 — B-TREE INTERNALS -->
+<!-- ============================================================ -->
+<section class="topic" id="t2">
+  <div class="topic-head">
+    <span class="topic-num">02</span>
+    <h2 class="topic-title">B-Tree Internals</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t2"></div>
+
+  <p class="topic-dek">Not a binary tree with a typo. The "B" buys you something binary trees structurally cannot: fewer trips to disk.</p>
+
+  <div class="grid-2">
+    <ul class="core-facts">
+      <li><span class="bullet">→</span><div>A B-Tree node holds <b>many keys</b> (not just one), matched to the database's page size — typically hundreds of keys per node.</div></li>
+      <li><span class="bullet">→</span><div><code>Fan-out</code> = the number of children per node. High fan-out means the tree stays extremely shallow even with millions of rows — usually 3–4 levels deep.</div></li>
+      <li><span class="bullet">→</span><div>Every level of the tree = one potential disk page read. Shallow tree → fewer reads → faster lookups.</div></li>
+      <li><span class="bullet">→</span><div>Leaf nodes are linked together in a doubly-linked list, sorted by key. This is what makes range scans and <code>ORDER BY</code> nearly free once you've found the starting point.</div></li>
+      <li><span class="bullet">→</span><div>The tree self-balances on every insert/delete — no separate maintenance step required to keep depth uniform (though fragmentation still accumulates and needs periodic rebuilds).</div></li>
+    </ul>
+
+    <div class="diagram-frame">
+      <div class="caption"><span>Fig 2 — Traversal to find key = 47</span><button onclick="replay('svg2')">▸ replay</button></div>
+      <svg id="svg2" class="flow-svg" viewBox="0 0 460 260" width="100%">
+        <!-- root -->
+        <rect x="170" y="10" width="120" height="30" fill="none" stroke="#d9a441" rx="4"/>
+        <text x="185" y="30" font-size="11">[25 | 60]</text>
+        <!-- level 2 -->
+        <rect x="40" y="90" width="100" height="30" fill="none" stroke="#5fb8ad" rx="4"/>
+        <text x="55" y="110" font-size="10">[10|20]</text>
+        <rect x="180" y="90" width="100" height="30" fill="none" stroke="#5fb8ad" rx="4" class="pulse"/>
+        <text x="195" y="110" font-size="10">[35|47|55]</text>
+        <rect x="320" y="90" width="100" height="30" fill="none" stroke="#5fb8ad" rx="4"/>
+        <text x="337" y="110" font-size="10">[75|90]</text>
+        <!-- lines root to l2 -->
+        <line x1="200" y1="40" x2="90" y2="90"/>
+        <line x1="230" y1="40" x2="230" y2="90"/>
+        <line x1="260" y1="40" x2="370" y2="90"/>
+        <!-- leaves -->
+        <rect x="180" y="170" width="100" height="28" fill="none" stroke="#d9a441" rx="4" class="pulse"/>
+        <text x="192" y="189" font-size="10" class="amber">…44,47,50…</text>
+        <line x1="230" y1="120" x2="230" y2="170"/>
+        <!-- linked list arrows across leaves -->
+        <line x1="40" y1="184" x2="180" y2="184" stroke-dasharray="2,4" stroke="#5fb8ad"/>
+        <line x1="280" y1="184" x2="420" y2="184" stroke-dasharray="2,4" stroke="#5fb8ad"/>
+        <text x="10" y="184" font-size="9" class="dim">←prev leaf</text>
+        <text x="330" y="184" font-size="9" class="dim">next leaf→</text>
+
+        <circle cx="230" cy="25" r="5" fill="#d9a441">
+          <animate attributeName="cy" values="25;105;184" dur="3s" repeatCount="indefinite"/>
+        </circle>
+        <text x="10" y="230" font-size="10" class="dim">3 page reads total — root, internal, leaf.</text>
+        <text x="10" y="246" font-size="10" class="dim">A million-row table often needs only 3–4 levels.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why not just use a plain Binary Search Tree instead of a B-Tree?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A BST is great in memory, where comparisons are nearly free. But an index lives on disk, and every level down can mean a slow disk trip. A B-Tree packs hundreds of keys per stop so you need far fewer trips.</p><pre class="rough-sketch">Binary Search Tree (2 children per node):
+  1,000,000 rows --> ~20 levels deep --> up to 20 disk trips
+
+B-Tree (hundreds of children per node):
+  1,000,000 rows --> only 3-4 levels deep --> only 3-4 disk trips
+
+Disk trips are slow. Comparisons in memory are basically free.
+B-Tree trades "more keys to check per stop" for "far fewer stops."</pre></div>
+      <p>A BST is optimized for comparisons in memory — each node has exactly 2 children, and depth grows as <code>log₂(n)</code>. For a million rows, that's roughly 20 levels deep. In pure RAM, 20 comparisons is nothing. But an index doesn't live in RAM — it lives on disk, and every level you descend is potentially a separate disk page fetch.</p>
+      <p>Disk I/O is orders of magnitude slower than a CPU comparison. So the real cost function isn't "how many comparisons" — it's "how many disk seeks." A B-Tree fixes this by making each node hold hundreds of keys instead of one, matched to the page size the disk reads in one go. That gives massive fan-out (hundreds of children per node instead of 2), which collapses the depth from ~20 levels down to 3 or 4. You trade "more keys examined per node" (cheap, happens in memory once the page is loaded) for "far fewer pages fetched" (expensive). That trade is the entire reason B-Trees exist for on-disk structures.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">How does a B-Tree serve an ORDER BY without a separate sort step?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Leaf pages are already sorted and chained together like a linked list — once you find the start, you just walk sideways.</p><pre class="rough-sketch">Leaf level (already sorted, linked left-to-right):
+
+[10,15]<-->[20,25]<-->[30,35]<-->[40,45]<-->...
+
+Find the starting point once, then just WALK SIDEWAYS
+-- results come out already in order, no extra sort needed</pre></div>
+      <p>Because the leaf nodes are already sorted by key and linked together as a doubly-linked list. Once the engine has traversed down to the correct starting leaf, it doesn't need to jump around the tree anymore — it just walks sideways along the linked list, reading keys in already-sorted order.</p>
+      <p>So <code>ORDER BY indexed_column</code> can skip the sort step entirely and stream results directly off the leaf chain. This is why you'll often see a query plan with no explicit "Sort" node when an index covers the ORDER BY clause — the optimizer recognized it gets sorted output for free.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does a B-Tree stay balanced automatically as rows are added and deleted?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>When a page fills up, it splits into two and pushes a copy of the middle key up to the parent — this can ripple all the way to the top, growing the tree evenly.</p><pre class="rough-sketch">Page fills up --> SPLIT into two pages
+     |
+     v
+middle key pushed UP to parent
+     |
+     v (if parent also fills up)
+split cascades upward, even to the root
+
+Because splits always start at a leaf and ripple UP evenly,
+every leaf ends up at exactly the same depth — no lopsided branches.</pre></div>
+      <p>The self-balancing behavior comes from the split/merge rule built into every insert and delete. When a leaf page fills up and a new key needs to go in, the page <b>splits</b> — it divides into two pages, and a copy of the middle key propagates up to the parent node as a new separator. If that causes the parent to overflow too, the split cascades upward, potentially all the way to the root — and if the root itself splits, the tree grows one level taller, uniformly, at the top.</p>
+      <p>Deletes work in reverse: if a page becomes too empty, it may merge with a sibling, and the tree can shrink a level. Because growth and shrinkage always happen at the root and propagate down uniformly, every leaf always ends up at exactly the same depth — there's no way for one branch to get lopsided the way an unbalanced BST can.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">A query filters <code style="background:none;color:inherit;padding:0;">WHERE created_at BETWEEN '2026-01-01' AND '2026-01-31'</code>. Walk through why a B-Tree handles this efficiently but a hash index wouldn't.</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A B-Tree finds the start once, then just walks forward reading in order until it passes the end. A hash index scrambles values, so nearby dates could land anywhere — it can't do ranges at all.</p><pre class="rough-sketch">B-TREE range scan:
+  find '2026-01-01' (one seek) --> walk sideways --> stop at '2026-01-31'
+  [01-01]-->[01-05]-->[01-14]-->...-->[01-31] STOP
+
+HASH INDEX:
+  hash('2026-01-01') = bucket 47
+  hash('2026-01-02') = bucket 12    <- totally unrelated bucket!
+  no way to walk "in order" -- hashing destroys the order</pre></div>
+      <p>The engine traverses the tree once to locate the leaf containing <code style="background:none;color:inherit;padding:0;">'2026-01-01'</code> — that's the only "search" it does, in O(log n) time. From there, it doesn't search again for the upper bound; it simply walks forward along the linked leaf chain, reading every entry in order, until it passes <code style="background:none;color:inherit;padding:0;">'2026-01-31'</code>, then stops. One traversal down, then a cheap sideways scan.</p>
+      <p>A hash index can't do this at all, because hashing deliberately destroys order — two dates one day apart could hash to completely unrelated buckets. A hash index can only answer "does this exact value exist," never "give me everything between these two values." That's precisely why hash indexes are excluded from your earlier "commonly used" list — range queries dominate real-world OLTP workloads, and hash indexes simply can't serve them.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 3 — COMPOSITE INDEX + LEFTMOST PREFIX -->
+<!-- ============================================================ -->
+<section class="topic" id="t3">
+  <div class="topic-head">
+    <span class="topic-num">03</span>
+    <h2 class="topic-title">Composite Index &amp; The Leftmost Prefix Rule</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t3"></div>
+
+  <p class="topic-dek">A composite index is sorted like a phone book sorted by surname, then first name. You can jump straight to "Sharma, Ankur" — but you cannot jump straight to all the "Ankur"s without reading the whole book.</p>
+
+  <div class="grid-2">
+    <ul class="core-facts">
+      <li><span class="bullet">→</span><div>Given <code>INDEX(user_id, status, created_at)</code>, the structure is sorted first by <code>user_id</code>, then <em>within</em> each user_id by <code>status</code>, then within that by <code>created_at</code>.</div></li>
+      <li><span class="bullet">→</span><div>The index can only be used efficiently starting from its <b>leftmost</b> column. Skip the leftmost column in your WHERE clause, and the whole index becomes unusable for a seek.</div></li>
+      <li><span class="bullet">→</span><div>Equality on earlier columns + range on a later column works well. Equality after a range column does not — once you range-scan, sort order for later columns breaks down.</div></li>
+      <li><span class="bullet">→</span><div>Column order should generally follow: <b>equality filters first, then the column you sort/range by last.</b></div></li>
+    </ul>
+
+    <div class="diagram-frame">
+      <div class="caption"><span>Fig 3 — Sort order of a composite index</span><button onclick="replay('svg3')">▸ replay</button></div>
+      <svg id="svg3" class="flow-svg" viewBox="0 0 460 240" width="100%">
+        <text x="10" y="20" font-size="11" class="dim">INDEX(user_id, status, created_at)</text>
+        <text x="10" y="45" font-size="10">user_id=1 →</text>
+        <rect x="90" y="34" width="90" height="20" fill="none" stroke="#d9a441"/>
+        <text x="96" y="49" font-size="9">status=ACTIVE</text>
+        <rect x="190" y="34" width="90" height="20" fill="none" stroke="#5fb8ad"/>
+        <text x="196" y="49" font-size="9">created 01-05</text>
+        <rect x="90" y="58" width="90" height="20" fill="none" stroke="#d9a441"/>
+        <text x="96" y="73" font-size="9">status=CLOSED</text>
+        <rect x="190" y="58" width="90" height="20" fill="none" stroke="#5fb8ad"/>
+        <text x="196" y="73" font-size="9">created 01-02</text>
+
+        <text x="10" y="100" font-size="10">user_id=2 →</text>
+        <rect x="90" y="89" width="90" height="20" fill="none" stroke="#d9a441"/>
+        <text x="96" y="104" font-size="9">status=ACTIVE</text>
+        <rect x="190" y="89" width="90" height="20" fill="none" stroke="#5fb8ad"/>
+        <text x="196" y="104" font-size="9">created 01-11</text>
+
+        <text x="10" y="130" font-size="10" class="dim">…and so on, user_id by user_id.</text>
+
+        <line x1="10" y1="150" x2="450" y2="150" stroke="#2a3140"/>
+        <text x="10" y="172" font-size="10" class="teal">status='ACTIVE' alone (no user_id)?</text>
+        <text x="10" y="188" font-size="10" class="dim">→ scattered across every user_id block.</text>
+        <text x="10" y="204" font-size="10" class="dim">   Index cannot jump straight there. Full scan instead.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does column order in a composite index matter so much — isn't it "the same data" either way?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Same data, totally different sort order — and sort order is the entire value of an index.</p><pre class="rough-sketch">INDEX(user_id, status):
+  sorted by user_id first, then status within each user
+  user1: [ACTIVE, CLOSED]   user2: [ACTIVE]
+  --> great for "everything for this user"
+
+INDEX(status, user_id):
+  sorted by status first, then user within each status
+  ACTIVE: [user1, user2, user5...]   CLOSED: [user1, user9...]
+  --> great for "everyone who is ACTIVE"
+
+Same columns, different sort = serves completely different queries.</pre></div>
+      <p>It's the same data but a completely different physical sort order — and the sort order is the entire value of an index. <code>INDEX(user_id, status)</code> groups all rows for a given user together, then sorts status within that group. <code>INDEX(status, user_id)</code> does the opposite: it groups all rows for a given status together, sorted by user within that.</p>
+      <p>These serve different queries well. The first is great for "get everything for this user, optionally filtered by status." The second is great for "get everyone who is ACTIVE, optionally filtered to one user." Neither one is a substitute for the other — picking the wrong order for your dominant query pattern means the index exists but doesn't actually help.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Given <code style="background:none;color:inherit;padding:0;">INDEX(user_id, status, created_at)</code>, which of these queries actually use it — fully, partially, or not at all?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Think of it like a phone book sorted by surname, then first name, then middle name — you can only jump straight in from the leftmost column.</p><pre class="rough-sketch">INDEX(user_id, status, created_at) -- like a phone book sorted by:
+   surname -> first name -> middle name
+
+Search by surname only?                 --> fast, direct jump
+Search by surname + first name?         --> fast, direct jump
+Search by first name only (no surname)? --> can't jump in, scan the book</pre></div>
+      <p><b>A.</b> <code style="background:none;color:inherit;padding:0;">WHERE user_id = 5</code> — <span class="verdict yes">full use</span> — leftmost column, direct seek.</p>
+      <p><b>B.</b> <code style="background:none;color:inherit;padding:0;">WHERE user_id = 5 AND status = 'ACTIVE'</code> — <span class="verdict yes">full use</span> — both are equality, in leftmost order, index narrows straight to this exact range.</p>
+      <p><b>C.</b> <code style="background:none;color:inherit;padding:0;">WHERE user_id = 5 AND created_at > '2026-01-01'</code> (status skipped) — <span class="verdict partial">partial</span> — the engine seeks on <code style="background:none;color:inherit;padding:0;">user_id</code>, but within that user's rows, <code style="background:none;color:inherit;padding:0;">created_at</code> is not sorted independently of status — it's sorted status-first. So it has to scan all of that user's rows and filter, rather than seeking directly to a date range.</p>
+      <p><b>D.</b> <code style="background:none;color:inherit;padding:0;">WHERE status = 'ACTIVE'</code> (user_id skipped entirely) — <span class="verdict no">no use</span> — leftmost column missing, index is unusable for a seek. Falls back to full scan (or full index scan, which is barely better).</p>
+      <p><b>E.</b> <code style="background:none;color:inherit;padding:0;">WHERE user_id = 5 AND status = 'ACTIVE' AND created_at > '2026-01-01'</code> — <span class="verdict yes">full use</span> — equality, equality, then range on the last column — this is the ideal shape for this index.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Your codebase has two hot query patterns: (1) filter by <code style="background:none;color:inherit;padding:0;">status</code> only for an ops dashboard, and (2) filter by <code style="background:none;color:inherit;padding:0;">user_id + status</code> for the user's own view. One index or two?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Leftmost prefix means one index can't serve two different starting columns.</p><pre class="rough-sketch">INDEX(user_id, status)  serves:  WHERE user_id=? AND status=?    OK
+                         does NOT serve: WHERE status=? alone     NOT OK
+                         (status isn't the leftmost column)
+
+Need TWO indexes:
+  INDEX(user_id, status)  <- for the user-facing pattern
+  INDEX(status)           <- for the ops dashboard pattern</pre></div>
+      <p>Two, in this case. A composite index's leftmost-prefix property means <code style="background:none;color:inherit;padding:0;">INDEX(user_id, status)</code> serves pattern 2 well but does nothing for pattern 1 — <code style="background:none;color:inherit;padding:0;">status</code> alone can't use it because <code style="background:none;color:inherit;padding:0;">user_id</code> isn't in the filter.</p>
+      <p>You genuinely need <code style="background:none;color:inherit;padding:0;">INDEX(user_id, status)</code> for the user-facing pattern, and a separate <code style="background:none;color:inherit;padding:0;">INDEX(status)</code> (possibly a partial index if the dashboard only cares about a couple of statuses) for the ops pattern. The mistake engineers make here is assuming one "wide enough" composite index will magically serve every filter combination — it won't, unless the query's filters happen to align with the leftmost prefix.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 4 — WHEN INDEXES GET IGNORED -->
+<!-- ============================================================ -->
+<section class="topic" id="t4">
+  <div class="topic-head">
+    <span class="topic-num">04</span>
+    <h2 class="topic-title">When Does an Index NOT Get Used?</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t4"></div>
+
+  <p class="topic-dek">Having the index isn't the same as the optimizer choosing it. This is the section that separates "I created an index" from "I understand why it helped."</p>
+
+  <div class="qa-section-label">The five classic traps</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">gotcha</span><span class="qtext">You wrap the indexed column in a function: <code style="background:none;color:inherit;padding:0;">WHERE YEAR(created_at) = 2026</code>. Does the index on <code style="background:none;color:inherit;padding:0;">created_at</code> get used?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>The index stores raw dates, not "year extracted." Wrapping the column in a function forces the engine to compute that function for every row first — which defeats the whole point of the index.</p><pre class="rough-sketch">Index stores RAW values: [2025-11-02][2025-12-15][2026-01-03]...
+
+WHERE YEAR(created_at)=2026
+  --> must compute YEAR() for EVERY row first, then compare
+  --> that means touching every row anyway --> index useless
+
+Fix: WHERE created_at >= '2026-01-01' AND created_at < '2027-01-01'
+  --> compares the RAW value directly --> index seek works</pre></div>
+      <span class="verdict no">not used</span>
+      <p>The index stores raw <code style="background:none;color:inherit;padding:0;">created_at</code> values in sorted order — it has no pre-computed entry for "the year part of this date." To evaluate <code style="background:none;color:inherit;padding:0;">YEAR(created_at) = 2026</code>, the engine would have to apply the function to every single row first, then compare — which means it has to visit every row anyway, defeating the purpose of the index. So the optimizer just skips straight to a full scan.</p>
+      <p><b>Fix:</b> rewrite as a sargable (search-argument-able) range: <code style="background:none;color:inherit;padding:0;">WHERE created_at >= '2026-01-01' AND created_at < '2027-01-01'</code>. Now the raw column is compared directly, and the B-Tree seek works.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">gotcha</span><span class="qtext">A leading wildcard: <code style="background:none;color:inherit;padding:0;">WHERE name LIKE '%esh'</code>. Usable?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>The index is sorted by first letters. Searching for something that just ends in "esh" could start with anything — there's no jump-to point.</p><pre class="rough-sketch">Index sorted by FIRST letters: [Amit][Bhavesh][Chetan][Ganesh][Rajesh]...
+
+LIKE 'Rag%'  (starts with)  --> jump straight to "Rag..." entries    OK
+LIKE '%esh'  (ends with)    --> could be ANYWHERE in the list        NOT OK
+                                 no jump point exists</pre></div>
+      <span class="verdict no">not used</span>
+      <p>A B-Tree is sorted left-to-right by the value's leading characters. <code style="background:none;color:inherit;padding:0;">LIKE 'Rag%'</code> can seek straight to entries starting with "Rag" — that's a normal prefix match. But <code style="background:none;color:inherit;padding:0;">LIKE '%esh'</code> asks "match anywhere the string ends in esh" — there's no way to know where in the sorted order that starts, because the sort key is the beginning of the string, not the end.</p>
+      <p><b>Fix:</b> if suffix search is a real requirement, that's what a trigram index (Postgres <code style="background:none;color:inherit;padding:0;">pg_trgm</code>) or a full-text index is for — not a plain B-Tree.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">gotcha</span><span class="qtext">Implicit type conversion: column is <code style="background:none;color:inherit;padding:0;">VARCHAR</code>, but you query <code style="background:none;color:inherit;padding:0;">WHERE account_no = 12345</code> (an integer literal).</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Comparing a text column to a number literal quietly forces a conversion — often on the column itself, not the literal — which breaks the seek.</p><pre class="rough-sketch">Column account_no is VARCHAR. Query: WHERE account_no = 12345 (a number)
+
+Engine silently converts:
+  CAST(account_no AS INT) = 12345   <- conversion applied to the COLUMN
+  --> must recompute for every row --> index unusable
+
+Fix: WHERE account_no = '12345'   <- match types explicitly</pre></div>
+      <span class="verdict no">not used</span>
+      <p>Most engines will silently cast one side to match the other so the comparison is even valid — and depending on the engine, that cast gets applied to the <em>column</em>, not the literal. If the column itself is being transformed for every row before comparison, you're back to the same problem as the function-wrapping case: the index's stored values no longer match what's being compared, so it can't be used for a seek.</p>
+      <p><b>Fix:</b> always match literal types to column types explicitly — <code style="background:none;color:inherit;padding:0;">WHERE account_no = '12345'</code> if the column is VARCHAR. This is a very common, very silent perf killer in fintech systems where account numbers, PAN, or policy numbers are sometimes typed inconsistently across services.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">gotcha</span><span class="qtext">You index a boolean column <code style="background:none;color:inherit;padding:0;">is_active</code>. Will the optimizer actually use it?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Only two possible values, so an index barely narrows anything down — reading the index then bouncing to the table can cost more than just scanning.</p><pre class="rough-sketch">is_active has only 2 values: true / false
+70% of rows are true
+
+WHERE is_active = true
+  --> matches 70% of the table anyway
+  --> index-then-bounce-to-table costs MORE than just scanning directly
+  --> optimizer skips the index, scans instead</pre></div>
+      <span class="verdict partial">usually not</span>
+      <p>This comes down to <b>cardinality/selectivity</b> — how many distinct values exist, and how evenly rows are spread across them. A boolean has only two possible values. If 70% of rows are <code style="background:none;color:inherit;padding:0;">true</code>, then filtering <code style="background:none;color:inherit;padding:0;">WHERE is_active = true</code> still returns most of the table — and reading the index, then bouncing to the table for each matching row (non-clustered), often costs <em>more</em> than just scanning the table directly. The optimizer's cost estimator knows this and will choose a full scan instead, even with the index sitting right there.</p>
+      <p>Low-cardinality columns become useful for indexing only in narrow circumstances — e.g., as the trailing column in a composite index, or as a <b>partial index</b> where you index just the rare value (<code style="background:none;color:inherit;padding:0;">WHERE is_active = false</code> if only 2% of rows are inactive).</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">gotcha</span><span class="qtext">You have an index, but the table only has 200 rows. Used?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A tiny table already fits in memory in one read — traversing an index is more overhead than just scanning everything.</p><pre class="rough-sketch">200-row table = probably ONE disk page, already cached in memory
+
+Full scan of 200 rows:         microseconds
+Index traversal + bounce back: MORE overhead than that
+
+Optimizer picks whichever is cheaper -- for tiny tables, that's the scan.</pre></div>
+      <span class="verdict partial">optimizer's call</span>
+      <p>Often not, and that's actually the correct decision, not a bug. For a tiny table, the whole thing likely fits in one or two disk pages already sitting in memory. A full scan of 200 rows takes microseconds — cheaper than the overhead of traversing an index structure and then bouncing back to the table. The cost-based optimizer estimates both paths and picks whichever is genuinely cheaper; below some row-count threshold, that's almost always the scan.</p>
+      <p>This is a common interview trap because candidates assume "index exists → index used" is an absolute rule. It isn't — it's a cost decision, re-evaluated per query based on table size and statistics.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">You add an index, run the query, and it's still slow. What's your actual debugging sequence — not the theory, the steps?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A practical checklist, in order — from cheapest to check, to most involved.</p><pre class="rough-sketch">1. EXPLAIN ANALYZE --> is the index even being considered?
+2. Check the 5 traps above (function wrap, wildcard, type mismatch,
+   low selectivity, tiny table)
+3. Check if table stats are stale (recent bulk load, no ANALYZE run)
+4. Check leftmost-prefix mismatch on composite indexes
+5. Only then, consider a DIFFERENT kind of index (covering/partial)</pre></div>
+      <p><b>1.</b> Run <code style="background:none;color:inherit;padding:0;">EXPLAIN ANALYZE</code> (Postgres) or the equivalent execution plan — confirm whether the index is even being considered, not just whether it exists.</p>
+      <p><b>2.</b> Check for exactly the five traps above in the actual query — function wrapping, leading wildcard, type mismatch, low selectivity, small table.</p>
+      <p><b>3.</b> Check statistics freshness — if the table's row/distribution stats are stale (large bulk load just happened, no <code style="background:none;color:inherit;padding:0;">ANALYZE</code> run), the optimizer's cost estimate can be badly wrong and it'll pick a scan even when the index would help.</p>
+      <p><b>4.</b> Check if it's actually a composite index leftmost-prefix mismatch — the most common "silent" cause on any table with more than one index.</p>
+      <p><b>5.</b> Only after ruling all of that out, consider whether you need a <em>different kind</em> of index entirely (covering index, partial index, or a different column order).</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 5 — PRIMARY KEY VS UNIQUE KEY -->
+<!-- ============================================================ -->
+<section class="topic" id="t5">
+  <div class="topic-head">
+    <span class="topic-num">05</span>
+    <h2 class="topic-title">Primary Key vs Unique Key</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t5"></div>
+
+  <p class="topic-dek">Both build an index automatically. The differences that actually matter live in NULL handling and default clustering behavior — not in "one is more unique than the other."</p>
+
+  <table class="compare">
+    <tr><th>Property</th><th>Primary Key</th><th>Unique Key</th></tr>
+    <tr><td>Auto-creates index</td><td>Yes, always</td><td>Yes, always</td></tr>
+    <tr><td>NULL values allowed</td><td>Never</td><td>One NULL typically allowed (MySQL/Postgres) — engine-dependent</td></tr>
+    <tr><td>Count per table</td><td>Exactly one</td><td>Many allowed</td></tr>
+    <tr><td>Default index type</td><td>Clustered, by default, in SQL Server &amp; MySQL InnoDB</td><td>Non-clustered</td></tr>
+    <tr><td>Used as FK reference target</td><td>Conventionally, yes</td><td>Possible, less common</td></tr>
+  </table>
+
+  <div class="qa-section-label">Thought-provoking</div>
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why is a Primary Key not allowed to be NULL, while a Unique Key can have one NULL row?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A Primary Key is a row's "identity card" — it can't be unknown. A Unique Key just says "don't repeat this value," and NULL means "unknown," so two unknowns aren't treated as the same value.</p><pre class="rough-sketch">PRIMARY KEY = row's "identity card" -- must always be known
+  row with NULL PK --> "an identity card that says UNKNOWN" --> not allowed
+
+UNIQUE KEY = "don't repeat this value" among KNOWN values
+  NULL means "unknown" -- two unknowns aren't compared as equal
+  --> one (or more, in Postgres) NULL rows allowed</pre></div>
+      <p>A primary key exists to <em>identify</em> a row — every row must be unambiguously locatable by it, including being the target of foreign key references from other tables. A NULL identity is a contradiction: NULL means "unknown/absent," so a row whose identity is unknown can't be reliably referenced or found. The constraint enforces "every row has exactly one, known, unique identity."</p>
+      <p>A unique key is a weaker promise — it says "no two <em>known</em> values in this column may be equal," but it doesn't claim to be the row's identity. Since NULL is treated as "unknown" rather than a comparable value in SQL's three-valued logic, two NULLs aren't considered equal to each other — so most engines allow one row (or in Postgres, technically <em>multiple</em> rows) with NULL in a unique column, because there's no violated uniqueness between unknowns.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">If you already have a Unique Key on a column, do you still get value from making it the Primary Key instead?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A Primary Key usually becomes the actual shelf order (clustered); a Unique Key alone is just a side catalog.</p><pre class="rough-sketch">UNIQUE only:   just a side catalog card, doesn't touch shelf order
+
+PRIMARY KEY:   usually BECOMES the shelf order (clustered)
+  --> if you fetch full rows by this column often,
+      making it PK = single-seek lookups instead of catalog-then-bounce</pre></div>
+      <p>Yes — because the primary key typically becomes the <em>clustering</em> key by default (SQL Server, MySQL InnoDB), which changes the physical storage of the whole table, not just adds a lookup index. A unique key alone is always non-clustered — it's a pointer structure sitting beside the table, not the table's own row order.</p>
+      <p>Practically: if a column is both unique <em>and</em> the column you'll most often use to fetch full rows (like an account number or policy ID), making it the primary key gets you clustered storage benefits — related lookups become single-seek operations instead of index-then-bookmark-lookup.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">A <code style="background:none;color:inherit;padding:0;">users</code> table has a surrogate <code style="background:none;color:inherit;padding:0;">user_id</code> as PK, and a <code style="background:none;color:inherit;padding:0;">pan_number</code> column that must also be unique but is nullable for onboarding-in-progress users. How do you model it?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Keep user_id as PK since it's always known and sequential. Give pan_number its own UNIQUE constraint so it can stay empty during onboarding.</p><pre class="rough-sketch">user_id      --> PRIMARY KEY (always known, good sequential clustering key)
+pan_number   --> UNIQUE constraint only (can be NULL while onboarding,
+                  but no two COMPLETED users can share one)</pre></div>
+      <p>Keep <code style="background:none;color:inherit;padding:0;">user_id</code> as the primary key — it's stable, non-null by design, and a good clustering key since it's typically sequential. Add a separate <code style="background:none;color:inherit;padding:0;">UNIQUE</code> constraint on <code style="background:none;color:inherit;padding:0;">pan_number</code>, which allows it to stay NULL for users mid-onboarding while still guaranteeing no two completed users ever share a PAN.</p>
+      <p>Trying to make <code style="background:none;color:inherit;padding:0;">pan_number</code> the primary key instead would force it to be non-null for every row from the start — breaking the "onboarding in progress" state entirely. This is a very typical KYC-flow modeling decision in fintech schemas.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 6 — COVERING INDEX -->
+<!-- ============================================================ -->
+<section class="topic" id="t6">
+  <div class="topic-head">
+    <span class="topic-num">06</span>
+    <h2 class="topic-title">Covering Index</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t6"></div>
+
+  <p class="topic-dek">The index-only scan. The table is never even touched — every column the query needs is already sitting in the index leaf.</p>
+
+  <div class="grid-2">
+    <ul class="core-facts">
+      <li><span class="bullet">→</span><div>A covering index contains <b>every</b> column a query needs — both the filter columns and the selected/returned columns — so the engine never has to jump to the actual table (no "bookmark lookup").</div></li>
+      <li><span class="bullet">→</span><div>Two ways to build one: add the extra columns to the composite <b>key</b> itself, or use an <code>INCLUDE</code> clause (SQL Server / Postgres 11+) to store them at the leaf level without making them part of the sort key.</div></li>
+      <li><span class="bullet">→</span><div><code>INCLUDE</code> is usually better when those extra columns aren't used for filtering/sorting — they don't need to affect the tree's sort order, just be present at the leaf for retrieval.</div></li>
+      <li><span class="bullet">→</span><div>Trade-off: covering indexes are wider, so they cost more storage and more write overhead — every INSERT/UPDATE touching any covered column has to update this index too.</div></li>
+    </ul>
+
+    <div class="diagram-frame">
+      <div class="caption"><span>Fig 4 — Covering vs regular index scan</span><button onclick="replay('svg4')">▸ replay</button></div>
+      <svg id="svg4" class="flow-svg" viewBox="0 0 460 220" width="100%">
+        <text x="10" y="20" font-size="11" class="dim">SELECT status FROM orders WHERE user_id=5</text>
+
+        <text x="10" y="55" font-size="10" class="teal">Regular index(user_id):</text>
+        <rect x="180" y="42" width="90" height="24" fill="none" stroke="#5fb8ad"/>
+        <text x="188" y="58" font-size="9">idx leaf: user_id</text>
+        <line x1="270" y1="54" x2="340" y2="54" stroke="#5fb8ad"/>
+        <rect x="340" y="42" width="90" height="24" fill="none" stroke="#d9a441"/>
+        <text x="352" y="58" font-size="9">table row</text>
+        <circle cx="200" cy="54" r="3" fill="#5fb8ad">
+          <animate attributeName="cx" values="200;400;200" dur="2.6s" repeatCount="indefinite"/>
+        </circle>
+        <text x="10" y="88" font-size="9" class="dim">↳ must bounce to table to get "status"</text>
+
+        <text x="10" y="130" font-size="10" class="amber">Covering index(user_id) INCLUDE(status):</text>
+        <rect x="180" y="118" width="170" height="24" fill="none" stroke="#d9a441" class="pulse"/>
+        <text x="188" y="134" font-size="9">idx leaf: user_id + status</text>
+        <circle cx="200" cy="130" r="3" fill="#d9a441">
+          <animate attributeName="cx" values="200;340;200" dur="2.6s" repeatCount="indefinite"/>
+        </circle>
+        <text x="10" y="164" font-size="9" class="dim">↳ answer is already in the index. Table never touched.</text>
+        <text x="10" y="188" font-size="10" class="dim">This is an "index-only scan" in EXPLAIN output.</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">If covering indexes are this good, why not just cover every query with one?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A covering index duplicates data into the index itself — more storage, and every write has to update it too.</p><pre class="rough-sketch">Regular index:  small, cheap to maintain
+
+Covering index (adds extra columns):
+  wider index --> more storage
+  every INSERT/UPDATE touching those columns --> must update index too
+
+Use covering indexes deliberately, for hot specific queries --
+not as a blanket "cover everything" strategy.</pre></div>
+      <p>Because "covering" everything means the index effectively becomes a second copy of large parts of your table — every extra INCLUDE column adds storage, and more importantly, adds write cost. Every INSERT, UPDATE, or DELETE that touches any of the covered columns now has to also update this index. On a write-heavy table (transactions, holdings, order books — very relevant to your platform), a handful of overly wide covering indexes can quietly become your biggest write-latency bottleneck.</p>
+      <p>The discipline is: build covering indexes for your <em>specific, high-frequency, latency-sensitive</em> read queries (dashboard widgets, hot API endpoints), not as a blanket strategy. Every one is a deliberate read/write trade-off, not a free win.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">What's the actual difference between adding a column to the composite key vs putting it in INCLUDE?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Key columns affect sort order. INCLUDE columns just ride along at the leaf for retrieval — no effect on sorting at all.</p><pre class="rough-sketch">KEY columns:      affect sort order, used for leftmost-prefix search
+  (user_id, status) --> tree literally sorted by these
+
+INCLUDE columns:  just extra baggage at the leaf, for retrieval only
+  (user_id, status) INCLUDE (name) --> "name" doesn't affect sorting
+
+Rule: only put columns you FILTER/SORT by in the key.
+      Put columns you only SELECT in INCLUDE.</pre></div>
+      <p>Columns in the key portion affect the B-Tree's <em>sort order</em> — they determine how entries are arranged and what the leftmost-prefix rule applies to. Columns in <code style="background:none;color:inherit;padding:0;">INCLUDE</code> are stored at the leaf level purely for retrieval — they ride along with the leaf entry but play no role in how the tree is sorted or searched.</p>
+      <p>Practical effect: adding an unnecessary column to the key portion can silently break leftmost-prefix usability for other queries and bloats every internal node of the tree (not just leaves). Putting the same column in <code style="background:none;color:inherit;padding:0;">INCLUDE</code> only bloats the leaf level, and doesn't interfere with the tree's search behavior at all. So: only put columns in the key if you actually filter or sort by them; put everything else you merely <em>select</em> into <code style="background:none;color:inherit;padding:0;">INCLUDE</code>.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">A dashboard endpoint runs <code style="background:none;color:inherit;padding:0;">SELECT policy_number, premium_amount, status FROM policies WHERE demat_account_id = ? AND status = 'ACTIVE'</code> thousands of times a minute. Design the index.</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Filter columns go in the key. Select-only columns go in INCLUDE — so the whole query answer sits inside the index.</p><pre class="rough-sketch">filter columns (demat_account_id, status) --> go in the KEY
+select-only columns (policy_number, premium_amount) --> go in INCLUDE
+
+Result: the query answer sits entirely in the index --
+the table itself is never touched ("index-only scan")</pre></div>
+      <pre>CREATE INDEX idx_policies_covering
+ON policies (demat_account_id, status)
+INCLUDE (policy_number, premium_amount);</pre>
+      <p><code style="background:none;color:inherit;padding:0;">demat_account_id</code> and <code style="background:none;color:inherit;padding:0;">status</code> go in the key because they're the filter columns and match the leftmost-prefix pattern this query uses. <code style="background:none;color:inherit;padding:0;">policy_number</code> and <code style="background:none;color:inherit;padding:0;">premium_amount</code> go in <code style="background:none;color:inherit;padding:0;">INCLUDE</code> because they're only ever <em>selected</em>, never filtered or sorted on — no reason to make them part of the sort key.</p>
+      <p>Result: this specific hot query becomes a pure index-only scan — no bookmark lookup to the base table at all, which matters a lot at "thousands of times a minute" scale.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 7 — FOREIGN KEY INDEXING -->
+<!-- ============================================================ -->
+<section class="topic" id="t7">
+  <div class="topic-head">
+    <span class="topic-num">07</span>
+    <h2 class="topic-title">Index on Foreign Keys</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t7"></div>
+
+  <p class="topic-dek">The one nuance interviewers love because it's genuinely engine-specific — and genuinely bites people in production.</p>
+
+  <table class="compare">
+    <tr><th>Engine</th><th>Auto-indexes FK column?</th><th>Practical implication</th></tr>
+    <tr><td>MySQL (InnoDB)</td><td>Yes — automatic</td><td>You get the safety net whether you ask for it or not.</td></tr>
+    <tr><td>PostgreSQL</td><td>No — you must add it explicitly</td><td>A very common silent perf issue in Postgres schemas that "just work" until they don't.</td></tr>
+    <tr><td>SQL Server</td><td>No — explicit</td><td>Same story as Postgres — FK constraint ≠ index.</td></tr>
+  </table>
+
+  <div class="qa-section-label">Thought-provoking</div>
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does a missing index on a foreign key column cause locking problems on the parent table, not just slow joins?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Deleting a parent row requires checking or cascading child rows. Without an index, that's a full scan — done while holding locks.</p><pre class="rough-sketch">DELETE parent row --> must check: "does any child row reference this?"
+
+No index on child.parent_id:
+  --> FULL SCAN of child table, WHILE HOLDING LOCKS
+  --> blocks other writes to that table during the scan
+
+Millions of child rows + no index = production grinds to a halt</pre></div>
+      <p>When you delete or update a row in the <em>parent</em> table, the engine has to verify (or cascade) whether any <em>child</em> rows reference it, to enforce the foreign key constraint. Without an index on the child table's FK column, that check requires a full scan of the entire child table — and depending on isolation level and engine, that scan can hold locks for its full duration.</p>
+      <p>On a busy child table (think: an <code style="background:none;color:inherit;padding:0;">order_items</code> table referencing <code style="background:none;color:inherit;padding:0;">orders</code>), a single parent-row delete can end up scanning millions of child rows while holding locks, which blocks unrelated concurrent writes to that child table. This is a classic "the schema looked fine in dev, then production ground to a halt" story — it only shows up under real concurrent load, not in a quick correctness test.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Does creating an FK constraint automatically create an index? Why would a database designer choose <em>not</em> to auto-create one?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>MySQL does it automatically, as a safety net. Postgres and SQL Server don't — they treat an index as a deliberate storage/write-cost decision, not an automatic side effect of a constraint.</p><pre class="rough-sketch">MySQL (InnoDB):     CREATE FK --> index auto-created   (safety net)
+Postgres/SQLServer: CREATE FK --> NO index created automatically
+                     (you must add it yourself)
+
+Common trap: engineers coming from MySQL assume Postgres
+behaves the same way -- forget the index -- pain shows up later</pre></div>
+      <span class="verdict partial">depends on the engine</span>
+      <p>MySQL's InnoDB does it automatically, treating it as a correctness-adjacent safety measure. Postgres and SQL Server deliberately don't — the reasoning is that an index is a storage and write-cost trade-off the schema designer should make explicitly, not one the engine should silently impose. Postgres in particular leans on the philosophy that indexes are a tuning decision, not a constraint side-effect — a FK guarantees referential integrity via a check, not via a specific access structure.</p>
+      <p>In practice, this philosophical stance causes real pain: engineers coming from MySQL often assume Postgres behaves the same way, forget to add the index, and only discover the gap when a delete on a parent table starts timing out under load.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Your <code style="background:none;color:inherit;padding:0;">holdings</code> table (Postgres) has an FK to <code style="background:none;color:inherit;padding:0;">demat_accounts</code>. An account closure flow deletes the parent account and cascades. It's suddenly slow under load. First thing you check?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Check for a missing explicit index on the child table's FK column — that's almost always the culprit in Postgres.</p><pre class="rough-sketch">holdings.demat_account_id --> has an index?  (check first!)
+
+If NO:
+  CREATE INDEX idx_holdings_demat_account_id
+  ON holdings (demat_account_id);
+
+Without it: every account deletion scans ALL of holdings,
+holding locks the whole time.</pre></div>
+      <p>Check whether <code style="background:none;color:inherit;padding:0;">holdings.demat_account_id</code> has an explicit index — in Postgres it almost certainly doesn't unless someone added it deliberately, since Postgres never auto-creates one for a FK constraint.</p>
+      <pre>CREATE INDEX idx_holdings_demat_account_id
+ON holdings (demat_account_id);</pre>
+      <p>Without it, every account deletion forces a full scan of <code style="background:none;color:inherit;padding:0;">holdings</code> to find rows to cascade-delete, while holding locks that block concurrent reads/writes to that table — exactly the kind of issue that stays invisible in low-traffic testing and surfaces only once real concurrent load hits production.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 8 — THE NOSQL INDEX LANDSCAPE -->
+<!-- ============================================================ -->
+<section class="topic" id="t8">
+  <div class="topic-head">
+    <span class="topic-num">08</span>
+    <h2 class="topic-title">The NoSQL Index Landscape</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t8"></div>
+
+  <p class="topic-dek">Same word, different physics. In SQL, "index" means a second structure pointing at your table. In most NoSQL systems, the index <em>is</em> the data placement strategy — you don't add it after the fact, you design around it from day one.</p>
+
+  <table class="compare">
+    <tr><th>System</th><th>What "index" means there</th><th>Its native index types</th></tr>
+    <tr><td>MongoDB</td><td>A B-Tree, same core structure as SQL, but built for documents</td><td>Single-field, compound, <b>multikey</b> (arrays), text (inverted), geospatial (2dsphere), hashed, wildcard, TTL</td></tr>
+    <tr><td>Cassandra</td><td>The partition key <em>is</em> the primary index — it decides which node owns the data</td><td>Partition key (mandatory), clustering columns (in-partition sort), secondary index (local, expensive), materialized views (auto-maintained denormalized copy)</td></tr>
+    <tr><td>DynamoDB</td><td>You don't "add" an index later — you declare access patterns up front as named indexes</td><td>Base table (partition+sort key), Local Secondary Index (LSI), Global Secondary Index (GSI)</td></tr>
+    <tr><td>Elasticsearch</td><td>Every document is indexed by default — there's no "unindexed" state</td><td>Inverted index (core), doc values (columnar, for sort/aggregation), geo, nested</td></tr>
+    <tr><td>Redis</td><td>No native secondary index — you build one yourself out of other data structures</td><td>Sorted sets / hashes as hand-rolled indexes; RediSearch module for real inverted indexing</td></tr>
+  </table>
+
+  <div class="diagram-frame" style="margin:30px 0 10px;">
+    <div class="caption"><span>Fig 5 — Where a secondary index lives: SQL vs Cassandra</span><button onclick="replay('svg5')">▸ replay</button></div>
+    <svg id="svg5" class="flow-svg" viewBox="0 0 460 220" width="100%">
+      <text x="10" y="18" font-size="11" class="amber">SQL — one machine, one B-Tree, done</text>
+      <rect x="10" y="30" width="200" height="34" fill="none" stroke="#d9a441" rx="4"/>
+      <text x="20" y="51" font-size="10">index(status) → seek → rows</text>
+      <circle cx="30" cy="47" r="4" fill="#d9a441">
+        <animate attributeName="cx" values="30;190;30" dur="2.2s" repeatCount="indefinite"/>
+      </circle>
+
+      <text x="10" y="100" font-size="11" class="teal">Cassandra — data scattered by partition key,</text>
+      <text x="10" y="116" font-size="11" class="teal">secondary index value could be on ANY node</text>
+      <rect x="10" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="22" y="145" font-size="9">Node A</text>
+      <rect x="115" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="127" y="145" font-size="9">Node B</text>
+      <rect x="220" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="232" y="145" font-size="9">Node C</text>
+      <rect x="325" y="128" width="90" height="26" fill="none" stroke="#5fb8ad" rx="4"/>
+      <text x="337" y="145" font-size="9">Node D</text>
+      <text x="10" y="180" font-size="10" class="dim">query status='ACTIVE' → must ask ALL FOUR nodes</text>
+      <text x="10" y="196" font-size="10" class="dim">and merge results. This is "scatter-gather."</text>
+      <circle cx="55" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="160" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="265" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+      <circle cx="370" cy="141" r="3" fill="#5fb8ad" class="pulse"/>
+    </svg>
+  </div>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does MongoDB's multikey index — which indexes every element of an array — refuse to let you build a compound index across two array fields?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>One entry per array element. Two arrays together would mean every combination — which explodes and doesn't mean anything sensible.</p><pre class="rough-sketch">tags: [a,b,c]  -->  multikey index makes 3 entries (one per element)
+
+tags:[a,b,c] AND colors:[x,y,z] combined?
+  --> would need 3x3 = 9 entries (every combination)
+  --> meaningless: "tag=a" and "color=x" were never actually paired
+  --> MongoDB just disallows this combination entirely</pre></div>
+      <p>A multikey index doesn't create one index entry per document — it creates <b>one entry per array element</b>. If a document has <code style="background:none;color:inherit;padding:0;">tags: ["a","b","c"]</code>, that's three separate leaf entries pointing back to the same document.</p>
+      <p>Now imagine two array fields on the same document, say <code style="background:none;color:inherit;padding:0;">tags: [a,b,c]</code> and <code style="background:none;color:inherit;padding:0;">colors: [x,y,z]</code>. A compound multikey index across both would have to generate an entry for <em>every combination</em> — a Cartesian product (3×3 = 9 entries for one document). This isn't a small inefficiency — it grows combinatorially with array size, and worse, it produces an ambiguous, exploding index that doesn't actually mean anything coherent for querying "does this doc have tag=a AND color=x" (they were never paired together in the source data). So MongoDB simply disallows it, not as an arbitrary limitation but because the concept doesn't have a sane definition once two arrays are involved.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why is a secondary index in Cassandra a fundamentally different (and much weaker) thing than a secondary index in SQL?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>The partition key decides which node owns a row. A secondary index on some other column doesn't know which node has it — so it has to ask every node.</p><pre class="rough-sketch">SQL: everything in one place --> index points directly to the row  (1 seek)
+
+Cassandra: rows scattered across nodes by partition key
+  secondary index on a NON-partition column:
+    Node A: local index   Node B: local index   Node C: local index
+    query --> ask ALL nodes --> merge results ("scatter-gather")
+    slow, defeats the whole point of partitioning</pre></div>
+      <p>In SQL, all your data lives in one coherent structure (or a small, known number of shards in distributed SQL), so a secondary index can point directly to exactly where a row lives — one seek, done.</p>
+      <p>In Cassandra, the <b>partition key</b> is what decides which physical node owns a row — that's the whole point of the architecture, spreading write load evenly across a cluster by hashing the partition key. A secondary index on a <em>non-partition-key</em> column has no way to know which node holds any given value, because rows with the same secondary-index value could be scattered across every node in the cluster. So Cassandra is forced to build a local index <em>on every node</em> and, at query time, ask <b>every node</b> to check its local index and return matches — a scatter-gather. This defeats the entire reason you chose Cassandra (avoiding cross-node coordination), which is why Cassandra secondary indexes carry a strong "avoid this at scale" warning, and why materialized views (a second, denormalized copy of the data, pre-organized by the new access pattern) are the idiomatic fix instead.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does DynamoDB force you to declare a Global Secondary Index with its own partition key, rather than just letting you query any attribute like SQL's WHERE clause?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>DynamoDB's speed promise depends on never scanning. A GSI is really a second table, auto-kept in sync, reorganized for a new access pattern.</p><pre class="rough-sketch">DynamoDB promise: every read = direct lookup, NEVER a scan
+
+GSI = literally a SECOND table
+  kept in sync automatically
+  organized around a DIFFERENT partition key
+  so a different access pattern can also get a direct lookup
+
+This is why DynamoDB design starts with "what will I query by"
+BEFORE you write a single row -- not something you bolt on later.</pre></div>
+      <p>DynamoDB's entire performance promise (single-digit millisecond latency at any scale) comes from never having to scan — every read must resolve to a direct partition lookup. A GSI is, structurally, a <em>second table</em> that DynamoDB automatically keeps in sync with the base table, reorganized around a different partition key so a different access pattern can also get a direct lookup.</p>
+      <p>This is why DynamoDB modeling famously happens "access-pattern first" — you're not adding a query capability after the fact the way <code style="background:none;color:inherit;padding:0;">CREATE INDEX</code> does in SQL. You're pre-declaring a second physical copy of the data, organized differently, and accepting the write amplification and (by default) eventual consistency that comes with keeping two independently-partitioned copies in sync.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">You're logging every KYC verification event in DynamoDB, partitioned by <code style="background:none;color:inherit;padding:0;">user_id</code>. Ops now wants "show me all FAILED verifications across all users, today." LSI or GSI — or neither?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>An LSI is still scoped to one user's partition — it can't search across users. You need a GSI with a new partition key instead.</p><pre class="rough-sketch">Base table: partitioned by user_id
+
+LSI: same partition key (user_id), different SORT key
+     --> still scoped PER USER, can't search "all users"       NOT OK
+
+GSI: NEW partition key (e.g. status), own sort key (timestamp)
+     --> can search across ALL users                            OK
+
+Watch out: if 95% SUCCESS / 5% FAILED, partitioning purely by
+status makes one huge partition and one tiny one -- hot-key problem.
+Better: composite like status#date.</pre></div>
+      <span class="verdict yes">GSI</span>
+      <p>An LSI shares the base table's partition key (<code style="background:none;color:inherit;padding:0;">user_id</code>) and only gives you an alternate <em>sort</em> key within that same partition — it can't answer "across all users" because it's still scoped per-user. You need a <b>GSI</b> with a new partition key — likely <code style="background:none;color:inherit;padding:0;">status</code> (or better, a composite like <code style="background:none;color:inherit;padding:0;">status#date</code> to avoid one enormous "FAILED" partition becoming a hot key) — with <code style="background:none;color:inherit;padding:0;">event_timestamp</code> as the sort key.</p>
+      <p>Watch the hot-partition trap here: if 95% of events are <code style="background:none;color:inherit;padding:0;">SUCCESS</code> and 5% are <code style="background:none;color:inherit;padding:0;">FAILED</code>, partitioning the GSI purely by <code style="background:none;color:inherit;padding:0;">status</code> creates two wildly uneven partitions — one enormous, one small — which is the DynamoDB equivalent of the low-cardinality problem from Topic 4, except here it doesn't just make the index unused, it can throttle your whole table under load.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 9 — ONLY SQL CAN DO THIS -->
+<!-- ============================================================ -->
+<section class="topic" id="t9">
+  <div class="topic-head">
+    <span class="topic-num">09</span>
+    <h2 class="topic-title">Indexing Capabilities Only SQL Really Gives You</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t9"></div>
+
+  <p class="topic-dek">Not "SQL is better." SQL made a specific trade: give up easy horizontal partitioning, in exchange for indexes that can be added freely, joined across, and trusted absolutely. Here's what that trade buys you.</p>
+
+  <ul class="core-facts">
+    <li><span class="bullet">→</span><div><b>True ad-hoc indexing.</b> You can <code>CREATE INDEX</code> on any new column combination, anytime, without redesigning your data model — because all the data already lives in one coherent, queryable structure.</div></li>
+    <li><span class="bullet">→</span><div><b>Instantly, globally consistent uniqueness.</b> A <code>UNIQUE</code> index in SQL is enforced the moment a transaction commits — no other transaction can ever observe a duplicate, even for a microsecond.</div></li>
+    <li><span class="bullet">→</span><div><b>Join-optimized index usage.</b> The query planner can use an index on <code>orders.user_id</code> to drive an index nested loop join against <code>users.id</code> — combining two indexed structures at query time, without pre-merging the data.</div></li>
+    <li><span class="bullet">→</span><div><b>Cost-based, dynamic index selection.</b> The optimizer evaluates multiple candidate indexes per query and picks the cheapest one based on live statistics — not something you commit to at write time.</div></li>
+  </ul>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can a SQL UNIQUE index guarantee "this value will never be duplicated, ever, even for an instant" — while a DynamoDB GSI cannot make that same promise?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>SQL checks and writes as one atomic step — no gap for a duplicate to sneak in. A DynamoDB GSI syncs asynchronously afterward, so there's a real window where two writes could both succeed.</p><pre class="rough-sketch">SQL UNIQUE:
+  check + write = ONE atomic step, same transaction
+  no gap --> no duplicate possible, ever
+
+DynamoDB GSI:
+  base table write --> [async delay] --> GSI updated later
+                 ^-- window where a duplicate can slip through</pre></div>
+      <span class="verdict no">not possible in most NoSQL</span>
+      <p>SQL's uniqueness guarantee comes from the index living in the same transactional boundary as the write itself — the engine checks the B-Tree for a conflict and commits the row atomically, as one indivisible operation, typically on a single coordinating structure. There's no window where a duplicate could exist, because the check and the write are the same event.</p>
+      <p>A DynamoDB GSI, by contrast, is asynchronously propagated from the base table — by default it's <b>eventually consistent</b>. Two concurrent writes with the same GSI key could both succeed on the base table before either one's GSI entry is even created, meaning a transient duplicate is genuinely possible in that window. This isn't a bug — it's the direct cost of DynamoDB's horizontal scalability model, where a "global" secondary index is really a separately-partitioned, asynchronously-synced copy, not a live extension of the same atomic write path. If you truly need global uniqueness in DynamoDB, you have to engineer it yourself (e.g. a separate table keyed by the unique value, written transactionally alongside the main write) — the index itself won't hand it to you for free.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why is "just add an index for this new query" a five-minute operation in SQL, but effectively a data-model redesign in Cassandra?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>In SQL, data sits in one place regardless of indexes — adding one doesn't move anything. In Cassandra, physical placement IS the query pattern, so a new query shape often needs a whole new, re-partitioned table.</p><pre class="rough-sketch">SQL:
+  data lives in ONE place  +  indexes are separate, disposable
+  ADD INDEX --> nothing moves --> 5 minutes
+
+Cassandra:
+  physical placement = your query pattern (partition key chosen for it)
+  NEW query shape (different filter column)?
+  --> existing table structurally can't serve it
+  --> need a whole NEW table, re-partitioned, re-written to
+  --> that's provisioning, not a schema tweak</pre></div>
+      <span class="verdict no">not possible in Cassandra the same way</span>
+      <p>In SQL, the table's physical layout doesn't encode your query patterns — the data sits in one place, and indexes are separate, disposable structures layered on top. Adding one doesn't require moving any existing row.</p>
+      <p>In Cassandra, the table's physical layout <em>is</em> your query pattern — the partition key was chosen specifically so that one known access pattern becomes a single-node lookup. A genuinely new query shape (filtering by a column that wasn't part of the partition key) usually means the existing table simply cannot serve it efficiently, full stop. The idiomatic fix isn't "add an index," it's "create a new table, denormalized and re-partitioned around the new access pattern, and write to both tables going forward" (this is literally what a materialized view automates). That's not a schema tweak — it's provisioning new infrastructure and a new write path. This is the single biggest mental shift required moving from SQL to wide-column NoSQL: <b>you model tables around queries, not around entities.</b></p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can SQL efficiently JOIN two indexed tables at query time, while Cassandra/DynamoDB push you toward denormalizing at write time instead?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>SQL's two tables live in the same reachable storage layer, so lots of small back-and-forth lookups are fine. In distributed NoSQL, "the other table" might be on a different machine — doing that per row means network calls for every single row.</p><pre class="rough-sketch">SQL JOIN (same storage layer, low latency):
+  orders.user_id --> seek --> users.id --> seek     (fast, many times)
+
+Cassandra/DynamoDB JOIN attempt (different nodes):
+  for EVERY row: network call to a different machine
+  --> not slow, ARCHITECTURALLY UNTENABLE at scale
+
+Fix: denormalize at WRITE time instead
+  (embed related data, or write a second pre-joined copy)
+  pay the cost once, up front, so every READ stays single-lookup</pre></div>
+      <span class="verdict no">not efficiently possible in partition-based NoSQL</span>
+      <p>An index nested loop join works because both tables' indexes live in the same coordinated storage layer, reachable with predictable, low latency — the engine can afford to do many small index seeks back and forth between two structures.</p>
+      <p>In a horizontally partitioned NoSQL system, "the other table" might live on a completely different node, and a join would mean per-row cross-node network calls — for every single row of the outer loop. At scale, that's not slow, it's architecturally untenable. So instead of joining at query time, these systems ask you to join at <em>write</em> time: embed the related data directly into the document (MongoDB embedding), or write it redundantly into a second, pre-joined table shaped exactly for the read (Cassandra denormalization). You pay the cost once, at write time, in exchange for every read being a single-partition lookup forever after. It's the same underlying trade as topic 6's covering index — read speed bought with write cost and storage — just pushed to an extreme.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Someone on your team proposes moving the <code style="background:none;color:inherit;padding:0;">holdings</code> ledger — where every debit/credit must be exactly consistent, joined against accounts and instruments, and audited — to DynamoDB "for scale." What's your pushback?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>The real requirement here is correctness — a balance can never be transiently wrong — not raw throughput. That's exactly what SQL was built for.</p><pre class="rough-sketch">Ledger's real requirement:
+  balance must NEVER be transiently wrong or double-counted
+  must JOIN against accounts/instruments for reporting
+
+DynamoDB trade:
+  eventual consistency (unacceptable for money)
+  OR build your own transaction layer on top (= rebuilding SQL, worse)
+
+Real question isn't "SQL vs NoSQL" --
+it's "does this table need horizontal partitioning at all,
+or just read replicas / sharding within a SQL system
+that keeps ACID intact?"</pre></div>
+      <p>The ledger's defining requirement isn't throughput — it's that a balance can never be transiently wrong, never double-counted, and must be joinable against accounts/instruments for reporting without pre-computing every possible report shape in advance. That's precisely the profile SQL's transactional, instantly-consistent, freely-indexable model was built for.</p>
+      <p>Moving it to DynamoDB would mean either accepting eventual consistency on financial state (unacceptable for a ledger) or engineering your own transactional layer on top of DynamoDB to fake what SQL gives you natively — at which point you've rebuilt a worse, custom version of what you already had. The honest scaling conversation isn't "SQL vs NoSQL" here — it's "does this table's actual write volume justify horizontal partitioning at all, or does it need read replicas / sharding within a SQL system that keeps ACID intact." Save NoSQL's real strengths (topic 10) for the parts of the platform that are genuinely append-heavy, denormalized-by-nature, and don't need cross-entity consistency — event logs, audit trails, notification feeds.</p>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- TOPIC 10 — ONLY NOSQL CAN DO THIS -->
+<!-- ============================================================ -->
+<section class="topic" id="t10">
+  <div class="topic-head">
+    <span class="topic-num">10</span>
+    <h2 class="topic-title">Indexing Capabilities Only NoSQL Really Gives You</h2>
+  </div>
+  <div class="audio-panel" id="audio-panel-t10"></div>
+
+  <p class="topic-dek">The trade runs both ways. Give up joins and instant global consistency, and NoSQL hands you index capabilities that a single coherent SQL structure structurally cannot offer — not "hasn't implemented yet," cannot.</p>
+
+  <ul class="core-facts">
+    <li><span class="bullet">→</span><div><b>Native multikey/array indexing.</b> MongoDB indexes every element of an array field directly — no join table, no child table, one index.</div></li>
+    <li><span class="bullet">→</span><div><b>Wildcard indexing on unknown fields.</b> You can index "every field under <code>metadata.*</code>" even for fields that don't exist yet at index-creation time — impossible in SQL, where a column must exist before you can index it.</div></li>
+    <li><span class="bullet">→</span><div><b>TTL indexes.</b> A document expires and is automatically removed purely because of an index on a timestamp field — no scheduled job, no batch DELETE.</div></li>
+    <li><span class="bullet">→</span><div><b>Index co-located with data at unbounded horizontal scale.</b> A partition key doesn't just organize a lookup — it decides physical node placement, so the "index" and the sharding strategy are the same decision, scaling to any number of nodes.</div></li>
+    <li><span class="bullet">→</span><div><b>Deliberately tunable consistency on the index itself.</b> You can explicitly choose an eventually-consistent secondary index to buy dramatically higher write throughput — a knob SQL's ACID-bound indexes don't expose at all.</div></li>
+  </ul>
+
+  <div class="qa-section-label">Thought-provoking</div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why can MongoDB index every element of an array natively, while SQL needs a whole separate child table to represent the same one-to-many relationship?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>SQL columns can only hold one value each, so a "one order, many items" relationship needs a whole separate linked table. MongoDB fields can hold arrays natively.</p><pre class="rough-sketch">SQL: a column holds exactly ONE value
+  order has many items? --> need a SEPARATE child table
+  order_items: [order_id, item]  <- one row per item, joined back
+
+MongoDB: a field can hold an ARRAY directly
+  order: { items: [item1, item2, item3] }  <- all in ONE document
+  multikey index: one leaf entry PER array element, same document</pre></div>
+      <span class="verdict no">not natively possible in SQL</span>
+      <p>A SQL column holds exactly one scalar value per row — that's the relational model's foundational rule (first normal form). An array inside a single cell violates that rule outright, so the relational answer to "one order has many line items" was never "put them in one cell" — it was "put them in a separate table, linked by a foreign key," and index <em>that</em> table normally. The B-Tree never needed to understand "arrays" because the model never allowed them to exist in a column in the first place.</p>
+      <p>MongoDB's document model has no such restriction — a field can hold an array natively, so the multikey index mechanism was built specifically to handle it: instead of one leaf entry per document, it emits one leaf entry per array element, each pointing back to the parent document. It's not that MongoDB found a clever trick SQL missed — it's that SQL's normalization rules made this indexing problem not exist in the first place, at the cost of needing an extra join whenever you want the child rows back together.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">A wildcard index can index fields that don't exist yet. Why does that concept have literally no SQL equivalent?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>SQL requires a column to exist before you can index it. MongoDB documents can have any field, even ones that don't exist yet — a wildcard index just says "index whatever shows up here."</p><pre class="rough-sketch">SQL: CREATE INDEX requires a column that ALREADY EXISTS
+  --> schema must be declared FIRST, index comes after
+
+MongoDB: documents can have ANY fields, even undeclared ones
+  doc 1: { metadata: { riskScore: 5 } }
+  doc 2: { metadata: { sourceChannel: "web" } }   <- different field!
+
+  Wildcard index {"metadata.$**": 1}:
+    "index whatever keys show up under metadata, automatically"</pre></div>
+      <span class="verdict no">not possible in SQL</span>
+      <p><code style="background:none;color:inherit;padding:0;">CREATE INDEX</code> in SQL requires naming an existing column — the schema is defined before the index, and the index is a promise about a specific, known column. SQL has no concept of "a field that might show up later with any name" because every column must be declared via <code style="background:none;color:inherit;padding:0;">ALTER TABLE</code> first; the schema is the contract.</p>
+      <p>MongoDB documents can carry arbitrary, dynamic fields per document — one document might have a <code style="background:none;color:inherit;padding:0;">metadata.riskScore</code> field, another might have <code style="background:none;color:inherit;padding:0;">metadata.sourceChannel</code>, neither declared in any schema. A wildcard index (<code style="background:none;color:inherit;padding:0;">{"metadata.$**": 1}</code>) tells the engine "index whatever keys actually show up under this path, for every document, automatically." This only makes sense in a schema-flexible model — it's solving a problem (unknown-at-design-time field names) that a schema-enforced system doesn't have, because in SQL every field name is known and fixed by definition.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why would anyone deliberately choose an eventually-consistent index over a strongly consistent one — what do you actually gain?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>Strong consistency means every write waits for the index too — at huge volume, that wait becomes the bottleneck. Eventual consistency lets the write return immediately and the index catch up right after.</p><pre class="rough-sketch">STRONG consistency index:
+  write --> WAIT for index update too --> THEN done
+  (safe, but the wait becomes the bottleneck at huge volume)
+
+EVENTUAL consistency index:
+  write --> done immediately --> index catches up shortly after
+  (fast, but a query right after the write might miss it briefly)
+
+Use eventual consistency where a few ms of staleness is fine
+(recent-orders feed, search index) -- NEVER where money or
+uniqueness is on the line.</pre></div>
+      <p>Strong consistency on a secondary index means every write has to wait for that index to be updated (and, in a distributed system, often coordinated/confirmed across replicas) before the write is considered done. At massive write volume, that coordination cost becomes the bottleneck — not disk, not CPU, but the waiting.</p>
+      <p>Accepting eventual consistency on the index means the base write returns immediately, and the index catches up asynchronously — usually within milliseconds, but with no hard guarantee. In exchange, you get dramatically higher sustained write throughput and lower write latency on the primary path. This trade only makes sense when a few milliseconds of index staleness genuinely doesn't matter for that query — a "recent orders" feed, a search index, an analytics rollup. It becomes dangerous exactly where SQL's guarantees matter most: anything involving money movement, uniqueness enforcement, or a decision that can't tolerate acting on stale state. Knowing which category a given index falls into is, honestly, the core architectural judgment call in this entire topic.</p>
+    </div></div>
+  </div>
+
+  <div class="qa-card">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">why</span><span class="qtext">Why does a TTL index remove the need for a scheduled cleanup job — isn't "delete rows older than X" trivial to schedule in SQL anyway?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>A cron job is external infrastructure you build, deploy, and monitor. A TTL index bakes expiry into the storage engine itself — no separate job at all.</p><pre class="rough-sketch">SQL approach:
+  cron job --> DELETE WHERE created_at < NOW() - INTERVAL
+  (you build it, deploy it, monitor it, handle its failures)
+
+MongoDB TTL index:
+  index on a timestamp field, set an expiry
+  background process built into the ENGINE removes expired docs
+  no external job, no separate monitoring, nothing of yours to own</pre></div>
+      <p>It's trivial to <em>write</em> in SQL (a cron job running <code style="background:none;color:inherit;padding:0;">DELETE WHERE created_at < NOW() - INTERVAL</code>), but it's an external process you have to build, deploy, monitor, and handle failure for — and a poorly-tuned bulk delete can itself lock rows and hurt concurrent traffic, ironically the exact problem topic 7 covered for foreign keys.</p>
+      <p>A MongoDB TTL index makes expiry a property of the index itself — a background process built into the engine periodically scans the TTL-indexed field and removes expired documents automatically, with no external job, no separate monitoring, no query pattern of your own to write. This is genuinely a capability difference, not just convenience: it's baking a lifecycle policy directly into the storage engine's index maintenance loop, something a B-Tree index in SQL was never designed to express — a SQL index describes "how to find data faster," never "when this data should cease to exist."</p>
+    </div></div>
+  </div>
+
+  <div class="qa-section-label">Scenario</div>
+  <div class="qa-card scenario">
+    <div class="qa-q" onclick="toggle(this)">
+      <div><span class="qa-tag">scenario</span><span class="qtext">Your PolicyBazaar integration needs to log every raw webhook payload for 90 days for debugging, at high volume, with wildly inconsistent JSON shapes per insurer. Where does this live, and what index?</span></div>
+      <div class="qa-plus">+</div>
+    </div>
+    <div class="qa-a"><div class="qa-a-inner">
+      <div class="plain-box"><div class="plain-label">&#9679; plain terms</div><p>The payload shape varies wildly per insurer — a document store lets each payload keep its own shape, with a TTL index handling the 90-day cleanup automatically.</p><pre class="rough-sketch">Problem: payload shape varies per insurer, high volume, 90-day log
+
+Document store (MongoDB) --> each payload keeps its native shape
+
+Index design:
+  compound (insurer_id, received_at)  --> for debugging lookups
+  TTL index on received_at, 90 days   --> auto-cleanup, no cron job
+  wildcard index on metadata path     --> covers unknown per-insurer fields</pre></div>
+      <p>This is close to the textbook case for NoSQL's actual strengths rather than SQL's. The payload shape varies per insurer and changes without your control — forcing it into a rigid SQL schema means either a huge sparse table or a JSON blob column you can't meaningfully index anyway. A document store (MongoDB) lets each payload keep its native shape.</p>
+      <p>Index design: a compound index on <code style="background:none;color:inherit;padding:0;">(insurer_id, received_at)</code> for your actual debugging access pattern ("show me PolicyBazaar's payloads from this window"), plus a <b>TTL index</b> on <code style="background:none;color:inherit;padding:0;">received_at</code> set to 90 days — so the 90-day retention policy enforces itself with no cleanup job for you to own. If specific insurers occasionally send fields you want to search on without knowing their names in advance, a <b>wildcard index</b> on the payload's metadata path covers that without you pre-declaring every possible key.</p>
+      <p>Contrast this with the <code style="background:none;color:inherit;padding:0;">holdings</code> ledger from Topic 9 — same platform, opposite answer, because the actual requirements (consistency vs. schema flexibility) are opposite. That contrast <em>is</em> the skill: not "SQL or NoSQL" as a platform-wide choice, but per-table, per-access-pattern reasoning.</p>
+    </div></div>
+  </div>
+</section>
+
+<footer>
+  <p class="sign">Every index is a bet on a query pattern. Know the pattern before you place the bet.</p>
+  <p class="stamp">ARCHITECTS LAB — INTERNALS SERIES — ENTRY 03 OF ∞</p>
+</footer>
+
+<script>
+  function toggle(headerEl){
+    const card = headerEl.parentElement;
+    const answer = card.querySelector('.qa-a');
+    const isOpen = card.classList.contains('open');
+    if(isOpen){
+      answer.style.maxHeight = null;
+      card.classList.remove('open');
+    } else {
+      card.classList.add('open');
+      answer.style.maxHeight = answer.scrollHeight + 'px';
+    }
+    updateProgress();
+  }
+
+  function replay(id){
+    const svg = document.getElementById(id);
+    const clone = svg.cloneNode(true);
+    svg.parentNode.replaceChild(clone, svg);
+  }
+
+  function updateProgress(){
+    const total = document.querySelectorAll('.qa-card').length;
+    const opened = document.querySelectorAll('.qa-card.open').length;
+    const pct = Math.round((opened/total)*100);
+    const circle = document.getElementById('progress-circle');
+    const circumference = 150.8;
+    const offset = circumference - (pct/100)*circumference;
+    circle.style.strokeDashoffset = offset;
+    document.getElementById('progress-pct').textContent = pct + '%';
+  }
+
+  // smooth scroll for catalog nav
+  document.querySelectorAll('.catalog-nav a').forEach(a=>{
+    a.addEventListener('click', e=>{
+      e.preventDefault();
+      const target = document.querySelector(a.getAttribute('href'));
+      target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+
+  updateProgress();
+</script>
+
+<script>
+/* ============================================================
+   AUDIO RECORDINGS — local-first, Google Drive links, GitHub sync
+   ============================================================ */
+
+const AUDIO_STORAGE_KEY = 'alab_audio_data_v1';
+const AUDIO_META_KEY    = 'alab_audio_meta_v1';
+const GH_CONFIG_KEY      = 'alab_gh_config_v1';
+const GH_TOKEN_SESSION_KEY = 'alab_gh_token_session';
+const GH_TOKEN_LOCAL_KEY   = 'alab_gh_token_local';
+
+const TOPIC_IDS = ['t1','t2','t3','t4','t5','t6','t7','t8','t9','t10'];
+
+/* ---------- storage helpers ---------- */
+function loadAudioData(){
+  try{ return JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY)) || {}; }
+  catch(e){ console.error('audio data parse error', e); return {}; }
+}
+function saveAudioData(data){
+  localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(data));
+  markDirty();
+}
+function loadMeta(){
+  try{ return JSON.parse(localStorage.getItem(AUDIO_META_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveMeta(m){ localStorage.setItem(AUDIO_META_KEY, JSON.stringify(m)); }
+function markDirty(){
+  const meta = loadMeta();
+  meta.dirty = true;
+  saveMeta(meta);
+  updateSyncStatus();
+}
+function getTopicAudios(topicId){
+  return loadAudioData()[topicId] || [];
+}
+function setTopicAudios(topicId, list){
+  const data = loadAudioData();
+  data[topicId] = list;
+  saveAudioData(data);
+}
+function uid(){ return 'a_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+
+/* ---------- Google Drive URL helpers ---------- */
+function extractDriveFileId(url){
+  if(!url) return null;
+  url = url.trim();
+  let m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if(m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{15,}$/.test(url)) return url; // bare file id pasted directly
+  return null;
+}
+
+/* ---------- rendering ---------- */
+function escapeHtml(str){
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function formatTime(sec){
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec/60), s = sec % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+function renderAudioPanel(topicId){
+  const container = document.getElementById('audio-panel-' + topicId);
+  if(!container) return;
+  const list = getTopicAudios(topicId);
+
+  let html = '<div class="audio-panel-head"><span class="audio-panel-title">&#127911; Audio Recordings</span>' +
+    '<span class="audio-count">' + list.length + '</span></div>';
+
+  html += '<div class="audio-list">';
+  if(list.length === 0){
+    html += '<p class="audio-empty">No recordings added yet — paste a Google Drive share link below.</p>';
+  } else {
+    list.forEach((item, idx) => { html += renderAudioItem(topicId, item, idx, list.length); });
+  }
+  html += '</div>';
+  html += renderAddForm(topicId);
+
+  container.innerHTML = html;
+  list.forEach(item => wireAudioControls(item.id));
+}
+
+function renderAudioItem(topicId, item, idx, total){
+  const fileId = item.fileId || extractDriveFileId(item.url);
+  const src = fileId ? ('https://drive.google.com/uc?export=download&id=' + fileId) : '';
+  const previewUrl = fileId ? ('https://drive.google.com/file/d/' + fileId + '/view') : (item.url || '#');
+
+  let playerHtml;
+  if(src){
+    playerHtml = `
+      <audio class="audio-el" id="audio-el-${item.id}" preload="none" src="${src}"></audio>
+      <div class="audio-controls">
+        <button class="ac-btn" id="play-${item.id}" title="Play/Pause" onclick="toggleAudioPlay('${item.id}')">&#9654;</button>
+        <button class="ac-btn" title="Stop" onclick="stopAudio('${item.id}')">&#9632;</button>
+        <span class="ac-time" id="time-${item.id}">0:00</span>
+        <input type="range" class="ac-seek" id="seek-${item.id}" min="0" max="100" value="0" oninput="seekAudio('${item.id}', this.value)">
+        <span class="ac-time" id="dur-${item.id}">0:00</span>
+        <span class="ac-icon">&#128266;</span>
+        <input type="range" class="ac-vol" id="vol-${item.id}" min="0" max="1" step="0.05" value="1" oninput="setVolume('${item.id}', this.value)">
+        <select class="ac-speed" id="speed-${item.id}" onchange="setSpeed('${item.id}', this.value)">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+      <div class="audio-fallback" id="fallback-${item.id}" style="display:none;">
+        Couldn't stream directly here (Drive may require you to sign in) —
+        <a href="${previewUrl}" target="_blank" rel="noopener">open in Google Drive</a>
+      </div>`;
+  } else {
+    playerHtml = `<div class="audio-fallback">Couldn't read a Google Drive file ID from this link —
+      <a href="#" onclick="editAudioUrl('${topicId}','${item.id}');return false;">edit link</a></div>`;
+  }
+
+  return `
+  <div class="audio-item" data-id="${item.id}">
+    <div class="audio-item-top">
+      <input type="text" class="audio-title-input" value="${escapeHtml(item.title || '')}" placeholder="Untitled recording"
+        onchange="updateAudioTitle('${topicId}','${item.id}', this.value)">
+      <div class="audio-item-actions">
+        <button class="ai-btn" title="Move up" ${idx===0?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',-1)">&#8593;</button>
+        <button class="ai-btn" title="Move down" ${idx===total-1?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',1)">&#8595;</button>
+        <button class="ai-btn" title="Edit link" onclick="editAudioUrl('${topicId}','${item.id}')">&#9998;</button>
+        <button class="ai-btn danger" title="Delete" onclick="deleteAudio('${topicId}','${item.id}')">&#10005;</button>
+      </div>
+    </div>
+    ${playerHtml}
+  </div>`;
+}
+
+function renderAddForm(topicId){
+  return `
+  <div class="audio-add">
+    <input type="text" class="audio-add-title" id="add-title-${topicId}" placeholder="Label (optional)">
+    <input type="text" class="audio-add-url" id="add-url-${topicId}" placeholder="Paste Google Drive share link"
+      onkeydown="if(event.key==='Enter'){addAudio('${topicId}');}">
+    <button class="audio-add-btn" onclick="addAudio('${topicId}')">+ Add recording</button>
+  </div>`;
+}
+
+/* ---------- CRUD actions (all local-only, until Sync is clicked) ---------- */
+function addAudio(topicId){
+  const titleEl = document.getElementById('add-title-' + topicId);
+  const urlEl = document.getElementById('add-url-' + topicId);
+  const url = urlEl.value.trim();
+  if(!url){ urlEl.focus(); return; }
+  const fileId = extractDriveFileId(url);
+  if(!fileId){
+    alert('Could not find a Google Drive file ID in that link. Paste the full "Share" link from Drive.');
+    return;
+  }
+  const list = getTopicAudios(topicId);
+  list.push({ id: uid(), title: titleEl.value.trim(), url: url, fileId: fileId });
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function updateAudioTitle(topicId, id, value){
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(item){ item.title = value; setTopicAudios(topicId, list); }
+}
+function editAudioUrl(topicId, id){
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(!item) return;
+  const newUrl = prompt('Google Drive share link:', item.url || '');
+  if(newUrl === null) return;
+  const fileId = extractDriveFileId(newUrl.trim());
+  if(!fileId){ alert('Could not find a Google Drive file ID in that link.'); return; }
+  item.url = newUrl.trim();
+  item.fileId = fileId;
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function deleteAudio(topicId, id){
+  if(!confirm('Delete this recording link? This only changes your local browser copy until you click Sync to GitHub.')) return;
+  const list = getTopicAudios(topicId).filter(a => a.id !== id);
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function moveAudio(topicId, id, dir){
+  const list = getTopicAudios(topicId);
+  const idx = list.findIndex(a => a.id === id);
+  const newIdx = idx + dir;
+  if(idx === -1 || newIdx < 0 || newIdx >= list.length) return;
+  const [item] = list.splice(idx, 1);
+  list.splice(newIdx, 0, item);
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+
+/* ---------- playback controls (independent per recording) ---------- */
+function wireAudioControls(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  const seek = document.getElementById('seek-' + id);
+  const timeEl = document.getElementById('time-' + id);
+  const durEl = document.getElementById('dur-' + id);
+  const playBtn = document.getElementById('play-' + id);
+  const fallback = document.getElementById('fallback-' + id);
+
+  audio.addEventListener('loadedmetadata', () => {
+    if(isFinite(audio.duration) && audio.duration > 0){
+      seek.max = Math.floor(audio.duration);
+      durEl.textContent = formatTime(audio.duration);
+    }
+  });
+  audio.addEventListener('timeupdate', () => {
+    if(!seek.matches(':active')){ seek.value = Math.floor(audio.currentTime); }
+    timeEl.textContent = formatTime(audio.currentTime);
+  });
+  audio.addEventListener('play',  () => { playBtn.innerHTML = '&#10074;&#10074;'; });
+  audio.addEventListener('pause', () => { playBtn.innerHTML = '&#9654;'; });
+  audio.addEventListener('ended', () => { playBtn.innerHTML = '&#9654;'; });
+  audio.addEventListener('error', () => { if(fallback) fallback.style.display = 'block'; });
+}
+function toggleAudioPlay(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  // pause other recordings so playback doesn't overlap; each still has fully independent controls
+  document.querySelectorAll('audio.audio-el').forEach(a => { if(a.id !== 'audio-el-' + id) a.pause(); });
+  if(audio.paused){
+    audio.play().catch(() => {
+      const fb = document.getElementById('fallback-' + id);
+      if(fb) fb.style.display = 'block';
+    });
+  } else {
+    audio.pause();
+  }
+}
+function stopAudio(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  audio.pause();
+  audio.currentTime = 0;
+}
+function seekAudio(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.currentTime = Number(value);
+}
+function setVolume(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.volume = Number(value);
+}
+function setSpeed(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.playbackRate = Number(value);
+}
+
+/* ============================================================
+   GITHUB SYNC — explicit, opt-in commit of local audio data
+   ============================================================ */
+function loadGithubConfig(){
+  try{ return JSON.parse(localStorage.getItem(GH_CONFIG_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveGithubConfigMeta(cfg){ localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(cfg)); }
+function getGithubToken(){
+  return sessionStorage.getItem(GH_TOKEN_SESSION_KEY) || localStorage.getItem(GH_TOKEN_LOCAL_KEY) || '';
+}
+
+function openGithubSettings(){
+  const cfg = loadGithubConfig();
+  document.getElementById('gh-owner').value = cfg.owner || '';
+  document.getElementById('gh-repo').value = cfg.repo || '';
+  document.getElementById('gh-branch').value = cfg.branch || 'creative';
+  document.getElementById('gh-path').value = cfg.path || 'audio-data/sql_indexes_deep_dive.json';
+  document.getElementById('gh-token').value = getGithubToken();
+  document.getElementById('gh-remember').checked = !!localStorage.getItem(GH_TOKEN_LOCAL_KEY);
+  document.getElementById('gh-modal-msg').textContent = '';
+  document.getElementById('gh-modal-overlay').style.display = 'flex';
+}
+function closeGithubSettings(){
+  document.getElementById('gh-modal-overlay').style.display = 'none';
+}
+function saveGithubSettings(){
+  const cfg = {
+    owner: document.getElementById('gh-owner').value.trim(),
+    repo: document.getElementById('gh-repo').value.trim(),
+    branch: document.getElementById('gh-branch').value.trim() || 'creative',
+    path: document.getElementById('gh-path').value.trim()
+  };
+  if(!cfg.owner || !cfg.repo || !cfg.path){
+    document.getElementById('gh-modal-msg').textContent = 'Owner, repo, and file path are required.';
+    return;
+  }
+  saveGithubConfigMeta(cfg);
+
+  const token = document.getElementById('gh-token').value.trim();
+  const remember = document.getElementById('gh-remember').checked;
+  sessionStorage.removeItem(GH_TOKEN_SESSION_KEY);
+  localStorage.removeItem(GH_TOKEN_LOCAL_KEY);
+  if(token){
+    if(remember){ localStorage.setItem(GH_TOKEN_LOCAL_KEY, token); }
+    else{ sessionStorage.setItem(GH_TOKEN_SESSION_KEY, token); }
+  }
+  document.getElementById('gh-modal-msg').textContent = 'Saved.';
+  setTimeout(closeGithubSettings, 500);
+}
+
+function b64EncodeUnicode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+async function safeJson(res){ try{ return await res.json(); }catch(e){ return null; } }
+
+async function handleSyncClick(){
+  const cfg = loadGithubConfig();
+  const token = getGithubToken();
+  if(!cfg.owner || !cfg.repo || !cfg.path || !token){
+    openGithubSettings();
+    return;
+  }
+  const btn = document.getElementById('sync-btn');
+  const statusEl = document.getElementById('sync-status');
+  btn.disabled = true;
+  const prevStatus = statusEl.textContent;
+  statusEl.textContent = 'syncing…';
+
+  try{
+    const data = loadAudioData();
+    const payload = JSON.stringify({ updatedAt: new Date().toISOString(), topics: data }, null, 2);
+    const cleanPath = cfg.path.replace(/^\/+/, '');
+    const apiBase = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' +
+      encodeURIComponent(cfg.repo) + '/contents/' + cleanPath.split('/').map(encodeURIComponent).join('/');
+
+    let sha = null;
+    const getRes = await fetch(apiBase + '?ref=' + encodeURIComponent(cfg.branch), {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
+    });
+    if(getRes.status === 200){
+      const j = await getRes.json();
+      sha = j.sha;
+    } else if(getRes.status !== 404){
+      const errJ = await safeJson(getRes);
+      throw new Error('GET failed (' + getRes.status + ') ' + (errJ && errJ.message ? errJ.message : ''));
+    }
+
+    const body = {
+      message: 'chore(audio): sync local audio links — ' + new Date().toISOString(),
+      content: b64EncodeUnicode(payload),
+      branch: cfg.branch
+    };
+    if(sha) body.sha = sha;
+
+    const putRes = await fetch(apiBase, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if(!putRes.ok){
+      const errJ = await safeJson(putRes);
+      throw new Error('Commit failed (' + putRes.status + ') ' + (errJ && errJ.message ? errJ.message : ''));
+    }
+
+    const meta = loadMeta();
+    meta.dirty = false;
+    meta.lastSyncTime = new Date().toISOString();
+    saveMeta(meta);
+    updateSyncStatus();
+  } catch(err){
+    console.error('GitHub sync error', err);
+    statusEl.textContent = 'sync failed — ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function timeAgo(iso){
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if(min < 1) return 'just now';
+  if(min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return hr + 'h ago';
+  return Math.floor(hr / 24) + 'd ago';
+}
+function updateSyncStatus(){
+  const meta = loadMeta();
+  const statusEl = document.getElementById('sync-status');
+  if(!statusEl) return;
+  if(meta.dirty){
+    statusEl.textContent = 'unsynced local changes';
+    statusEl.classList.add('dirty');
+  } else if(meta.lastSyncTime){
+    statusEl.textContent = 'synced ' + timeAgo(meta.lastSyncTime);
+    statusEl.classList.remove('dirty');
+  } else {
+    statusEl.textContent = 'no local changes';
+    statusEl.classList.remove('dirty');
+  }
+}
+
+/* ---------- init ---------- */
+TOPIC_IDS.forEach(renderAudioPanel);
+updateSyncStatus();
+</script>
+
+</body>
+</html>
