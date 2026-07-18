@@ -2,6 +2,11 @@
    Audio Module — Architects Lab
    Self-contained: injects back-button + audio section into
    every topic page via  <script src="../audio-module.js">
+
+   Private Google Drive files are played via Drive's own preview
+   iframe (drive.google.com/file/d/ID/preview), which makes
+   authenticated same-origin requests using the browser's
+   existing Google session — no CORS / ORB issues.
    ============================================================= */
 (function () {
   'use strict';
@@ -35,11 +40,6 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function fmt(sec) {
-    sec = Math.max(0, Math.floor(sec || 0));
-    return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  }
-
   function b64(str) {
     const bytes = new TextEncoder().encode(str);
     let bin = '';
@@ -54,7 +54,7 @@
   }
   function saveData(arr) { localStorage.setItem(LS_DATA, JSON.stringify(arr)); }
 
-  /* ── Google Drive ─────────────────────────────────────────── */
+  /* ── Google Drive helpers ─────────────────────────────────── */
   function extractFileId(url) {
     if (!url) return null;
     url = url.trim();
@@ -65,10 +65,13 @@
     if (/^[a-zA-Z0-9_-]{15,}$/.test(url)) return url;
     return null;
   }
-  function streamUrl(fid) {
-    return 'https://drive.usercontent.google.com/download?id=' + fid + '&export=download&authuser=0';
+
+  /* iframe src — authenticated via browser's Google session */
+  function previewUrl(fid) {
+    return 'https://drive.google.com/file/d/' + fid + '/preview';
   }
-  function driveViewUrl(fid) {
+  /* open-in-Drive link */
+  function viewUrl(fid) {
     return 'https://drive.google.com/file/d/' + fid + '/view';
   }
 
@@ -156,57 +159,29 @@
 .am-ctl:hover{color:var(--text,#242420);background:var(--panel-2,#F2F0E8);}
 .am-ctl:disabled{opacity:.35;cursor:default;}
 
-.am-player{display:flex;flex-direction:column;gap:7px;}
-.am-row1{display:flex;align-items:center;gap:8px;}
-.am-play{
-  width:30px;height:30px;border-radius:50%;
-  border:1px solid var(--border,#DEDACC);
-  background:var(--panel-2,#F2F0E8);color:var(--text,#242420);
-  display:flex;align-items:center;justify-content:center;
-  font-size:.85rem;cursor:pointer;flex-shrink:0;
-  transition:background .15s,color .15s,border-color .15s;
+/* Drive iframe player */
+.am-drive-frame{
+  display:block;width:100%;height:80px;
+  border:1px solid var(--border,#DEDACC);border-radius:6px;
+  background:var(--panel-2,#F2F0E8);
 }
-.am-play:hover{background:#9A62D6;border-color:#9A62D6;color:#fff;}
-.am-seek{
-  flex:1;height:4px;-webkit-appearance:none;appearance:none;
-  background:var(--border,#DEDACC);border-radius:2px;cursor:pointer;outline:none;
-}
-.am-seek::-webkit-slider-thumb{
-  -webkit-appearance:none;width:12px;height:12px;
-  border-radius:50%;background:#9A62D6;cursor:pointer;
-}
-.am-seek::-moz-range-thumb{
-  width:12px;height:12px;border-radius:50%;background:#9A62D6;border:none;cursor:pointer;
-}
-.am-time{
-  font-family:'IBM Plex Mono',monospace;font-size:.65rem;
-  color:var(--muted,#75736A);white-space:nowrap;min-width:80px;text-align:right;flex-shrink:0;
-}
-.am-row2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.am-vol{
-  width:70px;height:3px;-webkit-appearance:none;appearance:none;
-  background:var(--border,#DEDACC);border-radius:2px;cursor:pointer;outline:none;
-}
-.am-vol::-webkit-slider-thumb{
-  -webkit-appearance:none;width:10px;height:10px;
-  border-radius:50%;background:var(--muted,#75736A);
-}
-.am-vol::-moz-range-thumb{
-  width:10px;height:10px;border-radius:50%;background:var(--muted,#75736A);border:none;
-}
-.am-speed{
-  font-family:'IBM Plex Mono',monospace;font-size:.68rem;
-  background:var(--panel-2,#F2F0E8);border:1px solid var(--border,#DEDACC);
-  color:var(--text,#242420);border-radius:4px;padding:2px 5px;cursor:pointer;
+.am-frame-row{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:7px;gap:10px;
 }
 .am-drive-link{
   font-family:'IBM Plex Mono',monospace;font-size:.68rem;
-  color:var(--muted,#75736A);text-decoration:none;margin-left:auto;
+  color:var(--muted,#75736A);text-decoration:none;
 }
 .am-drive-link:hover{color:#9A62D6;}
-.am-msg{font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:5px 0;display:none;}
-.am-msg.err{color:#C1543A;}
-.am-msg.info{color:var(--muted,#75736A);}
+.am-drive-note{
+  font-family:'IBM Plex Mono',monospace;font-size:.63rem;
+  color:var(--muted,#75736A);opacity:.75;
+}
+.am-msg-block{
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;
+  color:#C1543A;padding:8px 0;
+}
 
 .am-add-row{
   display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;
@@ -372,44 +347,26 @@
     listEl.innerHTML = data.length === 0
       ? '<div class="am-empty">No recordings yet — paste a Google Drive link above to attach audio.</div>'
       : data.map((item, i) => itemHtml(item, i, data.length)).join('');
-    data.forEach(item => wirePlayer(item.id));
   }
 
-  /* ── Single item HTML ──────────────────────────────────────── */
+  /* ── Single item HTML (iframe player) ─────────────────────── */
   function itemHtml(item, idx, total) {
-    const label  = esc(item.title || 'Recording ' + (idx + 1));
-    const fid    = item.fileId || extractFileId(item.url || '');
-    const src    = fid ? streamUrl(fid)   : '';
-    const pUrl   = fid ? driveViewUrl(fid): (item.url || '#');
+    const label = esc(item.title || 'Recording ' + (idx + 1));
+    const fid   = item.fileId || extractFileId(item.url || '');
 
-    const player = src
-      ? `<audio id="am-audio-${item.id}" preload="none" src="${esc(src)}" style="display:none;"></audio>
-         <div class="am-player">
-           <div class="am-row1">
-             <button class="am-play" id="am-play-${item.id}" title="Play / Pause">&#9654;</button>
-             <button class="am-ctl"  id="am-stop-${item.id}" title="Stop">&#9632;</button>
-             <input  type="range" class="am-seek"
-                     id="am-seek-${item.id}" min="0" max="100" value="0" step="0.1">
-             <span class="am-time"   id="am-time-${item.id}">0:00 / 0:00</span>
-           </div>
-           <div class="am-row2">
-             <span style="font-size:.8rem;color:var(--muted,#75736A);">&#128266;</span>
-             <input type="range" class="am-vol"
-                    id="am-vol-${item.id}" min="0" max="1" step="0.05" value="1">
-             <select class="am-speed" id="am-speed-${item.id}" title="Playback speed">
-               <option value="0.5">0.5×</option>
-               <option value="0.75">0.75×</option>
-               <option value="1" selected>1×</option>
-               <option value="1.25">1.25×</option>
-               <option value="1.5">1.5×</option>
-               <option value="2">2×</option>
-             </select>
-             <a class="am-drive-link" href="${esc(pUrl)}"
-                target="_blank" rel="noopener" title="Open in Google Drive">&#8599; Drive</a>
-           </div>
-           <div class="am-msg" id="am-msg-${item.id}"></div>
+    const player = fid
+      ? `<iframe class="am-drive-frame"
+                 src="${esc(previewUrl(fid))}"
+                 allow="autoplay"
+                 loading="lazy"
+                 title="${label}"
+                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+         <div class="am-frame-row">
+           <span class="am-drive-note">Sign in to Google Drive in this browser to play private files.</span>
+           <a class="am-drive-link" href="${esc(viewUrl(fid))}"
+              target="_blank" rel="noopener">&#8599; Open in Drive</a>
          </div>`
-      : `<div class="am-msg err" style="display:block;">
+      : `<div class="am-msg-block">
            &#9888; Couldn't parse a Drive file ID —
            <a href="#" class="am-edit-lnk" data-id="${item.id}"
               style="color:#C1543A;">edit link</a>
@@ -420,9 +377,9 @@
         <span class="am-item-label" title="${label}">${label}</span>
         <div class="am-item-actions">
           <button class="am-ctl" data-action="up"   data-id="${item.id}"
-                  title="Move up"   ${idx === 0          ? 'disabled' : ''}>&#8593;</button>
+                  title="Move up"   ${idx === 0         ? 'disabled' : ''}>&#8593;</button>
           <button class="am-ctl" data-action="down" data-id="${item.id}"
-                  title="Move down" ${idx === total - 1  ? 'disabled' : ''}>&#8595;</button>
+                  title="Move down" ${idx === total - 1 ? 'disabled' : ''}>&#8595;</button>
           <button class="am-ctl" data-action="edit" data-id="${item.id}"
                   title="Edit">&#9998;</button>
           <button class="am-ctl danger" data-action="del" data-id="${item.id}"
@@ -433,82 +390,9 @@
     </div>`;
   }
 
-  /* ── Wire player controls ──────────────────────────────────── */
-  function wirePlayer(id) {
-    const audio = document.getElementById('am-audio-' + id);
-    if (!audio) return;
-
-    const playBtn = document.getElementById('am-play-' + id);
-    const stopBtn = document.getElementById('am-stop-' + id);
-    const seek    = document.getElementById('am-seek-' + id);
-    const timeEl  = document.getElementById('am-time-' + id);
-    const vol     = document.getElementById('am-vol-'  + id);
-    const speed   = document.getElementById('am-speed-'+ id);
-    const msg     = document.getElementById('am-msg-'  + id);
-
-    let loaded = false;
-    function ensureLoaded() {
-      if (!loaded) { audio.load(); loaded = true; }
-    }
-
-    if (playBtn) playBtn.addEventListener('click', () => {
-      ensureLoaded();
-      audio.paused
-        ? audio.play().catch(() =>
-            showMsg(msg, 'err',
-              '&#9888; Cannot stream — sign into Google with the account that has file access, then retry.'))
-        : audio.pause();
-    });
-
-    if (stopBtn) stopBtn.addEventListener('click', () => {
-      audio.pause();
-      audio.currentTime = 0;
-      if (seek)   seek.value = 0;
-      if (timeEl) timeEl.textContent = '0:00 / ' + fmt(audio.duration || 0);
-    });
-
-    if (seek) seek.addEventListener('input', () => {
-      if (!isNaN(audio.duration))
-        audio.currentTime = (parseFloat(seek.value) / 100) * audio.duration;
-    });
-
-    if (vol)   vol.addEventListener  ('input',  () => { audio.volume       = parseFloat(vol.value);   });
-    if (speed) speed.addEventListener('change', () => { audio.playbackRate = parseFloat(speed.value); });
-
-    audio.addEventListener('play',        () => { if (playBtn) playBtn.innerHTML = '&#9646;&#9646;'; hideMsg(msg); });
-    audio.addEventListener('pause',       () => { if (playBtn) playBtn.innerHTML = '&#9654;'; });
-    audio.addEventListener('ended',       () => {
-      if (playBtn) playBtn.innerHTML = '&#9654;';
-      if (seek)    seek.value = 0;
-    });
-    audio.addEventListener('timeupdate',  () => {
-      if (!isNaN(audio.duration) && seek) {
-        seek.value = (audio.currentTime / audio.duration) * 100;
-        if (timeEl) timeEl.textContent = fmt(audio.currentTime) + ' / ' + fmt(audio.duration);
-      }
-    });
-    audio.addEventListener('loadedmetadata', () => {
-      if (timeEl) timeEl.textContent = '0:00 / ' + fmt(audio.duration);
-      hideMsg(msg);
-    });
-    audio.addEventListener('waiting', () => showMsg(msg, 'info', '&#8987; Loading&#8230;'));
-    audio.addEventListener('canplay', () => hideMsg(msg));
-    audio.addEventListener('error',   () => {
-      const codes = ['ABORTED', 'NETWORK', 'DECODE', 'UNSUPPORTED'];
-      const code  = audio.error ? (codes[audio.error.code - 1] || 'UNKNOWN') : 'UNKNOWN';
-      showMsg(msg, 'err',
-        (code === 'NETWORK' || code === 'UNSUPPORTED')
-          ? '&#9888; Cannot stream — make sure you are signed into Google Drive with the account that has file access.'
-          : '&#9888; Audio error (' + code + ').');
-    });
-  }
-
-  function showMsg(el, cls, txt) { if (el) { el.className = 'am-msg ' + cls; el.innerHTML = txt; el.style.display = ''; } }
-  function hideMsg(el)           { if (el) el.style.display = 'none'; }
-
   /* ── List click delegation ─────────────────────────────────── */
   function bindListClicks() {
-    listEl.addEventListener('click', function onListClick(e) {
+    listEl.addEventListener('click', function (e) {
       const btn  = e.target.closest('[data-action]');
       const link = e.target.closest('.am-edit-lnk');
       if (btn) {
@@ -581,8 +465,8 @@
         bg.querySelector('#am-e-msg').textContent = 'Enter a valid Google Drive sharing link.';
         return;
       }
-      const idx  = data.findIndex(x => x.id === id);
-      data[idx]  = { ...item, title: bg.querySelector('#am-e-title').value.trim(), url, fileId };
+      const idx = data.findIndex(x => x.id === id);
+      data[idx] = { ...item, title: bg.querySelector('#am-e-title').value.trim(), url, fileId };
       saveData(data);
       renderList();
       setUnsaved();
@@ -655,9 +539,9 @@
     if (!token) { showPatModal(); return; }
 
     const syncBtn = document.getElementById('am-sync-btn');
-    syncBtn.disabled   = true;
-    syncBtn.textContent= 'Syncing…';
-    statusEl.className = 'am-status';
+    syncBtn.disabled    = true;
+    syncBtn.textContent = 'Syncing…';
+    statusEl.className  = 'am-status';
     statusEl.textContent = 'Connecting to GitHub…';
 
     const hdr = {
@@ -746,11 +630,10 @@
   }
 
   /* ── Suppress extension-runtime noise ─────────────────────────
-     Chrome extensions intercepting Drive requests via async message
-     listeners sometimes kill their service worker before calling
-     sendResponse. Chrome then rejects a Promise and logs it to the
-     page console. Swallow it here — real page errors never carry
-     this exact message text so nothing legitimate is hidden.        */
+     Chrome extensions intercepting Drive requests sometimes kill
+     their service worker before calling sendResponse. Chrome then
+     rejects a Promise and logs it to the page console. Swallow it
+     here — real page errors never carry this exact message text.  */
   window.addEventListener('unhandledrejection', function (event) {
     var msg = event && event.reason && event.reason.message;
     if (typeof msg === 'string' && msg.indexOf('message channel closed') !== -1) {

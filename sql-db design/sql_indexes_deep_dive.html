@@ -465,26 +465,22 @@
   .ai-btn.danger:hover{ border-color:var(--red-flag); color:var(--red-flag); }
   .ai-btn:disabled{ opacity:0.3; cursor:default; }
 
-  .audio-controls{
-    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  /* Drive iframe player (replaces custom audio controls) */
+  .audio-drive-frame{
+    display:block; width:100%; height:80px;
+    border:1px solid var(--hairline); border-radius:6px;
+    background:var(--ink-black);
   }
-  .ac-btn{
-    background:none; border:1px solid var(--hairline); color:var(--paper);
-    width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:12px;
-    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  .audio-frame-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:6px;
   }
-  .ac-btn:hover{ border-color:var(--amber); color:var(--amber); }
-  .ac-time{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim); flex:0 0 auto; }
-  .ac-seek{ flex:1 1 120px; accent-color:var(--amber); min-width:80px; }
-  .ac-vol{ width:70px; accent-color:var(--teal); flex:0 0 auto; }
-  .ac-icon{ font-size:12px; color:var(--text-dim); flex:0 0 auto; }
-  .ac-speed{
-    background:var(--panel); border:1px solid var(--hairline); color:var(--text-body);
-    font-family:'IBM Plex Mono', monospace; font-size:11px; border-radius:4px; padding:4px 6px; flex:0 0 auto;
+  .audio-frame-note{ font-size:11px; color:var(--text-dim); }
+  .audio-open-link{
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    color:var(--text-dim); text-decoration:none; white-space:nowrap; flex-shrink:0;
   }
-  .audio-fallback{
-    margin-top:8px; font-size:12px; color:var(--text-dim);
-  }
+  .audio-open-link:hover{ color:var(--teal); }
+  .audio-fallback{ margin-top:8px; font-size:12px; color:var(--text-dim); }
   .audio-fallback a{ color:var(--teal); }
 
   .audio-add{
@@ -567,7 +563,6 @@
 
   @media(max-width:640px){
     #sync-bar{ left:14px; right:14px; bottom:14px; }
-    .ac-seek{ flex-basis:100%; order:5; }
   }
   /* back button */
   .alab-back-btn{
@@ -1958,42 +1953,27 @@ function renderAudioPanel(topicId){
   html += renderAddForm(topicId);
 
   container.innerHTML = html;
-  list.forEach(item => wireAudioControls(item.id));
 }
 
 function renderAudioItem(topicId, item, idx, total){
-  const fileId = item.fileId || extractDriveFileId(item.url);
-  const src = fileId ? ('https://drive.usercontent.google.com/download?id=' + fileId + '&export=download&authuser=0') : '';
-  const previewUrl = fileId ? ('https://drive.google.com/file/d/' + fileId + '/view') : (item.url || '#');
+  const fileId     = item.fileId || extractDriveFileId(item.url);
+  const iframeSrc  = fileId ? ('https://drive.google.com/file/d/' + fileId + '/preview') : null;
+  const openInDrive= fileId ? ('https://drive.google.com/file/d/' + fileId + '/view')    : (item.url || '#');
 
-  let playerHtml;
-  if(src){
-    playerHtml = `
-      <audio class="audio-el" id="audio-el-${item.id}" preload="none" src="${src}"></audio>
-      <div class="audio-controls">
-        <button class="ac-btn" id="play-${item.id}" title="Play/Pause" onclick="toggleAudioPlay('${item.id}')">&#9654;</button>
-        <button class="ac-btn" title="Stop" onclick="stopAudio('${item.id}')">&#9632;</button>
-        <span class="ac-time" id="time-${item.id}">0:00</span>
-        <input type="range" class="ac-seek" id="seek-${item.id}" min="0" max="100" value="0" oninput="seekAudio('${item.id}', this.value)">
-        <span class="ac-time" id="dur-${item.id}">0:00</span>
-        <span class="ac-icon">&#128266;</span>
-        <input type="range" class="ac-vol" id="vol-${item.id}" min="0" max="1" step="0.05" value="1" oninput="setVolume('${item.id}', this.value)">
-        <select class="ac-speed" id="speed-${item.id}" onchange="setSpeed('${item.id}', this.value)">
-          <option value="0.75">0.75x</option>
-          <option value="1" selected>1x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-          <option value="2">2x</option>
-        </select>
-      </div>
-      <div class="audio-fallback" id="fallback-${item.id}" style="display:none;">
-        Couldn't stream directly here (Drive may require you to sign in) —
-        <a href="${previewUrl}" target="_blank" rel="noopener">open in Google Drive</a>
-      </div>`;
-  } else {
-    playerHtml = `<div class="audio-fallback">Couldn't read a Google Drive file ID from this link —
-      <a href="#" onclick="editAudioUrl('${topicId}','${item.id}');return false;">edit link</a></div>`;
-  }
+  const playerHtml = iframeSrc
+    ? `<iframe class="audio-drive-frame"
+               src="${iframeSrc}"
+               allow="autoplay"
+               loading="lazy"
+               title="${escapeHtml(item.title || 'audio player')}"
+               sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+       <div class="audio-frame-row">
+         <span class="audio-frame-note">Sign in to Google Drive in this browser to play private files.</span>
+         <a class="audio-open-link" href="${openInDrive}" target="_blank" rel="noopener">&#8599; Open in Drive</a>
+       </div>`
+    : `<div class="audio-fallback">&#9888; Couldn't read a Google Drive file ID from this link —
+         <a href="#" onclick="editAudioUrl('${topicId}','${item.id}');return false;">edit link</a>
+       </div>`;
 
   return `
   <div class="audio-item" data-id="${item.id}">
@@ -2001,7 +1981,7 @@ function renderAudioItem(topicId, item, idx, total){
       <input type="text" class="audio-title-input" value="${escapeHtml(item.title || '')}" placeholder="Untitled recording"
         onchange="updateAudioTitle('${topicId}','${item.id}', this.value)">
       <div class="audio-item-actions">
-        <button class="ai-btn" title="Move up" ${idx===0?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',-1)">&#8593;</button>
+        <button class="ai-btn" title="Move up"   ${idx===0?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',-1)">&#8593;</button>
         <button class="ai-btn" title="Move down" ${idx===total-1?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',1)">&#8595;</button>
         <button class="ai-btn" title="Edit link" onclick="editAudioUrl('${topicId}','${item.id}')">&#9998;</button>
         <button class="ai-btn danger" title="Delete" onclick="deleteAudio('${topicId}','${item.id}')">&#10005;</button>
@@ -2072,63 +2052,7 @@ function moveAudio(topicId, id, dir){
   renderAudioPanel(topicId);
 }
 
-/* ---------- playback controls (independent per recording) ---------- */
-function wireAudioControls(id){
-  const audio = document.getElementById('audio-el-' + id);
-  if(!audio) return;
-  const seek = document.getElementById('seek-' + id);
-  const timeEl = document.getElementById('time-' + id);
-  const durEl = document.getElementById('dur-' + id);
-  const playBtn = document.getElementById('play-' + id);
-  const fallback = document.getElementById('fallback-' + id);
-
-  audio.addEventListener('loadedmetadata', () => {
-    if(isFinite(audio.duration) && audio.duration > 0){
-      seek.max = Math.floor(audio.duration);
-      durEl.textContent = formatTime(audio.duration);
-    }
-  });
-  audio.addEventListener('timeupdate', () => {
-    if(!seek.matches(':active')){ seek.value = Math.floor(audio.currentTime); }
-    timeEl.textContent = formatTime(audio.currentTime);
-  });
-  audio.addEventListener('play',  () => { playBtn.innerHTML = '&#10074;&#10074;'; });
-  audio.addEventListener('pause', () => { playBtn.innerHTML = '&#9654;'; });
-  audio.addEventListener('ended', () => { playBtn.innerHTML = '&#9654;'; });
-  audio.addEventListener('error', () => { if(fallback) fallback.style.display = 'block'; });
-}
-function toggleAudioPlay(id){
-  const audio = document.getElementById('audio-el-' + id);
-  if(!audio) return;
-  // pause other recordings so playback doesn't overlap; each still has fully independent controls
-  document.querySelectorAll('audio.audio-el').forEach(a => { if(a.id !== 'audio-el-' + id) a.pause(); });
-  if(audio.paused){
-    audio.play().catch(() => {
-      const fb = document.getElementById('fallback-' + id);
-      if(fb) fb.style.display = 'block';
-    });
-  } else {
-    audio.pause();
-  }
-}
-function stopAudio(id){
-  const audio = document.getElementById('audio-el-' + id);
-  if(!audio) return;
-  audio.pause();
-  audio.currentTime = 0;
-}
-function seekAudio(id, value){
-  const audio = document.getElementById('audio-el-' + id);
-  if(audio) audio.currentTime = Number(value);
-}
-function setVolume(id, value){
-  const audio = document.getElementById('audio-el-' + id);
-  if(audio) audio.volume = Number(value);
-}
-function setSpeed(id, value){
-  const audio = document.getElementById('audio-el-' + id);
-  if(audio) audio.playbackRate = Number(value);
-}
+/* ---------- playback: handled by Google Drive iframe ---------- */
 
 /* ============================================================
    GITHUB SYNC — explicit, opt-in commit of local audio data
