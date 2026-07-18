@@ -412,6 +412,163 @@
   .flow-svg .amber{ fill:var(--amber); stroke:var(--amber); }
   .flow-svg .teal{ fill:var(--teal); stroke:var(--teal); }
   .flow-svg line, .flow-svg path{ stroke:var(--hairline); }
+
+  /* ---------- Audio panel ---------- */
+  .audio-panel{
+    background:var(--panel);
+    border:1px solid var(--hairline);
+    border-radius:8px;
+    padding:18px 20px;
+    margin:22px 0 36px;
+  }
+  .audio-panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .audio-panel-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--amber);
+  }
+  .audio-count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--text-dim);
+    border:1px solid var(--hairline); border-radius:10px; padding:1px 8px;
+  }
+  .audio-empty{
+    font-size:13px; color:var(--text-dim); font-style:italic; padding:2px 0 14px;
+  }
+  .audio-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .audio-item{
+    background:var(--panel-raised);
+    border:1px solid var(--hairline);
+    border-radius:6px;
+    padding:12px 14px;
+  }
+  .audio-item-top{
+    display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;
+  }
+  .audio-title-input{
+    flex:1; min-width:120px;
+    background:none; border:none; border-bottom:1px dashed var(--hairline);
+    color:var(--paper); font-family:'Newsreader', serif; font-size:15px; font-weight:500;
+    padding:2px 2px 4px;
+  }
+  .audio-title-input:focus{ outline:none; border-bottom-color:var(--amber); }
+  .audio-item-actions{ display:flex; gap:6px; flex:0 0 auto; }
+  .ai-btn{
+    background:none; border:1px solid var(--hairline); color:var(--text-dim);
+    width:26px; height:26px; border-radius:5px; cursor:pointer; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ai-btn:hover:not(:disabled){ border-color:var(--teal); color:var(--teal); }
+  .ai-btn.danger:hover{ border-color:var(--red-flag); color:var(--red-flag); }
+  .ai-btn:disabled{ opacity:0.3; cursor:default; }
+
+  .audio-controls{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  }
+  .ac-btn{
+    background:none; border:1px solid var(--hairline); color:var(--paper);
+    width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:12px;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .ac-btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .ac-time{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim); flex:0 0 auto; }
+  .ac-seek{ flex:1 1 120px; accent-color:var(--amber); min-width:80px; }
+  .ac-vol{ width:70px; accent-color:var(--teal); flex:0 0 auto; }
+  .ac-icon{ font-size:12px; color:var(--text-dim); flex:0 0 auto; }
+  .ac-speed{
+    background:var(--panel); border:1px solid var(--hairline); color:var(--text-body);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; border-radius:4px; padding:4px 6px; flex:0 0 auto;
+  }
+  .audio-fallback{
+    margin-top:8px; font-size:12px; color:var(--text-dim);
+  }
+  .audio-fallback a{ color:var(--teal); }
+
+  .audio-add{
+    display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--hairline); padding-top:14px;
+  }
+  .audio-add-title, .audio-add-url{
+    background:var(--ink-black); border:1px solid var(--hairline); color:var(--text-body);
+    font-size:13px; padding:8px 10px; border-radius:5px; font-family:'Inter', sans-serif;
+  }
+  .audio-add-title{ flex:0 1 180px; }
+  .audio-add-url{ flex:1 1 220px; }
+  .audio-add-title:focus, .audio-add-url:focus{ outline:none; border-color:var(--amber-dim); }
+  .audio-add-btn{
+    background:none; border:1px solid var(--amber-dim); color:var(--amber);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; padding:8px 14px; border-radius:5px; cursor:pointer;
+    flex:0 0 auto;
+  }
+  .audio-add-btn:hover{ background:rgba(217,164,65,0.1); }
+
+  /* ---------- Sync bar ---------- */
+  #sync-bar{
+    position:fixed; bottom:26px; left:26px; z-index:60;
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel-raised); border:1px solid var(--hairline);
+    padding:10px 14px; border-radius:30px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.35);
+  }
+  #sync-btn{
+    background:var(--amber-dim); border:none; color:var(--ink-black);
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:11px;
+    padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;
+  }
+  #sync-btn:hover{ background:var(--amber); }
+  #sync-btn:disabled{ opacity:0.6; cursor:default; }
+  .sync-status{ color:var(--text-dim); white-space:nowrap; }
+  .sync-status.dirty{ color:var(--amber); }
+  #sync-settings-btn{
+    background:none; border:1px solid var(--hairline); color:var(--text-dim);
+    width:26px; height:26px; border-radius:50%; cursor:pointer; flex:0 0 auto;
+  }
+  #sync-settings-btn:hover{ color:var(--teal); border-color:var(--teal); }
+
+  /* ---------- GitHub settings modal ---------- */
+  .gh-modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gh-modal{
+    background:var(--card); border:1px solid var(--hairline); border-radius:10px;
+    padding:26px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  }
+  .gh-modal h3{
+    font-family:'Newsreader', serif; color:var(--paper); font-size:20px; margin-bottom:16px;
+  }
+  .gh-modal label{
+    display:block; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--text-dim);
+    text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;
+  }
+  .gh-modal label input[type=text], .gh-modal label input[type=password]{
+    display:block; width:100%; margin-top:6px;
+    background:var(--ink-black); border:1px solid var(--hairline); color:var(--text-body);
+    font-family:'Inter', sans-serif; font-size:13px; padding:9px 10px; border-radius:5px;
+  }
+  .gh-modal label.gh-remember{
+    display:flex; align-items:center; gap:8px; text-transform:none; font-size:12px;
+  }
+  .gh-modal label.gh-remember input{ width:auto; margin:0; }
+  .gh-note{ font-size:11px; color:var(--text-dim); line-height:1.5; margin-bottom:16px; }
+  .gh-modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .gh-modal-actions button{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:9px 16px; border-radius:5px; cursor:pointer;
+    background:none; border:1px solid var(--hairline); color:var(--text-body);
+  }
+  .gh-modal-actions button.primary{
+    background:var(--amber-dim); border-color:var(--amber-dim); color:var(--ink-black); font-weight:600;
+  }
+  .gh-modal-actions button.primary:hover{ background:var(--amber); }
+  .gh-modal-msg{ margin-top:10px; font-size:12px; color:var(--teal); min-height:16px; }
+
+  @media(max-width:640px){
+    #sync-bar{ left:14px; right:14px; bottom:14px; }
+    .ac-seek{ flex-basis:100%; order:5; }
+  }
 </style>
 </head>
 <body>
@@ -424,6 +581,40 @@
     <circle class="fg" id="progress-circle" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="150.8"></circle>
   </svg>
   <div class="pct" id="progress-pct">0%</div>
+</div>
+
+<div id="sync-bar">
+  <button id="sync-btn" onclick="handleSyncClick()">⇪ Sync to GitHub</button>
+  <span id="sync-status" class="sync-status">no local changes</span>
+  <button id="sync-settings-btn" title="GitHub sync settings" onclick="openGithubSettings()">⚙</button>
+</div>
+
+<div id="gh-modal-overlay" class="gh-modal-overlay" style="display:none;">
+  <div class="gh-modal">
+    <h3>GitHub Sync Settings</h3>
+    <label>Owner
+      <input id="gh-owner" type="text" placeholder="e.g. ankur-xyz">
+    </label>
+    <label>Repo
+      <input id="gh-repo" type="text" placeholder="e.g. architects-lab">
+    </label>
+    <label>Branch
+      <input id="gh-branch" type="text" value="creative">
+    </label>
+    <label>File path
+      <input id="gh-path" type="text" placeholder="audio-data/sql_indexes_deep_dive.json">
+    </label>
+    <label>Personal Access Token
+      <input id="gh-token" type="password" placeholder="ghp_...">
+    </label>
+    <label class="gh-remember"><input id="gh-remember" type="checkbox"> Remember token on this device (localStorage)</label>
+    <p class="gh-note">This token is used only from this page to call the GitHub API directly from your browser to commit to the branch above — it's never sent anywhere else. Use a token scoped to just this repo's contents. If "remember" is unchecked, the token is kept only for this browser tab session.</p>
+    <div class="gh-modal-actions">
+      <button onclick="closeGithubSettings()">Cancel</button>
+      <button class="primary" onclick="saveGithubSettings()">Save</button>
+    </div>
+    <p id="gh-modal-msg" class="gh-modal-msg"></p>
+  </div>
 </div>
 
 <header class="hero">
@@ -458,6 +649,8 @@
     <span class="topic-num">01</span>
     <h2 class="topic-title">Clustered vs Non-Clustered</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t1"></div>
+
   <p class="topic-dek">One of these <em>is</em> the table. The other just points at it. That single distinction explains almost every follow-up question you'll get asked.</p>
 
   <div class="grid-2">
@@ -619,6 +812,8 @@ Better: cluster on (demat_account_id, holding_id) together
     <span class="topic-num">02</span>
     <h2 class="topic-title">B-Tree Internals</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t2"></div>
+
   <p class="topic-dek">Not a binary tree with a typo. The "B" buys you something binary trees structurally cannot: fewer trips to disk.</p>
 
   <div class="grid-2">
@@ -755,6 +950,8 @@ HASH INDEX:
     <span class="topic-num">03</span>
     <h2 class="topic-title">Composite Index &amp; The Leftmost Prefix Rule</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t3"></div>
+
   <p class="topic-dek">A composite index is sorted like a phone book sorted by surname, then first name. You can jump straight to "Sharma, Ankur" — but you cannot jump straight to all the "Ankur"s without reading the whole book.</p>
 
   <div class="grid-2">
@@ -868,6 +1065,8 @@ Need TWO indexes:
     <span class="topic-num">04</span>
     <h2 class="topic-title">When Does an Index NOT Get Used?</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t4"></div>
+
   <p class="topic-dek">Having the index isn't the same as the optimizer choosing it. This is the section that separates "I created an index" from "I understand why it helped."</p>
 
   <div class="qa-section-label">The five classic traps</div>
@@ -995,6 +1194,8 @@ Optimizer picks whichever is cheaper -- for tiny tables, that's the scan.</pre><
     <span class="topic-num">05</span>
     <h2 class="topic-title">Primary Key vs Unique Key</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t5"></div>
+
   <p class="topic-dek">Both build an index automatically. The differences that actually matter live in NULL handling and default clustering behavior — not in "one is more unique than the other."</p>
 
   <table class="compare">
@@ -1064,6 +1265,8 @@ pan_number   --> UNIQUE constraint only (can be NULL while onboarding,
     <span class="topic-num">06</span>
     <h2 class="topic-title">Covering Index</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t6"></div>
+
   <p class="topic-dek">The index-only scan. The table is never even touched — every column the query needs is already sitting in the index leaf.</p>
 
   <div class="grid-2">
@@ -1170,6 +1373,8 @@ INCLUDE (policy_number, premium_amount);</pre>
     <span class="topic-num">07</span>
     <h2 class="topic-title">Index on Foreign Keys</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t7"></div>
+
   <p class="topic-dek">The one nuance interviewers love because it's genuinely engine-specific — and genuinely bites people in production.</p>
 
   <table class="compare">
@@ -1247,6 +1452,8 @@ ON holdings (demat_account_id);</pre>
     <span class="topic-num">08</span>
     <h2 class="topic-title">The NoSQL Index Landscape</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t8"></div>
+
   <p class="topic-dek">Same word, different physics. In SQL, "index" means a second structure pointing at your table. In most NoSQL systems, the index <em>is</em> the data placement strategy — you don't add it after the fact, you design around it from day one.</p>
 
   <table class="compare">
@@ -1377,6 +1584,8 @@ Better: composite like status#date.</pre></div>
     <span class="topic-num">09</span>
     <h2 class="topic-title">Indexing Capabilities Only SQL Really Gives You</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t9"></div>
+
   <p class="topic-dek">Not "SQL is better." SQL made a specific trade: give up easy horizontal partitioning, in exchange for indexes that can be added freely, joined across, and trusted absolutely. Here's what that trade buys you.</p>
 
   <ul class="core-facts">
@@ -1484,6 +1693,8 @@ that keeps ACID intact?"</pre></div>
     <span class="topic-num">10</span>
     <h2 class="topic-title">Indexing Capabilities Only NoSQL Really Gives You</h2>
   </div>
+  <div class="audio-panel" id="audio-panel-t10"></div>
+
   <p class="topic-dek">The trade runs both ways. Give up joins and instant global consistency, and NoSQL hands you index capabilities that a single coherent SQL structure structurally cannot offer — not "hasn't implemented yet," cannot.</p>
 
   <ul class="core-facts">
@@ -1646,6 +1857,415 @@ Index design:
   });
 
   updateProgress();
+</script>
+
+<script>
+/* ============================================================
+   AUDIO RECORDINGS — local-first, Google Drive links, GitHub sync
+   ============================================================ */
+
+const AUDIO_STORAGE_KEY = 'alab_audio_data_v1';
+const AUDIO_META_KEY    = 'alab_audio_meta_v1';
+const GH_CONFIG_KEY      = 'alab_gh_config_v1';
+const GH_TOKEN_SESSION_KEY = 'alab_gh_token_session';
+const GH_TOKEN_LOCAL_KEY   = 'alab_gh_token_local';
+
+const TOPIC_IDS = ['t1','t2','t3','t4','t5','t6','t7','t8','t9','t10'];
+
+/* ---------- storage helpers ---------- */
+function loadAudioData(){
+  try{ return JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY)) || {}; }
+  catch(e){ console.error('audio data parse error', e); return {}; }
+}
+function saveAudioData(data){
+  localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(data));
+  markDirty();
+}
+function loadMeta(){
+  try{ return JSON.parse(localStorage.getItem(AUDIO_META_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveMeta(m){ localStorage.setItem(AUDIO_META_KEY, JSON.stringify(m)); }
+function markDirty(){
+  const meta = loadMeta();
+  meta.dirty = true;
+  saveMeta(meta);
+  updateSyncStatus();
+}
+function getTopicAudios(topicId){
+  return loadAudioData()[topicId] || [];
+}
+function setTopicAudios(topicId, list){
+  const data = loadAudioData();
+  data[topicId] = list;
+  saveAudioData(data);
+}
+function uid(){ return 'a_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }
+
+/* ---------- Google Drive URL helpers ---------- */
+function extractDriveFileId(url){
+  if(!url) return null;
+  url = url.trim();
+  let m = url.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if(m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{15,}$/.test(url)) return url; // bare file id pasted directly
+  return null;
+}
+
+/* ---------- rendering ---------- */
+function escapeHtml(str){
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function formatTime(sec){
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec/60), s = sec % 60;
+  return m + ':' + String(s).padStart(2,'0');
+}
+
+function renderAudioPanel(topicId){
+  const container = document.getElementById('audio-panel-' + topicId);
+  if(!container) return;
+  const list = getTopicAudios(topicId);
+
+  let html = '<div class="audio-panel-head"><span class="audio-panel-title">&#127911; Audio Recordings</span>' +
+    '<span class="audio-count">' + list.length + '</span></div>';
+
+  html += '<div class="audio-list">';
+  if(list.length === 0){
+    html += '<p class="audio-empty">No recordings added yet — paste a Google Drive share link below.</p>';
+  } else {
+    list.forEach((item, idx) => { html += renderAudioItem(topicId, item, idx, list.length); });
+  }
+  html += '</div>';
+  html += renderAddForm(topicId);
+
+  container.innerHTML = html;
+  list.forEach(item => wireAudioControls(item.id));
+}
+
+function renderAudioItem(topicId, item, idx, total){
+  const fileId = item.fileId || extractDriveFileId(item.url);
+  const src = fileId ? ('https://drive.google.com/uc?export=download&id=' + fileId) : '';
+  const previewUrl = fileId ? ('https://drive.google.com/file/d/' + fileId + '/view') : (item.url || '#');
+
+  let playerHtml;
+  if(src){
+    playerHtml = `
+      <audio class="audio-el" id="audio-el-${item.id}" preload="none" src="${src}"></audio>
+      <div class="audio-controls">
+        <button class="ac-btn" id="play-${item.id}" title="Play/Pause" onclick="toggleAudioPlay('${item.id}')">&#9654;</button>
+        <button class="ac-btn" title="Stop" onclick="stopAudio('${item.id}')">&#9632;</button>
+        <span class="ac-time" id="time-${item.id}">0:00</span>
+        <input type="range" class="ac-seek" id="seek-${item.id}" min="0" max="100" value="0" oninput="seekAudio('${item.id}', this.value)">
+        <span class="ac-time" id="dur-${item.id}">0:00</span>
+        <span class="ac-icon">&#128266;</span>
+        <input type="range" class="ac-vol" id="vol-${item.id}" min="0" max="1" step="0.05" value="1" oninput="setVolume('${item.id}', this.value)">
+        <select class="ac-speed" id="speed-${item.id}" onchange="setSpeed('${item.id}', this.value)">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2">2x</option>
+        </select>
+      </div>
+      <div class="audio-fallback" id="fallback-${item.id}" style="display:none;">
+        Couldn't stream directly here (Drive may require you to sign in) —
+        <a href="${previewUrl}" target="_blank" rel="noopener">open in Google Drive</a>
+      </div>`;
+  } else {
+    playerHtml = `<div class="audio-fallback">Couldn't read a Google Drive file ID from this link —
+      <a href="#" onclick="editAudioUrl('${topicId}','${item.id}');return false;">edit link</a></div>`;
+  }
+
+  return `
+  <div class="audio-item" data-id="${item.id}">
+    <div class="audio-item-top">
+      <input type="text" class="audio-title-input" value="${escapeHtml(item.title || '')}" placeholder="Untitled recording"
+        onchange="updateAudioTitle('${topicId}','${item.id}', this.value)">
+      <div class="audio-item-actions">
+        <button class="ai-btn" title="Move up" ${idx===0?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',-1)">&#8593;</button>
+        <button class="ai-btn" title="Move down" ${idx===total-1?'disabled':''} onclick="moveAudio('${topicId}','${item.id}',1)">&#8595;</button>
+        <button class="ai-btn" title="Edit link" onclick="editAudioUrl('${topicId}','${item.id}')">&#9998;</button>
+        <button class="ai-btn danger" title="Delete" onclick="deleteAudio('${topicId}','${item.id}')">&#10005;</button>
+      </div>
+    </div>
+    ${playerHtml}
+  </div>`;
+}
+
+function renderAddForm(topicId){
+  return `
+  <div class="audio-add">
+    <input type="text" class="audio-add-title" id="add-title-${topicId}" placeholder="Label (optional)">
+    <input type="text" class="audio-add-url" id="add-url-${topicId}" placeholder="Paste Google Drive share link"
+      onkeydown="if(event.key==='Enter'){addAudio('${topicId}');}">
+    <button class="audio-add-btn" onclick="addAudio('${topicId}')">+ Add recording</button>
+  </div>`;
+}
+
+/* ---------- CRUD actions (all local-only, until Sync is clicked) ---------- */
+function addAudio(topicId){
+  const titleEl = document.getElementById('add-title-' + topicId);
+  const urlEl = document.getElementById('add-url-' + topicId);
+  const url = urlEl.value.trim();
+  if(!url){ urlEl.focus(); return; }
+  const fileId = extractDriveFileId(url);
+  if(!fileId){
+    alert('Could not find a Google Drive file ID in that link. Paste the full "Share" link from Drive.');
+    return;
+  }
+  const list = getTopicAudios(topicId);
+  list.push({ id: uid(), title: titleEl.value.trim(), url: url, fileId: fileId });
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function updateAudioTitle(topicId, id, value){
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(item){ item.title = value; setTopicAudios(topicId, list); }
+}
+function editAudioUrl(topicId, id){
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(!item) return;
+  const newUrl = prompt('Google Drive share link:', item.url || '');
+  if(newUrl === null) return;
+  const fileId = extractDriveFileId(newUrl.trim());
+  if(!fileId){ alert('Could not find a Google Drive file ID in that link.'); return; }
+  item.url = newUrl.trim();
+  item.fileId = fileId;
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function deleteAudio(topicId, id){
+  if(!confirm('Delete this recording link? This only changes your local browser copy until you click Sync to GitHub.')) return;
+  const list = getTopicAudios(topicId).filter(a => a.id !== id);
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+function moveAudio(topicId, id, dir){
+  const list = getTopicAudios(topicId);
+  const idx = list.findIndex(a => a.id === id);
+  const newIdx = idx + dir;
+  if(idx === -1 || newIdx < 0 || newIdx >= list.length) return;
+  const [item] = list.splice(idx, 1);
+  list.splice(newIdx, 0, item);
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}
+
+/* ---------- playback controls (independent per recording) ---------- */
+function wireAudioControls(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  const seek = document.getElementById('seek-' + id);
+  const timeEl = document.getElementById('time-' + id);
+  const durEl = document.getElementById('dur-' + id);
+  const playBtn = document.getElementById('play-' + id);
+  const fallback = document.getElementById('fallback-' + id);
+
+  audio.addEventListener('loadedmetadata', () => {
+    if(isFinite(audio.duration) && audio.duration > 0){
+      seek.max = Math.floor(audio.duration);
+      durEl.textContent = formatTime(audio.duration);
+    }
+  });
+  audio.addEventListener('timeupdate', () => {
+    if(!seek.matches(':active')){ seek.value = Math.floor(audio.currentTime); }
+    timeEl.textContent = formatTime(audio.currentTime);
+  });
+  audio.addEventListener('play',  () => { playBtn.innerHTML = '&#10074;&#10074;'; });
+  audio.addEventListener('pause', () => { playBtn.innerHTML = '&#9654;'; });
+  audio.addEventListener('ended', () => { playBtn.innerHTML = '&#9654;'; });
+  audio.addEventListener('error', () => { if(fallback) fallback.style.display = 'block'; });
+}
+function toggleAudioPlay(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  // pause other recordings so playback doesn't overlap; each still has fully independent controls
+  document.querySelectorAll('audio.audio-el').forEach(a => { if(a.id !== 'audio-el-' + id) a.pause(); });
+  if(audio.paused){
+    audio.play().catch(() => {
+      const fb = document.getElementById('fallback-' + id);
+      if(fb) fb.style.display = 'block';
+    });
+  } else {
+    audio.pause();
+  }
+}
+function stopAudio(id){
+  const audio = document.getElementById('audio-el-' + id);
+  if(!audio) return;
+  audio.pause();
+  audio.currentTime = 0;
+}
+function seekAudio(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.currentTime = Number(value);
+}
+function setVolume(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.volume = Number(value);
+}
+function setSpeed(id, value){
+  const audio = document.getElementById('audio-el-' + id);
+  if(audio) audio.playbackRate = Number(value);
+}
+
+/* ============================================================
+   GITHUB SYNC — explicit, opt-in commit of local audio data
+   ============================================================ */
+function loadGithubConfig(){
+  try{ return JSON.parse(localStorage.getItem(GH_CONFIG_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveGithubConfigMeta(cfg){ localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(cfg)); }
+function getGithubToken(){
+  return sessionStorage.getItem(GH_TOKEN_SESSION_KEY) || localStorage.getItem(GH_TOKEN_LOCAL_KEY) || '';
+}
+
+function openGithubSettings(){
+  const cfg = loadGithubConfig();
+  document.getElementById('gh-owner').value = cfg.owner || '';
+  document.getElementById('gh-repo').value = cfg.repo || '';
+  document.getElementById('gh-branch').value = cfg.branch || 'creative';
+  document.getElementById('gh-path').value = cfg.path || 'audio-data/sql_indexes_deep_dive.json';
+  document.getElementById('gh-token').value = getGithubToken();
+  document.getElementById('gh-remember').checked = !!localStorage.getItem(GH_TOKEN_LOCAL_KEY);
+  document.getElementById('gh-modal-msg').textContent = '';
+  document.getElementById('gh-modal-overlay').style.display = 'flex';
+}
+function closeGithubSettings(){
+  document.getElementById('gh-modal-overlay').style.display = 'none';
+}
+function saveGithubSettings(){
+  const cfg = {
+    owner: document.getElementById('gh-owner').value.trim(),
+    repo: document.getElementById('gh-repo').value.trim(),
+    branch: document.getElementById('gh-branch').value.trim() || 'creative',
+    path: document.getElementById('gh-path').value.trim()
+  };
+  if(!cfg.owner || !cfg.repo || !cfg.path){
+    document.getElementById('gh-modal-msg').textContent = 'Owner, repo, and file path are required.';
+    return;
+  }
+  saveGithubConfigMeta(cfg);
+
+  const token = document.getElementById('gh-token').value.trim();
+  const remember = document.getElementById('gh-remember').checked;
+  sessionStorage.removeItem(GH_TOKEN_SESSION_KEY);
+  localStorage.removeItem(GH_TOKEN_LOCAL_KEY);
+  if(token){
+    if(remember){ localStorage.setItem(GH_TOKEN_LOCAL_KEY, token); }
+    else{ sessionStorage.setItem(GH_TOKEN_SESSION_KEY, token); }
+  }
+  document.getElementById('gh-modal-msg').textContent = 'Saved.';
+  setTimeout(closeGithubSettings, 500);
+}
+
+function b64EncodeUnicode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+async function safeJson(res){ try{ return await res.json(); }catch(e){ return null; } }
+
+async function handleSyncClick(){
+  const cfg = loadGithubConfig();
+  const token = getGithubToken();
+  if(!cfg.owner || !cfg.repo || !cfg.path || !token){
+    openGithubSettings();
+    return;
+  }
+  const btn = document.getElementById('sync-btn');
+  const statusEl = document.getElementById('sync-status');
+  btn.disabled = true;
+  const prevStatus = statusEl.textContent;
+  statusEl.textContent = 'syncing…';
+
+  try{
+    const data = loadAudioData();
+    const payload = JSON.stringify({ updatedAt: new Date().toISOString(), topics: data }, null, 2);
+    const cleanPath = cfg.path.replace(/^\/+/, '');
+    const apiBase = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' +
+      encodeURIComponent(cfg.repo) + '/contents/' + cleanPath.split('/').map(encodeURIComponent).join('/');
+
+    let sha = null;
+    const getRes = await fetch(apiBase + '?ref=' + encodeURIComponent(cfg.branch), {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }
+    });
+    if(getRes.status === 200){
+      const j = await getRes.json();
+      sha = j.sha;
+    } else if(getRes.status !== 404){
+      const errJ = await safeJson(getRes);
+      throw new Error('GET failed (' + getRes.status + ') ' + (errJ && errJ.message ? errJ.message : ''));
+    }
+
+    const body = {
+      message: 'chore(audio): sync local audio links — ' + new Date().toISOString(),
+      content: b64EncodeUnicode(payload),
+      branch: cfg.branch
+    };
+    if(sha) body.sha = sha;
+
+    const putRes = await fetch(apiBase, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if(!putRes.ok){
+      const errJ = await safeJson(putRes);
+      throw new Error('Commit failed (' + putRes.status + ') ' + (errJ && errJ.message ? errJ.message : ''));
+    }
+
+    const meta = loadMeta();
+    meta.dirty = false;
+    meta.lastSyncTime = new Date().toISOString();
+    saveMeta(meta);
+    updateSyncStatus();
+  } catch(err){
+    console.error('GitHub sync error', err);
+    statusEl.textContent = 'sync failed — ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function timeAgo(iso){
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if(min < 1) return 'just now';
+  if(min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return hr + 'h ago';
+  return Math.floor(hr / 24) + 'd ago';
+}
+function updateSyncStatus(){
+  const meta = loadMeta();
+  const statusEl = document.getElementById('sync-status');
+  if(!statusEl) return;
+  if(meta.dirty){
+    statusEl.textContent = 'unsynced local changes';
+    statusEl.classList.add('dirty');
+  } else if(meta.lastSyncTime){
+    statusEl.textContent = 'synced ' + timeAgo(meta.lastSyncTime);
+    statusEl.classList.remove('dirty');
+  } else {
+    statusEl.textContent = 'no local changes';
+    statusEl.classList.remove('dirty');
+  }
+}
+
+/* ---------- init ---------- */
+TOPIC_IDS.forEach(renderAudioPanel);
+updateSyncStatus();
 </script>
 
 </body>
