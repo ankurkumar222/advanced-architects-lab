@@ -500,6 +500,59 @@
   }
   .audio-add-btn:hover{ background:rgba(217,164,65,0.1); }
 
+  /* ---------- Add section: mode tabs + recording ---------- */
+  .audio-add-section{
+    border-top:1px solid var(--hairline); padding-top:14px; margin-top:0;
+  }
+  .audio-add-tabs{ display:flex; gap:4px; margin-bottom:10px; }
+  .audio-tab{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; font-weight:600;
+    padding:4px 12px; border-radius:20px;
+    border:1px solid var(--hairline);
+    background:none; color:var(--text-dim);
+    cursor:pointer;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  .audio-tab.audio-tab-active{
+    background:var(--panel-raised); border-color:var(--text-body); color:var(--text-body);
+  }
+  .audio-tab:hover:not(.audio-tab-active){ border-color:var(--teal); color:var(--teal); }
+  .audio-add-link{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .audio-add-rec{ display:flex; flex-direction:column; gap:10px; }
+  .audio-rec-row1{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .audio-rec-btn{
+    background:none; border:1px solid var(--hairline); color:var(--text-dim);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; font-weight:600;
+    padding:8px 14px; border-radius:5px; cursor:pointer; white-space:nowrap;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  .audio-rec-btn:hover{ border-color:var(--teal); color:var(--teal); }
+  .audio-rec-btn.rec-on{ border-color:var(--red-flag); color:var(--red-flag); }
+  .audio-rec-btn.rec-on:hover{ background:rgba(166,63,63,0.12); }
+  .audio-rec-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--red-flag); display:none; flex-shrink:0;
+  }
+  .audio-rec-dot.on{ display:inline-block; animation:sql-rec-blink 1s ease-in-out infinite; }
+  @keyframes sql-rec-blink{ 0%,100%{opacity:1} 50%{opacity:.2} }
+  .audio-rec-timer{
+    font-family:'IBM Plex Mono', monospace; font-size:12px;
+    color:var(--text-body); min-width:44px; visibility:hidden;
+  }
+  .audio-rec-timer.on{ visibility:visible; }
+  .audio-rec-after{ display:flex; flex-direction:column; gap:10px; }
+  .audio-rec-preview{ width:100%; max-width:100%; }
+  .audio-rec-btn-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .audio-btn-danger{ border-color:var(--red-flag) !important; color:var(--red-flag) !important; }
+  .audio-btn-danger:hover{ background:rgba(166,63,63,0.12) !important; }
+  .audio-rec-status{
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    color:var(--text-dim); min-height:18px;
+  }
+  .audio-rec-status.err{ color:var(--red-flag); }
+  .audio-rec-status.ok{ color:var(--teal); }
+
   /* ---------- Sync bar ---------- */
   #sync-bar{
     position:fixed; bottom:26px; left:26px; z-index:60;
@@ -1923,6 +1976,255 @@ function extractDriveFileId(url){
   return null;
 }
 
+/* ---------- Tab switching ---------- */
+function switchAddTab(topicId, tab){
+  const linkPanel = document.getElementById('add-link-panel-' + topicId);
+  const recPanel  = document.getElementById('add-rec-panel-'  + topicId);
+  const tabs      = document.querySelectorAll('[data-topic="' + topicId + '"] .audio-tab');
+  if(!linkPanel || !recPanel) return;
+  linkPanel.style.display = tab === 'link'   ? '' : 'none';
+  recPanel.style.display  = tab === 'record' ? '' : 'none';
+  tabs.forEach((el, i) => el.classList.toggle('audio-tab-active',
+    (i === 0 && tab === 'link') || (i === 1 && tab === 'record')));
+}
+
+/* ---------- Recording state ---------- */
+const SQL_GOOGLE_CLIENT_ID = '586782835490-8bab6ubs872d1lv58375876ujirm8g24.apps.googleusercontent.com';
+
+let _sqlRecState    = 'idle';   /* idle | recording | done */
+let _sqlRecTopicId  = null;
+let _sqlRecRecorder = null;
+let _sqlRecStream   = null;
+let _sqlRecChunks   = [];
+let _sqlRecBlob     = null;
+let _sqlRecTimerInt = null;
+let _sqlRecSeconds  = 0;
+let _sqlOAuthToken  = null;
+let _sqlOAuthExpiry = 0;
+let _sqlTokenClient = null;
+
+/* ---------- Google OAuth2 ---------- */
+function loadGsiForSql(){
+  return new Promise(function(resolve, reject){
+    if(window.google && google.accounts){ resolve(); return; }
+    const existing = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+    if(existing){
+      const id = setInterval(function(){
+        if(window.google && google.accounts){ clearInterval(id); resolve(); }
+      }, 50);
+      setTimeout(function(){ clearInterval(id); reject(new Error('Google library load timed out.')); }, 10000);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = resolve;
+    s.onerror = function(){ reject(new Error('Could not load the Google Sign-In library.')); };
+    document.head.appendChild(s);
+  });
+}
+
+function getSqlOAuthToken(){
+  return loadGsiForSql().then(function(){
+    if(_sqlOAuthToken && Date.now() < _sqlOAuthExpiry - 60000) return _sqlOAuthToken;
+    return new Promise(function(resolve, reject){
+      if(!_sqlTokenClient){
+        _sqlTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id : SQL_GOOGLE_CLIENT_ID,
+          scope     : 'https://www.googleapis.com/auth/drive.file',
+          callback  : '',
+        });
+      }
+      _sqlTokenClient.callback = function(r){
+        if(r.error){
+          reject(new Error('Google sign-in failed: ' + (r.error_description || r.error)));
+        } else {
+          _sqlOAuthToken  = r.access_token;
+          _sqlOAuthExpiry = Date.now() + ((r.expires_in || 3600) * 1000);
+          resolve(_sqlOAuthToken);
+        }
+      };
+      _sqlTokenClient.requestAccessToken({ prompt: '' });
+    });
+  });
+}
+
+function uploadToDriveForSql(blob, fileName){
+  return getSqlOAuthToken().then(function(token){
+    const form = new FormData();
+    form.append('metadata',
+      new Blob([JSON.stringify({ name: fileName, mimeType: blob.type || 'audio/webm' })],
+               { type: 'application/json' }));
+    form.append('file', blob, fileName);
+    return fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: form }
+    );
+  }).then(function(res){
+    if(!res.ok){
+      return res.json().catch(function(){ return {}; }).then(function(err){
+        throw new Error((err.error && err.error.message) || 'Drive upload failed (' + res.status + ')');
+      });
+    }
+    return res.json().then(function(d){ return d.id; });
+  });
+}
+
+/* ---------- Recording actions ---------- */
+function startOrStopRecord(topicId){
+  if(_sqlRecTopicId !== topicId || _sqlRecState === 'idle'){
+    _startRecordForTopic(topicId);
+  } else if(_sqlRecState === 'recording'){
+    _stopRecordForTopic(topicId);
+  } else if(_sqlRecState === 'done'){
+    discardRecordingForTopic(topicId);
+    _startRecordForTopic(topicId);
+  }
+}
+
+function _startRecordForTopic(topicId){
+  const statusEl = document.getElementById('rec-status-' + topicId);
+  const recBtn   = document.getElementById('rec-btn-'    + topicId);
+  const dot      = document.getElementById('rec-dot-'    + topicId);
+  const timer    = document.getElementById('rec-timer-'  + topicId);
+  const after    = document.getElementById('rec-after-'  + topicId);
+
+  if(statusEl){ statusEl.className = 'audio-rec-status'; statusEl.textContent = ''; }
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    if(statusEl){ statusEl.className = 'audio-rec-status err'; statusEl.textContent = 'Browser does not support audio recording.'; }
+    return;
+  }
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
+    _sqlRecChunks   = [];
+    _sqlRecSeconds  = 0;
+    _sqlRecTopicId  = topicId;
+    _sqlRecState    = 'recording';
+    _sqlRecStream   = stream;
+
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg','']
+      .find(function(t){ return t === '' || MediaRecorder.isTypeSupported(t); });
+
+    _sqlRecRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
+    _sqlRecRecorder.addEventListener('dataavailable', function(e){
+      if(e.data && e.data.size > 0) _sqlRecChunks.push(e.data);
+    });
+    _sqlRecRecorder.addEventListener('stop', function(){
+      _sqlRecBlob  = new Blob(_sqlRecChunks, { type: _sqlRecRecorder.mimeType || 'audio/webm' });
+      _sqlRecState = 'done';
+      stream.getTracks().forEach(function(t){ t.stop(); });
+      _sqlRecStream = null;
+
+      clearInterval(_sqlRecTimerInt); _sqlRecTimerInt = null;
+
+      var previewEl = document.getElementById('rec-preview-' + topicId);
+      if(previewEl) previewEl.src = URL.createObjectURL(_sqlRecBlob);
+      var afterEl = document.getElementById('rec-after-' + topicId);
+      if(afterEl) afterEl.style.display = '';
+      var btnEl = document.getElementById('rec-btn-' + topicId);
+      if(btnEl){ btnEl.textContent = '&#9679; Record again'; btnEl.className = 'audio-rec-btn'; }
+      var dotEl = document.getElementById('rec-dot-' + topicId);
+      if(dotEl) dotEl.classList.remove('on');
+      var timerEl = document.getElementById('rec-timer-' + topicId);
+      if(timerEl) timerEl.classList.remove('on');
+      var stEl = document.getElementById('rec-status-' + topicId);
+      if(stEl){ stEl.className = 'audio-rec-status'; stEl.textContent = 'Review and upload, or discard.'; }
+    });
+
+    _sqlRecRecorder.start(100);
+
+    if(recBtn){ recBtn.textContent = '&#9632; Stop'; recBtn.className = 'audio-rec-btn rec-on'; }
+    if(dot)   dot.classList.add('on');
+    if(timer){ timer.textContent = '0:00'; timer.classList.add('on'); }
+    if(after) after.style.display = 'none';
+    if(statusEl){ statusEl.className = 'audio-rec-status'; statusEl.textContent = 'Recording… click Stop when done.'; }
+
+    _sqlRecTimerInt = setInterval(function(){
+      _sqlRecSeconds++;
+      var el = document.getElementById('rec-timer-' + topicId);
+      if(el) el.textContent = Math.floor(_sqlRecSeconds/60) + ':' + String(_sqlRecSeconds%60).padStart(2,'0');
+    }, 1000);
+
+  }).catch(function(err){
+    if(statusEl){ statusEl.className = 'audio-rec-status err'; statusEl.textContent = 'Microphone denied: ' + err.message; }
+  });
+}
+
+function _stopRecordForTopic(topicId){
+  if(_sqlRecRecorder && _sqlRecRecorder.state !== 'inactive') _sqlRecRecorder.stop();
+  clearInterval(_sqlRecTimerInt); _sqlRecTimerInt = null;
+  if(_sqlRecStream){ _sqlRecStream.getTracks().forEach(function(t){ t.stop(); }); _sqlRecStream = null; }
+}
+
+function discardRecordingForTopic(topicId){
+  _stopRecordForTopic(topicId);
+  _sqlRecState    = 'idle';
+  _sqlRecTopicId  = null;
+  _sqlRecRecorder = null;
+  _sqlRecChunks   = [];
+  _sqlRecSeconds  = 0;
+  _sqlRecBlob = null;
+
+  var recBtn  = document.getElementById('rec-btn-'    + topicId);
+  var dot     = document.getElementById('rec-dot-'    + topicId);
+  var timer   = document.getElementById('rec-timer-'  + topicId);
+  var after   = document.getElementById('rec-after-'  + topicId);
+  var stEl    = document.getElementById('rec-status-' + topicId);
+  var preview = document.getElementById('rec-preview-'+ topicId);
+
+  if(recBtn)  { recBtn.textContent = '&#9679; Record'; recBtn.className = 'audio-rec-btn'; }
+  if(dot)     dot.classList.remove('on');
+  if(timer)   { timer.textContent = '0:00'; timer.classList.remove('on'); }
+  if(after)   after.style.display = 'none';
+  if(stEl)    { stEl.textContent = ''; stEl.className = 'audio-rec-status'; }
+  if(preview && preview.src){ URL.revokeObjectURL(preview.src); preview.src = ''; }
+}
+
+function uploadRecordingForTopic(topicId){
+  if(_sqlRecState !== 'done' || !_sqlRecBlob) return;
+
+  var stEl      = document.getElementById('rec-status-' + topicId);
+  var labelEl   = document.getElementById('add-rec-title-' + topicId);
+  var uploadBtn = document.querySelector('#rec-after-' + topicId + ' .audio-add-btn:not(.audio-btn-danger)');
+  var discardBtn= document.querySelector('#rec-after-' + topicId + ' .audio-btn-danger');
+  var label     = (labelEl && labelEl.value.trim()) || '';
+
+  if(stEl){ stEl.className = 'audio-rec-status'; stEl.textContent = 'Signing in to Google…'; }
+  if(uploadBtn)  uploadBtn.disabled  = true;
+  if(discardBtn) discardBtn.disabled = true;
+
+  var ext  = _sqlRecBlob.type.includes('ogg') ? '.ogg' : _sqlRecBlob.type.includes('mp4') ? '.m4a' : '.webm';
+  var name = ((label || 'Recording') + ' — ' + new Date().toISOString().slice(0,10) + ext)
+               .replace(/[<>:"/\\|?*]/g, '-');
+  var blob = _sqlRecBlob;
+
+  if(stEl) stEl.textContent = 'Uploading to Google Drive…';
+
+  uploadToDriveForSql(blob, name).then(function(fileId){
+    var list = getTopicAudios(topicId);
+    list.push({
+      id     : uid(),
+      title  : label || name.slice(0, -ext.length),
+      url    : 'https://drive.google.com/file/d/' + fileId + '/view',
+      fileId : fileId,
+    });
+    setTopicAudios(topicId, list);
+
+    if(stEl){ stEl.className = 'audio-rec-status ok'; stEl.textContent = 'Uploaded ✓ — added to recordings.'; }
+
+    setTimeout(function(){
+      discardRecordingForTopic(topicId);
+      if(labelEl) labelEl.value = '';
+      renderAudioPanel(topicId);
+    }, 1800);
+
+  }).catch(function(err){
+    if(stEl){ stEl.className = 'audio-rec-status err'; stEl.textContent = '✗ Upload failed: ' + err.message; }
+    if(uploadBtn)  uploadBtn.disabled  = false;
+    if(discardBtn) discardBtn.disabled = false;
+  });
+}
+
 /* ---------- rendering ---------- */
 function escapeHtml(str){
   return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -1936,6 +2238,8 @@ function formatTime(sec){
 }
 
 function renderAudioPanel(topicId){
+  /* Don't clobber the recording/preview UI while the user is recording */
+  if(_sqlRecTopicId === topicId && (_sqlRecState === 'recording' || _sqlRecState === 'done')) return;
   const container = document.getElementById('audio-panel-' + topicId);
   if(!container) return;
   const list = getTopicAudios(topicId);
@@ -1993,11 +2297,36 @@ function renderAudioItem(topicId, item, idx, total){
 
 function renderAddForm(topicId){
   return `
-  <div class="audio-add">
-    <input type="text" class="audio-add-title" id="add-title-${topicId}" placeholder="Label (optional)">
-    <input type="text" class="audio-add-url" id="add-url-${topicId}" placeholder="Paste Google Drive share link"
-      onkeydown="if(event.key==='Enter'){addAudio('${topicId}');}">
-    <button class="audio-add-btn" onclick="addAudio('${topicId}')">+ Add recording</button>
+  <div class="audio-add-section">
+    <div class="audio-add-tabs" data-topic="${topicId}">
+      <button class="audio-tab audio-tab-active" onclick="switchAddTab('${topicId}','link')">&#128206; Paste link</button>
+      <button class="audio-tab" onclick="switchAddTab('${topicId}','record')">&#127897; Record</button>
+    </div>
+
+    <div id="add-link-panel-${topicId}" class="audio-add-link">
+      <input type="text" class="audio-add-title" id="add-title-${topicId}" placeholder="Label (optional)">
+      <input type="text" class="audio-add-url" id="add-url-${topicId}" placeholder="Paste Google Drive share link"
+        onkeydown="if(event.key==='Enter'){addAudio('${topicId}');}">
+      <button class="audio-add-btn" onclick="addAudio('${topicId}')">+ Add</button>
+    </div>
+
+    <div id="add-rec-panel-${topicId}" class="audio-add-rec" style="display:none;">
+      <div class="audio-rec-row1">
+        <input type="text" class="audio-add-title" id="add-rec-title-${topicId}" placeholder="Label (optional)">
+        <button class="audio-rec-btn" id="rec-btn-${topicId}"
+                onclick="startOrStopRecord('${topicId}')">&#9679; Record</button>
+        <span class="audio-rec-dot" id="rec-dot-${topicId}" aria-hidden="true"></span>
+        <span class="audio-rec-timer" id="rec-timer-${topicId}">0:00</span>
+      </div>
+      <div class="audio-rec-after" id="rec-after-${topicId}" style="display:none;">
+        <audio id="rec-preview-${topicId}" controls class="audio-rec-preview"></audio>
+        <div class="audio-rec-btn-row">
+          <button class="audio-add-btn" onclick="uploadRecordingForTopic('${topicId}')">&#8593; Upload to Drive</button>
+          <button class="audio-add-btn audio-btn-danger" onclick="discardRecordingForTopic('${topicId}')">&#10005; Discard</button>
+        </div>
+      </div>
+      <div class="audio-rec-status" id="rec-status-${topicId}"></div>
+    </div>
   </div>`;
 }
 

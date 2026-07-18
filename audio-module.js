@@ -7,14 +7,18 @@
    iframe (drive.google.com/file/d/ID/preview), which makes
    authenticated same-origin requests using the browser's
    existing Google session — no CORS / ORB issues.
+
+   Live recording: MediaRecorder → Blob → Drive API upload
+   (requires Google OAuth2 with drive.file scope)
    ============================================================= */
 (function () {
   'use strict';
 
   /* ── Config ─────────────────────────────────────────────── */
-  const GH_OWNER  = 'ankurkumar222';
-  const GH_REPO   = 'advanced-architects-lab';
-  const GH_BRANCH = 'creative';
+  const GH_OWNER         = 'ankurkumar222';
+  const GH_REPO          = 'advanced-architects-lab';
+  const GH_BRANCH        = 'creative';
+  const GOOGLE_CLIENT_ID = '586782835490-8bab6ubs872d1lv58375876ujirm8g24.apps.googleusercontent.com';
 
   /* ── Shared PAT keys (same as sql_indexes_deep_dive) ─────── */
   const LS_TOKEN_LOCAL   = 'alab_gh_token_local';
@@ -88,6 +92,91 @@
     }
   }
 
+  /* ── Google OAuth2 (for Drive upload) ────────────────────── */
+  let _gsiLoaded   = false;
+  let _tokenClient = null;
+  let _cachedToken = null;
+  let _tokenExpiry = 0;
+
+  function loadGsi() {
+    return new Promise((resolve, reject) => {
+      if (_gsiLoaded && window.google && google.accounts) { resolve(); return; }
+      /* Script already in DOM (e.g. loaded by index.html) — wait for it */
+      if (document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
+        const id = setInterval(() => {
+          if (window.google && google.accounts) { _gsiLoaded = true; clearInterval(id); resolve(); }
+        }, 50);
+        setTimeout(() => { clearInterval(id); reject(new Error('Google library load timed out.')); }, 10000);
+        return;
+      }
+      const s   = document.createElement('script');
+      s.src     = 'https://accounts.google.com/gsi/client';
+      s.onload  = () => { _gsiLoaded = true; resolve(); };
+      s.onerror = () => reject(new Error('Could not load the Google Sign-In library.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function getOAuthToken() {
+    await loadGsi();
+    if (_cachedToken && Date.now() < _tokenExpiry - 60000) return _cachedToken;
+    return new Promise((resolve, reject) => {
+      if (!_tokenClient) {
+        _tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id : GOOGLE_CLIENT_ID,
+          scope     : 'https://www.googleapis.com/auth/drive.file',
+          callback  : '', /* set per-call below */
+        });
+      }
+      _tokenClient.callback = (r) => {
+        if (r.error) {
+          reject(new Error('Google sign-in failed: ' + (r.error_description || r.error)));
+        } else {
+          _cachedToken = r.access_token;
+          _tokenExpiry = Date.now() + ((r.expires_in || 3600) * 1000);
+          resolve(_cachedToken);
+        }
+      };
+      _tokenClient.requestAccessToken({ prompt: '' });
+    });
+  }
+
+  async function uploadToDrive(blob, fileName) {
+    const token = await getOAuthToken();
+    const form  = new FormData();
+    form.append(
+      'metadata',
+      new Blob([JSON.stringify({ name: fileName, mimeType: blob.type || 'audio/webm' })],
+               { type: 'application/json' })
+    );
+    form.append('file', blob, fileName);
+    const res = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+      { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: form }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || 'Drive upload failed (' + res.status + ')');
+    }
+    return (await res.json()).id;
+  }
+
+  /* ── Recording state ─────────────────────────────────────── */
+  let _recState    = 'idle'; /* idle | recording | done */
+  let _recRecorder = null;
+  let _recStream   = null;
+  let _recChunks   = [];
+  let _recBlob     = null;
+  let _recTimerInt = null;
+  let _recSeconds  = 0;
+
+  function _recExt(blob) {
+    const t = (blob && blob.type) || '';
+    if (t.includes('ogg')) return '.ogg';
+    if (t.includes('mp4')) return '.m4a';
+    return '.webm';
+  }
+
   /* ── CSS ─────────────────────────────────────────────────── */
   const CSS = `
 /* == Architects Lab — Audio Module == */
@@ -131,6 +220,8 @@
 .am-btn.sync:hover{background:#6366F1;color:#fff;}
 .am-btn.danger{border-color:#C1543A;color:#C1543A;}
 .am-btn.danger:hover{background:#C1543A;color:#fff;}
+.am-btn.rec-on{border-color:#C1543A;color:#C1543A;}
+.am-btn.rec-on:hover{background:#C1543A;color:#fff;}
 .am-btn:disabled{opacity:.4;cursor:not-allowed;}
 
 .am-list{display:flex;flex-direction:column;gap:12px;}
@@ -183,11 +274,27 @@
   color:#C1543A;padding:8px 0;
 }
 
-.am-add-row{
-  display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;
-  padding-top:14px;border-top:1px dashed var(--border,#DEDACC);
-  align-items:center;
+/* Add section: mode tabs + two panels */
+.am-add-section{
+  margin-top:14px;padding-top:14px;
+  border-top:1px dashed var(--border,#DEDACC);
 }
+.am-mode-tabs{display:flex;gap:4px;margin-bottom:12px;}
+.am-tab{
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;font-weight:600;
+  padding:4px 12px;border-radius:20px;
+  border:1px solid var(--border,#DEDACC);
+  background:none;color:var(--muted,#75736A);
+  cursor:pointer;
+  transition:border-color .15s,color .15s,background .15s;
+}
+.am-tab.am-tab-active{
+  background:var(--panel-2,#F2F0E8);
+  border-color:var(--text,#242420);color:var(--text,#242420);
+}
+.am-tab:hover:not(.am-tab-active){border-color:#9A62D6;color:#9A62D6;}
+
+.am-add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .am-input{
   font-family:'IBM Plex Mono',monospace;font-size:.78rem;
   background:var(--panel-2,#F2F0E8);border:1px solid var(--border,#DEDACC);
@@ -198,6 +305,31 @@
 .am-input.am-title{width:160px;flex-shrink:0;}
 .am-input.am-url{flex:1;min-width:200px;}
 
+/* Recording panel */
+.am-rec-panel{display:flex;flex-direction:column;gap:10px;}
+.am-rec-row1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.am-rec-dot{
+  width:9px;height:9px;border-radius:50%;
+  background:#C1543A;display:none;flex-shrink:0;
+}
+.am-rec-dot.on{display:inline-block;animation:am-blink 1s ease-in-out infinite;}
+@keyframes am-blink{0%,100%{opacity:1}50%{opacity:.2}}
+.am-rec-timer{
+  font-family:'IBM Plex Mono',monospace;font-size:.78rem;
+  color:var(--text,#242420);min-width:44px;visibility:hidden;
+}
+.am-rec-timer.on{visibility:visible;}
+.am-rec-after{display:flex;flex-direction:column;gap:10px;}
+.am-rec-preview{width:100%;max-width:100%;}
+.am-rec-upload-row{display:flex;gap:8px;flex-wrap:wrap;}
+.am-rec-status{
+  font-family:'IBM Plex Mono',monospace;font-size:.7rem;
+  color:var(--muted,#75736A);min-height:18px;
+}
+.am-rec-status.err{color:#C1543A;}
+.am-rec-status.ok{color:#2E8B82;}
+
+/* Footer */
 .am-footer{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   margin-top:16px;padding-top:14px;border-top:1px solid var(--border,#DEDACC);
@@ -209,6 +341,7 @@
 .am-status.ok{color:#2E8B82;}
 .am-status.err{color:#C1543A;}
 
+/* Modal */
 .am-modal-bg{
   position:fixed;inset:0;background:rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;z-index:500;
@@ -243,6 +376,7 @@
   .am-back{bottom:18px;top:auto;}
   .am-add-row{flex-direction:column;}
   .am-input.am-title{width:100%;}
+  .am-rec-row1{flex-direction:column;align-items:flex-start;}
 }
 `;
 
@@ -284,16 +418,44 @@
       <div class="am-hdr">
         <span class="am-hdr-title">&#127911; Audio Recordings</span>
         <span class="am-count" id="am-count">0</span>
-        <button class="am-btn add" id="am-focus-add">+ Add</button>
       </div>
       <div class="am-list" id="am-list"></div>
-      <div class="am-add-row">
-        <input class="am-input am-title" type="text"
-               id="am-new-title" placeholder="Label (optional)">
-        <input class="am-input am-url" type="url"
-               id="am-new-url" placeholder="Paste Google Drive share link">
-        <button class="am-btn add" id="am-add-confirm">Add recording</button>
+
+      <div class="am-add-section">
+        <div class="am-mode-tabs">
+          <button class="am-tab am-tab-active" id="am-tab-link">&#128206; Paste link</button>
+          <button class="am-tab" id="am-tab-record">&#127897; Record</button>
+        </div>
+
+        <!-- Panel A: paste a Drive link -->
+        <div class="am-add-row" id="am-panel-link">
+          <input class="am-input am-title" type="text"
+                 id="am-new-title" placeholder="Label (optional)">
+          <input class="am-input am-url" type="url"
+                 id="am-new-url" placeholder="Paste Google Drive share link">
+          <button class="am-btn add" id="am-add-confirm">Add</button>
+        </div>
+
+        <!-- Panel B: record live audio -->
+        <div class="am-rec-panel" id="am-panel-record" style="display:none;">
+          <div class="am-rec-row1">
+            <input class="am-input am-title" type="text"
+                   id="am-rec-label" placeholder="Label (optional)">
+            <button class="am-btn" id="am-rec-btn">&#9679; Record</button>
+            <span class="am-rec-dot" id="am-rec-dot" aria-hidden="true"></span>
+            <span class="am-rec-timer" id="am-rec-timer">0:00</span>
+          </div>
+          <div class="am-rec-after" id="am-rec-after" style="display:none;">
+            <audio id="am-rec-preview" controls class="am-rec-preview"></audio>
+            <div class="am-rec-upload-row">
+              <button class="am-btn add" id="am-rec-upload">&#8593; Upload to Drive</button>
+              <button class="am-btn danger" id="am-rec-discard">&#10005; Discard</button>
+            </div>
+          </div>
+          <div class="am-rec-status" id="am-rec-status"></div>
+        </div>
       </div>
+
       <div class="am-footer">
         <span class="am-status" id="am-status">Local — not yet synced to GitHub</span>
         <button class="am-btn" id="am-pat-btn"
@@ -307,18 +469,195 @@
     statusEl  = document.getElementById('am-status');
     countEl   = document.getElementById('am-count');
 
-    document.getElementById('am-focus-add').addEventListener('click', () =>
-      document.getElementById('am-new-url').focus()
-    );
+    /* Paste-link tab events */
     document.getElementById('am-add-confirm').addEventListener('click', addFromForm);
     document.getElementById('am-new-url').addEventListener('keydown', e => {
       if (e.key === 'Enter') addFromForm();
     });
     document.getElementById('am-pat-btn').addEventListener('click', showPatModal);
     document.getElementById('am-sync-btn').addEventListener('click', syncToGitHub);
+
+    /* Mode tabs */
+    document.getElementById('am-tab-link').addEventListener('click',   () => switchTab('link'));
+    document.getElementById('am-tab-record').addEventListener('click', () => switchTab('record'));
+
+    /* Recording events */
+    bindRecordEvents();
   }
 
-  /* ── Add from inline form ──────────────────────────────────── */
+  /* ── Tab switching ─────────────────────────────────────────── */
+  function switchTab(tab) {
+    document.getElementById('am-tab-link')  .classList.toggle('am-tab-active', tab === 'link');
+    document.getElementById('am-tab-record').classList.toggle('am-tab-active', tab === 'record');
+    document.getElementById('am-panel-link')  .style.display = tab === 'link'   ? '' : 'none';
+    document.getElementById('am-panel-record').style.display = tab === 'record' ? '' : 'none';
+  }
+
+  /* ── Recording events ──────────────────────────────────────── */
+  function bindRecordEvents() {
+    document.getElementById('am-rec-btn').addEventListener('click', async () => {
+      if (_recState === 'idle')      { await startRecording(); }
+      else if (_recState === 'recording') { stopRecording(); }
+      else if (_recState === 'done') { resetRecording(); await startRecording(); }
+    });
+    document.getElementById('am-rec-upload') .addEventListener('click', doUpload);
+    document.getElementById('am-rec-discard').addEventListener('click', resetRecording);
+  }
+
+  async function startRecording() {
+    const statusEl2 = document.getElementById('am-rec-status');
+    const recBtn    = document.getElementById('am-rec-btn');
+    const dot       = document.getElementById('am-rec-dot');
+    const timer     = document.getElementById('am-rec-timer');
+    const after     = document.getElementById('am-rec-after');
+
+    statusEl2.className = statusEl2.className.replace(/\s*(err|ok)\b/g, '');
+    statusEl2.textContent = '';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      statusEl2.className   = 'am-rec-status err';
+      statusEl2.textContent = 'Your browser does not support audio recording.';
+      return;
+    }
+
+    try {
+      _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      statusEl2.className   = 'am-rec-status err';
+      statusEl2.textContent = 'Microphone access denied: ' + err.message;
+      return;
+    }
+
+    _recChunks  = [];
+    _recSeconds = 0;
+
+    const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', '']
+      .find(t => t === '' || MediaRecorder.isTypeSupported(t));
+
+    _recRecorder = new MediaRecorder(_recStream, mimeType ? { mimeType } : {});
+    _recRecorder.addEventListener('dataavailable', e => {
+      if (e.data && e.data.size > 0) _recChunks.push(e.data);
+    });
+    _recRecorder.addEventListener('stop', () => {
+      _recBlob  = new Blob(_recChunks, { type: _recRecorder.mimeType || 'audio/webm' });
+      _recState = 'done';
+
+      const preview = document.getElementById('am-rec-preview');
+      if (preview) preview.src = URL.createObjectURL(_recBlob);
+
+      document.getElementById('am-rec-after').style.display = '';
+      document.getElementById('am-rec-btn').textContent     = '&#9679; Record again';
+      document.getElementById('am-rec-btn').className       = 'am-btn';
+      document.getElementById('am-rec-dot').classList.remove('on');
+      document.getElementById('am-rec-timer').classList.remove('on');
+
+      clearInterval(_recTimerInt); _recTimerInt = null;
+      if (_recStream) { _recStream.getTracks().forEach(t => t.stop()); _recStream = null; }
+
+      const s = document.getElementById('am-rec-status');
+      if (s) { s.className = 'am-rec-status'; s.textContent = 'Review and upload, or discard.'; }
+    });
+
+    _recRecorder.start(100);
+    _recState = 'recording';
+
+    recBtn.textContent    = '&#9632; Stop';
+    recBtn.className      = 'am-btn rec-on';
+    after.style.display   = 'none';
+    dot.classList.add('on');
+    timer.textContent = '0:00';
+    timer.classList.add('on');
+
+    _recTimerInt = setInterval(() => {
+      _recSeconds++;
+      const el = document.getElementById('am-rec-timer');
+      if (el) el.textContent = Math.floor(_recSeconds / 60) + ':' + String(_recSeconds % 60).padStart(2, '0');
+    }, 1000);
+
+    statusEl2.className   = 'am-rec-status';
+    statusEl2.textContent = 'Recording… click Stop when done.';
+  }
+
+  function stopRecording() {
+    if (_recRecorder && _recRecorder.state !== 'inactive') _recRecorder.stop();
+    clearInterval(_recTimerInt); _recTimerInt = null;
+    if (_recStream) { _recStream.getTracks().forEach(t => t.stop()); _recStream = null; }
+  }
+
+  function resetRecording() {
+    stopRecording();
+    _recState    = 'idle';
+    _recRecorder = null;
+    _recChunks   = [];
+    _recBlob     = null;
+    _recSeconds  = 0;
+
+    const recBtn  = document.getElementById('am-rec-btn');
+    const dot     = document.getElementById('am-rec-dot');
+    const timer   = document.getElementById('am-rec-timer');
+    const after   = document.getElementById('am-rec-after');
+    const status  = document.getElementById('am-rec-status');
+    const preview = document.getElementById('am-rec-preview');
+
+    if (recBtn)  { recBtn.textContent = '&#9679; Record'; recBtn.className = 'am-btn'; }
+    if (dot)     dot.classList.remove('on');
+    if (timer)   { timer.textContent = '0:00'; timer.classList.remove('on'); }
+    if (after)   after.style.display = 'none';
+    if (status)  { status.textContent = ''; status.className = 'am-rec-status'; }
+    if (preview && preview.src) { URL.revokeObjectURL(preview.src); preview.src = ''; }
+  }
+
+  async function doUpload() {
+    if (_recState !== 'done' || !_recBlob) return;
+
+    const status  = document.getElementById('am-rec-status');
+    const upload  = document.getElementById('am-rec-upload');
+    const discard = document.getElementById('am-rec-discard');
+    const label   = (document.getElementById('am-rec-label') || {}).value || '';
+
+    status.className = status.className.replace(/\s*(err|ok)\b/g, '');
+    status.textContent = 'Signing in to Google…';
+    upload.disabled  = true;
+    discard.disabled = true;
+
+    try {
+      const ext  = _recExt(_recBlob);
+      const name = ((label.trim() || 'Recording') + ' — ' + new Date().toISOString().slice(0, 10) + ext)
+        .replace(/[<>:"/\\|?*]/g, '-');
+
+      status.textContent = 'Uploading to Google Drive…';
+      const fileId = await uploadToDrive(_recBlob, name);
+
+      const data = loadData();
+      data.push({
+        id: uid(),
+        title  : label.trim() || name.slice(0, -ext.length),
+        url    : viewUrl(fileId),
+        fileId : fileId,
+      });
+      saveData(data);
+      renderList();
+      setUnsaved();
+
+      status.className   = 'am-rec-status ok';
+      status.textContent = 'Uploaded ✓ — saved to Drive and added to recordings.';
+
+      /* Reset after a moment so the user can see the success */
+      setTimeout(() => {
+        const lbl = document.getElementById('am-rec-label');
+        if (lbl) lbl.value = '';
+        resetRecording();
+      }, 1800);
+
+    } catch (err) {
+      status.className   = 'am-rec-status err';
+      status.textContent = '✗ Upload failed: ' + err.message;
+      upload.disabled  = false;
+      discard.disabled = false;
+    }
+  }
+
+  /* ── Add from paste-link form ──────────────────────────────── */
   function addFromForm() {
     const titleEl = document.getElementById('am-new-title');
     const urlEl   = document.getElementById('am-new-url');
@@ -345,7 +684,7 @@
     const data = loadData();
     countEl.textContent = data.length;
     listEl.innerHTML = data.length === 0
-      ? '<div class="am-empty">No recordings yet — paste a Google Drive link above to attach audio.</div>'
+      ? '<div class="am-empty">No recordings yet — paste a Drive link or record directly above.</div>'
       : data.map((item, i) => itemHtml(item, i, data.length)).join('');
   }
 
@@ -367,7 +706,7 @@
               target="_blank" rel="noopener">&#8599; Open in Drive</a>
          </div>`
       : `<div class="am-msg-block">
-           &#9888; Couldn't parse a Drive file ID —
+           &#9888; Couldn't parse a Drive file ID &mdash;
            <a href="#" class="am-edit-lnk" data-id="${item.id}"
               style="color:#C1543A;">edit link</a>
          </div>`;
@@ -491,7 +830,7 @@
       <div class="am-modal" role="dialog" aria-modal="true">
         <h3>GitHub Token</h3>
         <div class="am-field">
-          <label>Personal Access Token (classic — repo scope)</label>
+          <label>Personal Access Token (classic &mdash; repo scope)</label>
           <input class="am-input" type="password" id="am-p-token"
                  value="${esc(current)}" placeholder="ghp_…" autocomplete="off">
           <small>Used only from this page to call the GitHub API at api.github.com.
@@ -539,9 +878,9 @@
     if (!token) { showPatModal(); return; }
 
     const syncBtn = document.getElementById('am-sync-btn');
-    syncBtn.disabled    = true;
-    syncBtn.textContent = 'Syncing…';
-    statusEl.className  = 'am-status';
+    syncBtn.disabled     = true;
+    syncBtn.textContent  = 'Syncing…';
+    statusEl.className   = 'am-status';
     statusEl.textContent = 'Connecting to GitHub…';
 
     const hdr = {
@@ -629,11 +968,11 @@
     }
   }
 
-  /* ── Suppress extension-runtime noise ─────────────────────────
-     Chrome extensions intercepting Drive requests sometimes kill
-     their service worker before calling sendResponse. Chrome then
-     rejects a Promise and logs it to the page console. Swallow it
-     here — real page errors never carry this exact message text.  */
+  /* ── Suppress Chrome-extension runtime noise ───────────────────
+     Some extensions intercept Drive network requests and kill their
+     service worker before calling sendResponse. Chrome rejects the
+     resulting promise and logs it to the page console. Swallow it —
+     real page errors never carry this exact message string.         */
   window.addEventListener('unhandledrejection', function (event) {
     var msg = event && event.reason && event.reason.message;
     if (typeof msg === 'string' && msg.indexOf('message channel closed') !== -1) {
