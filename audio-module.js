@@ -66,7 +66,7 @@
     return null;
   }
   function streamUrl(fid) {
-    return 'https://drive.google.com/uc?export=download&id=' + fid;
+    return 'https://drive.usercontent.google.com/download?id=' + fid + '&export=download&authuser=0';
   }
   function driveViewUrl(fid) {
     return 'https://drive.google.com/file/d/' + fid + '/view';
@@ -744,6 +744,19 @@
       syncBtn.textContent = 'Sync to GitHub';
     }
   }
+
+  /* ── Suppress extension-runtime noise ─────────────────────────
+     Chrome extensions intercepting Drive requests via async message
+     listeners sometimes kill their service worker before calling
+     sendResponse. Chrome then rejects a Promise and logs it to the
+     page console. Swallow it here — real page errors never carry
+     this exact message text so nothing legitimate is hidden.        */
+  window.addEventListener('unhandledrejection', function (event) {
+    var msg = event && event.reason && event.reason.message;
+    if (typeof msg === 'string' && msg.indexOf('message channel closed') !== -1) {
+      event.preventDefault();
+    }
+  });
 
   /* ── Init ──────────────────────────────────────────────────── */
   function init() {

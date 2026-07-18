@@ -1963,7 +1963,7 @@ function renderAudioPanel(topicId){
 
 function renderAudioItem(topicId, item, idx, total){
   const fileId = item.fileId || extractDriveFileId(item.url);
-  const src = fileId ? ('https://drive.google.com/uc?export=download&id=' + fileId) : '';
+  const src = fileId ? ('https://drive.usercontent.google.com/download?id=' + fileId + '&export=download&authuser=0') : '';
   const previewUrl = fileId ? ('https://drive.google.com/file/d/' + fileId + '/view') : (item.url || '#');
 
   let playerHtml;
@@ -2280,6 +2280,20 @@ function updateSyncStatus(){
 /* ---------- init ---------- */
 TOPIC_IDS.forEach(renderAudioPanel);
 updateSyncStatus();
+
+/* ---------- suppress extension-runtime noise ----------
+   Chrome extensions that intercept network requests via an async message
+   listener sometimes kill their service-worker before calling sendResponse.
+   Chrome then rejects a Promise and logs it to the *page* console even
+   though it originated inside the extension. Swallow it here so it doesn't
+   alarm users; real page errors are unaffected because they never carry
+   this exact message text. */
+window.addEventListener('unhandledrejection', function(event) {
+  var msg = event && event.reason && event.reason.message;
+  if (typeof msg === 'string' && msg.indexOf('message channel closed') !== -1) {
+    event.preventDefault();
+  }
+});
 </script>
 
 </body>
