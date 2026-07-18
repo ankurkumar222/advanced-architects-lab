@@ -569,9 +569,23 @@
     #sync-bar{ left:14px; right:14px; bottom:14px; }
     .ac-seek{ flex-basis:100%; order:5; }
   }
+  /* back button */
+  .alab-back-btn{
+    position:fixed;top:18px;left:18px;z-index:200;
+    display:flex;align-items:center;gap:7px;
+    background:var(--panel,#12161d);border:1px solid var(--hairline,#2a3140);
+    color:var(--text-body,#c9cdd6);
+    font-family:'IBM Plex Mono',monospace;font-size:.75rem;font-weight:600;
+    padding:8px 14px;border-radius:20px;text-decoration:none;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+    transition:border-color .15s,color .15s;
+  }
+  .alab-back-btn:hover{border-color:var(--amber,#d9a441);color:var(--amber,#d9a441);}
+  @media(max-width:600px){.alab-back-btn{bottom:18px;top:auto;}}
 </style>
 </head>
 <body>
+<a class="alab-back-btn" href="../index.html">&#8592; Index</a>
 
 <div class="ledger-bg"></div>
 
