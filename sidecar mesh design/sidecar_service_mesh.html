@@ -287,9 +287,202 @@ section.divider{ border-top:1px solid var(--border); }
 footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size:13px; font-family:'JetBrains Mono', monospace; border-top:1px solid var(--border); margin-top:40px; }
 
 @media (max-width:640px){ .diagram-block{ font-size:11.5px; } }
+
+  /* ---------- audio-panel: uses --ap-* vars so it works in light+dark ---------- */
+  :root{
+    --ap-bg:var(--panel,#12161d);
+    --ap-bg-raised:var(--panel-2,#1C2027);
+    --ap-border:var(--border,#2a3140);
+    --ap-text:var(--text,#c9cdd6);
+    --ap-text-dim:var(--muted,#767d8a);
+    --ap-ink:var(--paper,#0b0e12);
+    --ap-amber:#d9a441;
+    --ap-amber-dim:#8f6f30;
+    --ap-teal:#5fb8ad;
+    --ap-red:#c26a5b;
+  }
+  .audio-panel{
+    background:var(--ap-bg);
+    border:1px solid var(--ap-border);
+    border-radius:8px;
+    padding:18px 20px;
+    margin:22px 0 36px;
+  }
+  .audio-panel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .audio-panel-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--ap-amber);
+  }
+  .audio-count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--ap-text-dim);
+    border:1px solid var(--ap-border); border-radius:10px; padding:1px 8px;
+  }
+  .audio-empty{
+    font-size:13px; color:var(--ap-text-dim); font-style:italic; padding:2px 0 14px;
+  }
+  .audio-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .audio-item{
+    background:var(--ap-bg-raised);
+    border:1px solid var(--ap-border);
+    border-radius:6px;
+    padding:12px 14px;
+  }
+  .audio-item-top{
+    display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;
+  }
+  .audio-title-input{
+    flex:1; min-width:120px;
+    background:none; border:none; border-bottom:1px dashed var(--ap-border);
+    color:var(--ap-text); font-family:'IBM Plex Mono', monospace; font-size:14px; font-weight:500;
+    padding:2px 2px 4px;
+  }
+  .audio-title-input:focus{ outline:none; border-bottom-color:var(--ap-amber); }
+  .audio-item-actions{ display:flex; gap:6px; flex:0 0 auto; }
+  .ai-btn{
+    background:none; border:1px solid var(--ap-border); color:var(--ap-text-dim);
+    width:26px; height:26px; border-radius:5px; cursor:pointer; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .ai-btn:hover:not(:disabled){ border-color:var(--ap-teal); color:var(--ap-teal); }
+  .ai-btn.danger:hover{ border-color:var(--ap-red); color:var(--ap-red); }
+  .ai-btn:disabled{ opacity:0.3; cursor:default; }
+  .audio-drive-frame{
+    display:block; width:100%; height:80px;
+    border:1px solid var(--ap-border); border-radius:6px;
+    background:var(--ap-ink);
+  }
+  .audio-frame-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:6px;
+  }
+  .audio-frame-note{ font-size:11px; color:var(--ap-text-dim); }
+  .audio-open-link{
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    color:var(--ap-text-dim); text-decoration:none; white-space:nowrap; flex-shrink:0;
+  }
+  .audio-open-link:hover{ color:var(--ap-teal); }
+  .audio-fallback{ margin-top:8px; font-size:12px; color:var(--ap-text-dim); }
+  .audio-fallback a{ color:var(--ap-teal); }
+  .audio-add{
+    display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--ap-border); padding-top:14px;
+  }
+  .audio-add-title, .audio-add-url{
+    background:var(--ap-ink); border:1px solid var(--ap-border); color:var(--ap-text);
+    font-size:13px; padding:8px 10px; border-radius:5px; font-family:'IBM Plex Mono', monospace;
+  }
+  .audio-add-title{ flex:0 1 180px; }
+  .audio-add-url{ flex:1 1 220px; }
+  .audio-add-title:focus, .audio-add-url:focus{ outline:none; border-color:var(--ap-amber-dim); }
+  .audio-add-btn{
+    background:none; border:1px solid var(--ap-amber-dim); color:var(--ap-amber);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; padding:8px 14px; border-radius:5px; cursor:pointer;
+    flex:0 0 auto;
+  }
+  .audio-add-btn:hover{ background:rgba(217,164,65,0.1); }
+  /* ---------- Sync bar ---------- */
+  #sync-bar{
+    position:fixed; bottom:26px; left:26px; z-index:60;
+    display:flex; align-items:center; gap:10px;
+    background:var(--ap-bg-raised); border:1px solid var(--ap-border);
+    padding:10px 14px; border-radius:30px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.35);
+  }
+  #sync-btn{
+    background:var(--ap-amber-dim); border:none; color:#0b0e12;
+    font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:11px;
+    padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;
+  }
+  #sync-btn:hover{ background:var(--ap-amber); }
+  #sync-btn:disabled{ opacity:0.6; cursor:default; }
+  .sync-status{ color:var(--ap-text-dim); white-space:nowrap; }
+  .sync-status.dirty{ color:var(--ap-amber); }
+  #sync-settings-btn{
+    background:none; border:1px solid var(--ap-border); color:var(--ap-text-dim);
+    width:26px; height:26px; border-radius:50%; cursor:pointer; flex:0 0 auto;
+  }
+  #sync-settings-btn:hover{ color:var(--ap-teal); border-color:var(--ap-teal); }
+  /* ---------- GitHub settings modal ---------- */
+  .gh-modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gh-modal{
+    background:var(--ap-bg-raised); border:1px solid var(--ap-border); border-radius:10px;
+    padding:26px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  }
+  .gh-modal h3{
+    font-family:'IBM Plex Mono', monospace; color:var(--ap-text); font-size:18px; margin-bottom:16px;
+  }
+  .gh-modal label{
+    display:block; font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ap-text-dim);
+    text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;
+  }
+  .gh-modal label input[type=text], .gh-modal label input[type=password]{
+    display:block; width:100%; margin-top:6px;
+    background:var(--ap-ink); border:1px solid var(--ap-border); color:var(--ap-text);
+    font-family:'IBM Plex Mono', monospace; font-size:13px; padding:9px 10px; border-radius:5px;
+  }
+  .gh-modal label.gh-remember{
+    display:flex; align-items:center; gap:8px; text-transform:none; font-size:12px;
+  }
+  .gh-modal label.gh-remember input{ width:auto; margin:0; }
+  .gh-note{ font-size:11px; color:var(--ap-text-dim); line-height:1.5; margin-bottom:16px; }
+  .gh-modal-actions{ display:flex; justify-content:flex-end; gap:10px; }
+  .gh-modal-actions button{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:9px 16px; border-radius:5px; cursor:pointer;
+    background:none; border:1px solid var(--ap-border); color:var(--ap-text);
+  }
+  .gh-modal-actions button.primary{
+    background:var(--ap-amber-dim); border-color:var(--ap-amber-dim); color:#0b0e12; font-weight:600;
+  }
+  .gh-modal-actions button.primary:hover{ background:var(--ap-amber); }
+  .gh-modal-msg{ margin-top:10px; font-size:12px; color:var(--ap-teal); min-height:16px; }
+  @media(max-width:640px){
+    #sync-bar{ left:14px; right:14px; bottom:14px; }
+  }
+
 </style>
 </head>
 <body>
+<div id="sync-bar">
+  <button id="sync-btn" onclick="handleSyncClick()">&#x21EA; Sync to GitHub</button>
+  <span id="sync-status" class="sync-status">no local changes</span>
+  <button id="sync-settings-btn" title="GitHub sync settings" onclick="openGithubSettings()">&#9881;</button>
+</div>
+
+<div id="gh-modal-overlay" class="gh-modal-overlay" style="display:none;">
+  <div class="gh-modal">
+    <h3>GitHub Sync Settings</h3>
+    <label>Owner
+      <input id="gh-owner" type="text" placeholder="e.g. ankur-xyz">
+    </label>
+    <label>Repo
+      <input id="gh-repo" type="text" placeholder="e.g. architects-lab">
+    </label>
+    <label>Branch
+      <input id="gh-branch" type="text" value="main">
+    </label>
+    <label>File path
+      <input id="gh-path" type="text" placeholder="audio-data/notes.json">
+    </label>
+    <label>Personal Access Token
+      <input id="gh-token" type="password" placeholder="ghp_...">
+    </label>
+    <label class="gh-remember"><input id="gh-remember" type="checkbox"> Remember token on this device (localStorage)</label>
+    <p class="gh-note">Token is used only from this page to call the GitHub API directly from your browser. Use a token scoped to just this repo&apos;s contents. If &quot;remember&quot; is unchecked, the token is kept only for this browser tab session.</p>
+    <div class="gh-modal-actions">
+      <button onclick="closeGithubSettings()">Cancel</button>
+      <button class="primary" onclick="saveGithubSettings()">Save</button>
+    </div>
+    <p id="gh-modal-msg" class="gh-modal-msg"></p>
+  </div>
+</div>
+
 
 <div class="hero">
   <div class="hero-eyebrow">system design · inside the pod</div>
@@ -313,12 +506,13 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
 <div class="wrap">
 
   <!-- ================= NORTH-SOUTH vs EAST-WEST ================= -->
-  <section>
+  <section id="sm1">
     <div class="section-head">
       <div class="section-eyebrow">a new dimension</div>
       <h2>There are two completely different traffic problems</h2>
       <p class="lede">One is <em>"how does a request from outside get to one pod?"</em> — that's <strong style="color:var(--teal)">North-South</strong> traffic, and load balancers/gateways solve it. The other is <em>"how do services inside the cluster talk to each other?"</em> — that's <strong style="color:var(--amber)">East-West</strong> traffic, and it's a different shape of problem entirely.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm1"></div>
     <div class="split">
       <div class="split-col">
         <h4 style="color:var(--teal)">North-South · outside → in</h4>
@@ -343,12 +537,13 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   </section>
 
   <!-- ================= ANATOMY OF A POD ================= -->
-  <section class="divider">
+  <section class="divider" id="sm2">
     <div class="section-head">
       <div class="section-eyebrow">first, the building block</div>
       <h2>What's actually inside a Pod?</h2>
       <p class="lede">A Pod is never just "your app." It's one or more containers that are always scheduled together, on the same machine, sharing the same network identity.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm2"></div>
     <div class="anatomy-pod">
       <div class="anatomy-pod-label">POD · single IP 10.4.2.17</div>
       <div class="anatomy-box app">
@@ -366,11 +561,12 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   </section>
 
   <!-- ================= WHY A SIDECAR ================= -->
-  <section>
+  <section id="sm3">
     <div class="section-head">
       <div class="section-eyebrow">the logic behind the pattern</div>
       <h2>Why bolt on a sidecar instead of coding it into the app?</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm3"></div>
     <div class="reveal-box">
       <button class="reveal-q">
         <div><span class="rq-label">think before you expand</span><span class="rq-text">Why not just put logging, monitoring, and networking logic directly inside the app's own code?</span></div>
@@ -381,11 +577,12 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   </section>
 
   <!-- ================= SIDECAR TYPES ACCORDION ================= -->
-  <section class="divider">
+  <section class="divider" id="sm4">
     <div class="section-head">
       <div class="section-eyebrow">tap to expand</div>
       <h2>Four things people actually put in a sidecar</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm4"></div>
     <div class="controls-bar">
       <button class="btn-toggle" id="expand-sidecar">+ Expand all</button>
       <button class="btn-toggle" id="collapse-sidecar">− Collapse all</button>
@@ -394,11 +591,12 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   </section>
 
   <!-- ================= MONITORING AGENT WALKTHROUGH ================= -->
-  <section>
+  <section id="sm5">
     <div class="section-head">
       <div class="section-eyebrow">concrete walkthrough</div>
       <h2>A monitoring agent sidecar, step by step</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm5"></div>
     <div class="diagram-block">   <span class="c-mid">App Container</span>                    <span class="c-end">Sidecar (agent)</span>
    exposes metrics at             scrapes it locally
    <span class="c-q">localhost:8080/metrics</span>  ───────▶   every 15 seconds
@@ -417,12 +615,13 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   </section>
 
   <!-- ================= SERVICE MESH - BEFORE/AFTER ================= -->
-  <section class="divider">
+  <section class="divider" id="sm6">
     <div class="section-head">
       <div class="section-eyebrow">now scale the same idea to networking</div>
       <h2>That's a service mesh</h2>
       <p class="lede">Same sidecar pattern — but instead of just watching traffic, this sidecar (usually Envoy) sits directly <em>inside</em> the traffic path and intercepts everything in and out of the pod.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm6"></div>
     <div class="split">
       <div class="split-col">
         <h4 style="color:var(--muted)">Without a mesh</h4>
@@ -459,12 +658,13 @@ inside both apps</span></div>
   </section>
 
   <!-- ================= CONTROL PLANE VS DATA PLANE ================= -->
-  <section>
+  <section id="sm7">
     <div class="section-head">
       <div class="section-eyebrow">who's actually in charge</div>
       <h2>Control plane vs data plane</h2>
       <p class="lede">Every sidecar proxy in the mesh is dumb on its own — it just enforces rules. One central brain writes those rules and pushes them to every proxy at once.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm7"></div>
 
     <div class="mesh-control">
       <div class="mc-title">Control Plane — Istio / Linkerd</div>
@@ -500,11 +700,12 @@ inside both apps</span></div>
   </section>
 
   <!-- ================= WHAT MESH BUYS YOU ================= -->
-  <section class="divider">
+  <section class="divider" id="sm8">
     <div class="section-head">
       <div class="section-eyebrow">what it actually buys you</div>
       <h2>Capabilities that move out of your app</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm8"></div>
     <table class="decision-table">
       <thead><tr><th>Capability</th><th>Without a mesh</th><th>With a mesh</th></tr></thead>
       <tbody>
@@ -518,11 +719,12 @@ inside both apps</span></div>
   </section>
 
   <!-- ================= PASSIVE VS IN-PATH ================= -->
-  <section>
+  <section id="sm9">
     <div class="section-head">
       <div class="section-eyebrow">the nuance worth remembering</div>
       <h2>Not every sidecar is the same kind of sidecar</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm9"></div>
     <div class="compare">
       <div class="compare-col a">
         <h3>Passive sidecar</h3>
@@ -550,12 +752,13 @@ inside both apps</span></div>
   </section>
 
   <!-- ================= HOW THE SIDECAR EVEN GETS THERE ================= -->
-  <section>
+  <section id="sm10">
     <div class="section-head">
       <div class="section-eyebrow">a mechanism most people never see</div>
       <h2>You wrote a pod with one container. Where did the second one come from?</h2>
       <p class="lede">Nobody edits YAML to add a sidecar by hand at scale. Kubernetes intercepts your request <em>before it's even saved</em> and rewrites it.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm10"></div>
     <div class="diagram-block"><span class="c-client">kubectl apply -f order-pod.yaml</span>   <span class="c-muted">(you wrote 1 container)</span>
         │
         ▼
@@ -581,11 +784,12 @@ inside both apps</span></div>
   </section>
 
   <!-- ================= NEW: STARTUP ORDERING RACE ================= -->
-  <section class="divider">
+  <section class="divider" id="sm11">
     <div class="section-head">
       <div class="section-eyebrow">a gotcha almost nobody sees coming</div>
       <h2>Two containers, one pod, same start time. Then what?</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm11"></div>
     <div class="reveal-box">
       <button class="reveal-q">
         <div><span class="rq-label">think before you expand</span><span class="rq-text">The app and the sidecar both start at t=0. Which one is actually ready to handle traffic first?</span></div>
@@ -608,11 +812,12 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= NEW: HEALTH PROBE NUANCE ================= -->
-  <section>
+  <section id="sm12">
     <div class="section-head">
       <div class="section-eyebrow">a question with a genuinely surprising answer</div>
       <h2>When kubelet health-checks your pod, what is it actually talking to?</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm12"></div>
     <div class="reveal-box">
       <button class="reveal-q">
         <div><span class="rq-label">think before you expand</span><span class="rq-text">The sidecar's iptables rules redirect ALL traffic in and out of the pod. So does the health probe hit your app — or does it hit Envoy?</span></div>
@@ -634,12 +839,13 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= CANARY / TRAFFIC SPLITTING ================= -->
-  <section class="divider">
+  <section class="divider" id="sm13">
     <div class="section-head">
       <div class="section-eyebrow">use case 1 · progressive delivery</div>
       <h2>Shipping a risky release without betting the whole system on it</h2>
       <p class="lede">The mesh can split traffic between two versions of the same service by percentage — no app code change, no second deploy pipeline, no feature flag library.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm13"></div>
     <div class="split-bar">
       <div class="split-bar-seg v1" style="width:90%;">order-service v1 · 90%</div>
       <div class="split-bar-seg v2" style="width:10%;">v2 · 10%</div>
@@ -658,12 +864,13 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= RETRY STORM / CIRCUIT BREAKER ================= -->
-  <section>
+  <section id="sm14">
     <div class="section-head">
       <div class="section-eyebrow">use case 2 · the thought experiment</div>
       <h2>What happens when one dependency quietly gets slow?</h2>
       <p class="lede">Not down. Just slow. This is the failure mode that takes down entire platforms — and it's almost never the slow service itself that causes the outage.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm14"></div>
     <div class="reveal-box">
       <button class="reveal-q">
         <div><span class="rq-label">follow the chain</span><span class="rq-text">One dependency gets slow — not down, just slow. What actually brings the whole platform down?</span></div>
@@ -685,11 +892,12 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= DISTRIBUTED TRACING ================= -->
-  <section class="divider">
+  <section class="divider" id="sm15">
     <div class="section-head">
       <div class="section-eyebrow">use case 3 · "why was this request slow?"</div>
       <h2>Tracing a request across five services nobody instrumented by hand</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm15"></div>
     <div class="diagram-block">trace-id: 8f3a...  (assigned once, at the Gateway)
 
 <span class="c-mid">Gateway</span>       [██]                                    5ms
@@ -709,12 +917,13 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= ZERO TRUST / mTLS ================= -->
-  <section>
+  <section id="sm16">
     <div class="section-head">
       <div class="section-eyebrow">use case 4 · the mental model shift</div>
       <h2>Zero trust: stop assuming your own network is safe</h2>
       <p class="lede">The old model: "we're inside the VPC, traffic between our own services doesn't need encryption." The mesh model: <strong>assume any hop could be observed</strong> — encrypt everything, service-to-service, automatically.</p>
     </div>
+    <div class="audio-panel" id="audio-panel-sm16"></div>
     <div class="zt-row">
       <div class="zt-pod">
         <div class="zt-pod-label">Order Service pod</div>
@@ -738,11 +947,12 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= THE HIDDEN COST ================= -->
-  <section class="divider">
+  <section class="divider" id="sm17">
     <div class="section-head">
       <div class="section-eyebrow">the honest part nobody puts in the pitch deck</div>
       <h2>Every sidecar is also a tax</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm17"></div>
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-num">×2</div><div class="stat-label">containers per pod</div></div>
       <div class="stat-card"><div class="stat-num">+50–100MB</div><div class="stat-label">memory, per sidecar</div></div>
@@ -777,11 +987,12 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= WHEN NOT TO USE A MESH ================= -->
-  <section>
+  <section id="sm18">
     <div class="section-head">
       <div class="section-eyebrow">closing the loop, honestly</div>
       <h2>When should you actually <em>not</em> reach for a service mesh?</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm18"></div>
     <table class="decision-table">
       <thead><tr><th>Signal</th><th>What it usually means</th></tr></thead>
       <tbody>
@@ -799,11 +1010,12 @@ t=41ms+  App calls now succeed normally</div>
   </section>
 
   <!-- ================= RECALL ================= -->
-  <section class="divider">
+  <section class="divider" id="sm19">
     <div class="section-head">
       <div class="section-eyebrow">quick recall</div>
       <h2>Flip each card — name the question or the one-liner</h2>
     </div>
+    <div class="audio-panel" id="audio-panel-sm19"></div>
     <div class="flash-grid" id="flash"></div>
     <div class="hint">tap a card to reveal · tap again to hide</div>
   </section>
@@ -933,5 +1145,281 @@ flashDeck.forEach(h => {
 </script>
 
 <script src="../audio-module.js"></script>
+<script>
+/* ============================================================
+   AUDIO RECORDINGS — local-first, Google Drive links, GitHub sync
+   ============================================================ */
+
+const AUDIO_STORAGE_KEY = 'alab_audio_data_sidecar_service_mesh_v1';
+const AUDIO_META_KEY    = 'alab_audio_meta_sidecar_service_mesh_v1';
+const GH_CONFIG_KEY      = 'alab_gh_config_v1';
+const GH_TOKEN_SESSION_KEY = 'alab_gh_token_session';
+const GH_TOKEN_LOCAL_KEY   = 'alab_gh_token_local';
+
+const TOPIC_IDS = ["sm1", "sm2", "sm3", "sm4", "sm5", "sm6", "sm7", "sm8", "sm9", "sm10", "sm11", "sm12", "sm13", "sm14", "sm15", "sm16", "sm17", "sm18", "sm19"];
+
+function loadAudioData(){{
+  try{{ return JSON.parse(localStorage.getItem(AUDIO_STORAGE_KEY)) || {{}}; }}
+  catch(e){{ console.error('audio data parse error', e); return {{}}; }}
+}}
+function saveAudioData(data){{
+  localStorage.setItem(AUDIO_STORAGE_KEY, JSON.stringify(data));
+  markDirty();
+}}
+function loadMeta(){{
+  try{{ return JSON.parse(localStorage.getItem(AUDIO_META_KEY)) || {{}}; }}
+  catch(e){{ return {{}}; }}
+}}
+function saveMeta(m){{ localStorage.setItem(AUDIO_META_KEY, JSON.stringify(m)); }}
+function markDirty(){{
+  const meta = loadMeta();
+  meta.dirty = true;
+  saveMeta(meta);
+  updateSyncStatus();
+}}
+function getTopicAudios(topicId){{
+  return loadAudioData()[topicId] || [];
+}}
+function setTopicAudios(topicId, list){{
+  const data = loadAudioData();
+  data[topicId] = list;
+  saveAudioData(data);
+}}
+function uid(){{ return 'a_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36); }}
+
+function extractDriveFileId(url){{
+  if(!url) return null;
+  url = url.trim();
+  let m = url.match(/\/d\/([a-zA-Z0-9_-]{{10,}})/);
+  if(m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]{{10,}})/);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{{15,}}$/.test(url)) return url;
+  return null;
+}}
+
+function escapeHtml(str){{
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({{
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }})[c]);
+}}
+
+function renderAudioPanel(topicId){{
+  const container = document.getElementById('audio-panel-' + topicId);
+  if(!container) return;
+  const list = getTopicAudios(topicId);
+  let html = '<div class="audio-panel-head"><span class="audio-panel-title">&#127911; Audio Recordings</span>'
+           + '<span class="audio-count">' + list.length + '</span></div>';
+  html += '<div class="audio-list">';
+  if(list.length === 0){{
+    html += '<p class="audio-empty">No recordings yet — paste a Google Drive share link below.</p>';
+  }} else {{
+    list.forEach((item, idx) => {{ html += renderAudioItem(topicId, item, idx, list.length); }});
+  }}
+  html += '</div>';
+  html += renderAddForm(topicId);
+  container.innerHTML = html;
+}}
+
+function renderAudioItem(topicId, item, idx, total){{
+  const fileId     = item.fileId || extractDriveFileId(item.url);
+  const iframeSrc  = fileId ? ('https://drive.google.com/file/d/' + fileId + '/preview') : null;
+  const openInDrive= fileId ? ('https://drive.google.com/file/d/' + fileId + '/view') : (item.url || '#');
+  const safeTitle  = escapeHtml(item.title || '');
+  const safeId     = escapeHtml(item.id);
+
+  const playerHtml = iframeSrc
+    ? `<iframe class="audio-drive-frame" src="${{iframeSrc}}" allow="autoplay" loading="lazy"
+         title="${{safeTitle || 'audio player'}}"
+         sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+       <div class="audio-frame-row">
+         <span class="audio-frame-note">Sign in to Google Drive in this browser to play private files.</span>
+         <a class="audio-open-link" href="${{openInDrive}}" target="_blank" rel="noopener">&#8599; Open in Drive</a>
+       </div>`
+    : `<div class="audio-fallback">&#9888; Couldn&#39;t read a Google Drive file ID —
+         <a href="#" onclick="editAudioUrl('${{topicId}}','${{safeId}}');return false;">edit link</a></div>`;
+
+  return `<div class="audio-item" data-id="${{safeId}}">
+    <div class="audio-item-top">
+      <input type="text" class="audio-title-input" value="${{safeTitle}}" placeholder="Untitled recording"
+        onchange="updateAudioTitle('${{topicId}}','${{safeId}}', this.value)">
+      <div class="audio-item-actions">
+        <button class="ai-btn" title="Move up"   ${{idx===0?'disabled':''}} onclick="moveAudio('${{topicId}}','${{safeId}}',-1)">&#8593;</button>
+        <button class="ai-btn" title="Move down" ${{idx===total-1?'disabled':''}} onclick="moveAudio('${{topicId}}','${{safeId}}',1)">&#8595;</button>
+        <button class="ai-btn" title="Edit link" onclick="editAudioUrl('${{topicId}}','${{safeId}}')">&#9998;</button>
+        <button class="ai-btn danger" title="Delete" onclick="deleteAudio('${{topicId}}','${{safeId}}')">&#10005;</button>
+      </div>
+    </div>
+    ${{playerHtml}}
+  </div>`;
+}}
+
+function renderAddForm(topicId){{
+  return `<div class="audio-add">
+    <input type="text" class="audio-add-title" id="add-title-${{topicId}}" placeholder="Label (optional)">
+    <input type="text" class="audio-add-url" id="add-url-${{topicId}}" placeholder="Paste Google Drive share link"
+      onkeydown="if(event.key==='Enter'){{addAudio('${{topicId}}');}}">
+    <button class="audio-add-btn" onclick="addAudio('${{topicId}}')">+ Add recording</button>
+  </div>`;
+}}
+
+function addAudio(topicId){{
+  const titleEl = document.getElementById('add-title-' + topicId);
+  const urlEl   = document.getElementById('add-url-'   + topicId);
+  const url = urlEl.value.trim();
+  if(!url){{ urlEl.focus(); return; }}
+  const fileId = extractDriveFileId(url);
+  if(!fileId){{ alert('Could not find a Google Drive file ID in that link. Paste the full “Share” link from Drive.'); return; }}
+  const list = getTopicAudios(topicId);
+  list.push({{ id: uid(), title: titleEl.value.trim(), url: url, fileId: fileId }});
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}}
+function updateAudioTitle(topicId, id, value){{
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(item){{ item.title = value; setTopicAudios(topicId, list); }}
+}}
+function editAudioUrl(topicId, id){{
+  const list = getTopicAudios(topicId);
+  const item = list.find(a => a.id === id);
+  if(!item) return;
+  const newUrl = prompt('Google Drive share link:', item.url || '');
+  if(newUrl === null) return;
+  const fileId = extractDriveFileId(newUrl.trim());
+  if(!fileId){{ alert('Could not find a Google Drive file ID in that link.'); return; }}
+  item.url = newUrl.trim(); item.fileId = fileId;
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}}
+function deleteAudio(topicId, id){{
+  if(!confirm('Delete this recording link? Changes are local until you click Sync.')) return;
+  setTopicAudios(topicId, getTopicAudios(topicId).filter(a => a.id !== id));
+  renderAudioPanel(topicId);
+}}
+function moveAudio(topicId, id, dir){{
+  const list = getTopicAudios(topicId);
+  const idx = list.findIndex(a => a.id === id);
+  const newIdx = idx + dir;
+  if(idx === -1 || newIdx < 0 || newIdx >= list.length) return;
+  const [item] = list.splice(idx, 1);
+  list.splice(newIdx, 0, item);
+  setTopicAudios(topicId, list);
+  renderAudioPanel(topicId);
+}}
+
+/* ============================================================ GITHUB SYNC */
+function loadGithubConfig(){{
+  try{{ return JSON.parse(localStorage.getItem(GH_CONFIG_KEY)) || {{}}; }}
+  catch(e){{ return {{}}; }}
+}}
+function getGithubToken(){{
+  return sessionStorage.getItem(GH_TOKEN_SESSION_KEY) || localStorage.getItem(GH_TOKEN_LOCAL_KEY) || '';
+}}
+function openGithubSettings(){{
+  const cfg = loadGithubConfig();
+  document.getElementById('gh-owner').value   = cfg.owner  || '';
+  document.getElementById('gh-repo').value    = cfg.repo   || '';
+  document.getElementById('gh-branch').value  = cfg.branch || 'main';
+  document.getElementById('gh-path').value    = cfg.path   || 'audio-data/sidecar_service_mesh.json';
+  document.getElementById('gh-token').value   = getGithubToken();
+  document.getElementById('gh-remember').checked = !!localStorage.getItem(GH_TOKEN_LOCAL_KEY);
+  document.getElementById('gh-modal-msg').textContent = '';
+  document.getElementById('gh-modal-overlay').style.display = 'flex';
+}}
+function closeGithubSettings(){{
+  document.getElementById('gh-modal-overlay').style.display = 'none';
+}}
+function saveGithubSettings(){{
+  const cfg = {{
+    owner:  document.getElementById('gh-owner').value.trim(),
+    repo:   document.getElementById('gh-repo').value.trim(),
+    branch: document.getElementById('gh-branch').value.trim() || 'main',
+    path:   document.getElementById('gh-path').value.trim()
+  }};
+  if(!cfg.owner || !cfg.repo || !cfg.path){{
+    document.getElementById('gh-modal-msg').textContent = 'Owner, repo, and file path are required.';
+    return;
+  }}
+  localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(cfg));
+  const token = document.getElementById('gh-token').value.trim();
+  const remember = document.getElementById('gh-remember').checked;
+  sessionStorage.removeItem(GH_TOKEN_SESSION_KEY);
+  localStorage.removeItem(GH_TOKEN_LOCAL_KEY);
+  if(token){{
+    if(remember) localStorage.setItem(GH_TOKEN_LOCAL_KEY, token);
+    else         sessionStorage.setItem(GH_TOKEN_SESSION_KEY, token);
+  }}
+  document.getElementById('gh-modal-msg').textContent = 'Saved.';
+  setTimeout(closeGithubSettings, 500);
+}}
+
+function b64EncodeUnicode(str){{ return btoa(unescape(encodeURIComponent(str))); }}
+async function safeJson(res){{ try{{ return await res.json(); }}catch(e){{ return null; }} }}
+
+async function handleSyncClick(){{
+  const cfg = loadGithubConfig();
+  const token = getGithubToken();
+  if(!cfg.owner || !cfg.repo || !cfg.path || !token){{ openGithubSettings(); return; }}
+  const btn = document.getElementById('sync-btn');
+  const statusEl = document.getElementById('sync-status');
+  btn.disabled = true; statusEl.textContent = 'syncing…';
+  try{{
+    const payload = JSON.stringify({{ updatedAt: new Date().toISOString(), topics: loadAudioData() }}, null, 2);
+    const cleanPath = cfg.path.replace(/^\/+/, '');
+    const apiBase = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/'
+      + encodeURIComponent(cfg.repo) + '/contents/' + cleanPath.split('/').map(encodeURIComponent).join('/');
+    let sha = null;
+    const getRes = await fetch(apiBase + '?ref=' + encodeURIComponent(cfg.branch), {{
+      headers: {{ 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' }}
+    }});
+    if(getRes.status === 200){{ sha = (await getRes.json()).sha; }}
+    else if(getRes.status !== 404){{
+      const e = await safeJson(getRes);
+      throw new Error('GET failed (' + getRes.status + ') ' + (e && e.message ? e.message : ''));
+    }}
+    const body = {{ message: 'chore(audio): sync — ' + new Date().toISOString(),
+                    content: b64EncodeUnicode(payload), branch: cfg.branch }};
+    if(sha) body.sha = sha;
+    const putRes = await fetch(apiBase, {{
+      method: 'PUT',
+      headers: {{ 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json' }},
+      body: JSON.stringify(body)
+    }});
+    if(!putRes.ok){{
+      const e = await safeJson(putRes);
+      throw new Error('Commit failed (' + putRes.status + ') ' + (e && e.message ? e.message : ''));
+    }}
+    const meta = loadMeta(); meta.dirty = false; meta.lastSyncTime = new Date().toISOString();
+    saveMeta(meta); updateSyncStatus();
+  }} catch(err){{
+    console.error('GitHub sync error', err);
+    statusEl.textContent = 'sync failed — ' + err.message;
+  }} finally {{ btn.disabled = false; }}
+}}
+
+function timeAgo(iso){{
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if(min < 1) return 'just now';
+  if(min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if(hr < 24) return hr + 'h ago';
+  return Math.floor(hr / 24) + 'd ago';
+}}
+function updateSyncStatus(){{
+  const meta = loadMeta();
+  const el = document.getElementById('sync-status');
+  if(!el) return;
+  if(meta.dirty){{ el.textContent = 'unsynced local changes'; el.classList.add('dirty'); }}
+  else if(meta.lastSyncTime){{ el.textContent = 'synced ' + timeAgo(meta.lastSyncTime); el.classList.remove('dirty'); }}
+  else {{ el.textContent = 'no local changes'; el.classList.remove('dirty'); }}
+}}
+
+TOPIC_IDS.forEach(renderAudioPanel);
+updateSyncStatus();
+</script>
+
 </body>
 </html>
