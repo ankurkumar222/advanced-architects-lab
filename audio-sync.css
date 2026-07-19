@@ -117,6 +117,13 @@
 }
 #sync-btn:hover    { background: var(--ap-amber); }
 #sync-btn:disabled { opacity: 0.6; cursor: default; }
+#load-btn {
+  background: none; border: 1px solid var(--ap-teal); color: var(--ap-teal);
+  font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 11px;
+  padding: 8px 14px; border-radius: 20px; cursor: pointer; white-space: nowrap;
+}
+#load-btn:hover    { background: rgba(95,184,173,0.12); }
+#load-btn:disabled { opacity: 0.6; cursor: default; }
 .sync-status       { color: var(--ap-text-dim); white-space: nowrap; }
 .sync-status.dirty { color: var(--ap-amber); }
 #sync-settings-btn {

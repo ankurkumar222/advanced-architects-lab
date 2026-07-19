@@ -32,6 +32,7 @@
     var html = [
       '<div id="sync-bar">',
       '  <button id="sync-btn" onclick="window._alab.handleSync()">&#x21EA; Sync to GitHub</button>',
+      '  <button id="load-btn" onclick="window._alab.handleLoad()" title="Load recordings from GitHub into this browser">&#x2193; Load from GitHub</button>',
       '  <span id="sync-status" class="sync-status">no local changes</span>',
       '  <button id="sync-settings-btn" title="GitHub sync settings" onclick="window._alab.openSettings()">&#9881;</button>',
       '</div>',
@@ -322,6 +323,56 @@
     }
   }
 
+  async function handleLoad() {
+    var c     = loadGhConfig();
+    var token = getToken();
+    if (!c.owner || !c.repo || !c.path) { openSettings(); return; }
+    var btn    = document.getElementById('load-btn');
+    var status = document.getElementById('sync-status');
+    btn.disabled = true; status.textContent = 'loading from GitHub…';
+    try {
+      var path = c.path.replace(/^\/+/, '');
+      var url  = 'https://api.github.com/repos/'
+               + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo)
+               + '/contents/' + path.split('/').map(encodeURIComponent).join('/')
+               + '?ref=' + encodeURIComponent(c.branch) + '&_=' + Date.now();
+      var headers = { Accept: 'application/vnd.github+json' };
+      if (token) headers.Authorization = 'Bearer ' + token;
+      var r = await fetch(url, { headers: headers, cache: 'no-store' });
+      if (r.status === 404) throw new Error('File not found on GitHub — sync first to create it');
+      if (!r.ok) {
+        var ej = await r.json().catch(function () { return {}; });
+        throw new Error('GitHub fetch failed (' + r.status + ') ' + (ej.message || ''));
+      }
+      var json     = await r.json();
+      var decoded  = decodeURIComponent(escape(atob(json.content.replace(/\s/g, ''))));
+      var remote   = JSON.parse(decoded);
+      if (!remote.topics || typeof remote.topics !== 'object') throw new Error('Unexpected file format');
+
+      var existing = localStorage.getItem(AUDIO_KEY);
+      if (existing && existing !== '{}') {
+        var ok = window.confirm(
+          'This browser already has local recordings for this page.\n\n' +
+          'Load from GitHub will REPLACE them with the synced version.\n\n' +
+          'Continue?'
+        );
+        if (!ok) { status.textContent = 'load cancelled'; btn.disabled = false; return; }
+      }
+
+      localStorage.setItem(AUDIO_KEY, JSON.stringify(remote.topics));
+      var m = loadMeta(); m.dirty = false; m.lastSyncTime = remote.updatedAt || new Date().toISOString();
+      saveMeta(m);
+      TOPIC_IDS.forEach(renderPanel);
+      updateSyncStatus();
+      status.textContent = 'loaded from GitHub ✓';
+    } catch (err) {
+      console.error('GitHub load error', err);
+      status.textContent = 'load failed — ' + err.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   function timeAgo(iso) {
     var diff = Date.now() - new Date(iso).getTime();
     var min  = Math.floor(diff / 60000);
@@ -348,6 +399,7 @@
     del:         delAudio,
     move:        moveAudio,
     handleSync:  handleSync,
+    handleLoad:  handleLoad,
     openSettings:  openSettings,
     closeSettings: closeSettings,
     saveSettings:  saveSettings
