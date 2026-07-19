@@ -18,6 +18,12 @@
 (function () {
   'use strict';
 
+  // Auth guard — all notes are one level deep, so index is always ../index.html
+  if (!localStorage.getItem('gsi_user')) {
+    window.location.replace('../index.html');
+    return;
+  }
+
   var cfg   = window.ALAB_PAGE_CONFIG || {};
   var AUDIO_KEY  = cfg.storageKey || 'alab_audio_data_default_v1';
   var META_KEY   = cfg.metaKey   || 'alab_audio_meta_default_v1';
