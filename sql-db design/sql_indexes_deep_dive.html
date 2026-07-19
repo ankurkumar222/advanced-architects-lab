@@ -1554,6 +1554,83 @@ Better: composite like status#date.</pre></div>
       <p>Watch the hot-partition trap here: if 95% of events are <code style="background:none;color:inherit;padding:0;">SUCCESS</code> and 5% are <code style="background:none;color:inherit;padding:0;">FAILED</code>, partitioning the GSI purely by <code style="background:none;color:inherit;padding:0;">status</code> creates two wildly uneven partitions — one enormous, one small — which is the DynamoDB equivalent of the low-cardinality problem from Topic 4, except here it doesn't just make the index unused, it can throttle your whole table under load.</p>
     </div></div>
   </div>
+
+  <div class="qa-section-label">Working Examples — GSI vs LSI</div>
+
+  <div class="plain-box" style="margin-bottom:28px;">
+    <div class="plain-label">&#9679; the table we'll use for all four examples</div>
+    <pre class="rough-sketch">Orders Table (DynamoDB)
+  Partition Key = user_id
+  Sort Key      = order_date
+  Attributes    = status, price, product_id</pre>
+  </div>
+
+  <div class="examples-grid">
+
+    <div class="example-card">
+      <div class="example-num">Example 1</div>
+      <div class="example-q">"Show me User 101's orders sorted by price."</div>
+      <span class="verdict yes" style="font-size:11px;padding:3px 10px;">LSI</span>
+      <p class="example-why">You are still looking <em>inside</em> User 101's partition — just using <code style="background:none;color:inherit;padding:0;">price</code> as the sort key instead of <code style="background:none;color:inherit;padding:0;">order_date</code>. Same partition key, different sort key = LSI.</p>
+      <pre class="rough-sketch">User 101 (same partition key)
+  ├── ₹500
+  ├── ₹1,000
+  └── ₹2,000    ← sorted by price via LSI</pre>
+    </div>
+
+    <div class="example-card">
+      <div class="example-num">Example 2</div>
+      <div class="example-q">"Show me all FAILED orders across ALL users."</div>
+      <span class="verdict yes" style="font-size:11px;padding:3px 10px;">GSI</span>
+      <p class="example-why">You need to search <em>across different users</em> — that means crossing partition boundaries. An LSI can't do that (it's still scoped per user_id). You need a GSI with <code style="background:none;color:inherit;padding:0;">status</code> as the new partition key.</p>
+      <pre class="rough-sketch">GSI partition key = status
+
+FAILED
+  ├── User 101
+  ├── User 205
+  └── User 350    ← all in one GSI partition</pre>
+    </div>
+
+    <div class="example-card">
+      <div class="example-num">Example 3</div>
+      <div class="example-q">"Show me the latest orders for User 101."</div>
+      <span class="verdict yes" style="font-size:11px;padding:3px 10px;background:var(--teal,#5fb8ad);color:#0b0e12;">Base Table</span>
+      <p class="example-why">You already have <code style="background:none;color:inherit;padding:0;">user_id</code> as partition key and <code style="background:none;color:inherit;padding:0;">order_date</code> as sort key. DynamoDB lets you query with <code style="background:none;color:inherit;padding:0;">ScanIndexForward=false</code> to get newest first. No index needed at all.</p>
+      <pre class="rough-sketch">Query: PK=user_101, ScanIndexForward=false
+  ├── 2025-06-10
+  ├── 2025-03-22
+  └── 2024-11-05    ← already sorted descending</pre>
+    </div>
+
+    <div class="example-card">
+      <div class="example-num">Example 4</div>
+      <div class="example-q">"Who ordered iPhone 17?"</div>
+      <span class="verdict yes" style="font-size:11px;padding:3px 10px;">GSI</span>
+      <p class="example-why">You're looking up by <code style="background:none;color:inherit;padding:0;">product_id</code> across the entire table — this crosses all user partitions. Create a GSI with <code style="background:none;color:inherit;padding:0;">product_id</code> as the partition key.</p>
+      <pre class="rough-sketch">GSI partition key = product_id
+
+iPhone 17
+   ├── User 101
+   ├── User 205
+   └── User 900    ← direct lookup, no scan</pre>
+    </div>
+
+  </div>
+
+  <div class="plain-box" style="margin-top:28px;">
+    <div class="plain-label">&#9679; the one rule to remember</div>
+    <pre class="rough-sketch">Looking within ONE user's data? (same partition key, new sort)
+         │
+         └──▶  LSI
+
+Want a NEW way to group or search the whole table?
+         │
+         └──▶  GSI
+
+LSI = same PK, new sort key   (scoped to one partition)
+GSI = new PK (+ optional SK)  (crosses all partitions)</pre>
+  </div>
+
 </section>
 
 <!-- ============================================================ -->
