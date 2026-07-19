@@ -6,6 +6,7 @@
 <title>Architects Lab</title>
 <meta name="description" content="A collection of system design explorations — hand-drawn in HTML.">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="auth-config.js"></script>
 <style>
   /* ── Tokens ── */
   :root {
@@ -678,6 +679,9 @@
         <!-- Signed-out: Google button -->
         <div id="auth-signed-out">
           <div id="google-signin-container"></div>
+          <p id="auth-denied" style="display:none;font-family:'Courier New',monospace;font-size:11px;color:var(--accent);margin-top:10px;line-height:1.5;">
+            Access restricted.<br>This account is not on the allowed list.
+          </p>
         </div>
 
         <!-- Signed-in: user chip -->
@@ -1160,6 +1164,12 @@ window.ALAB_PAGE_CONFIG = {
   function onGoogleCredential(response) {
     const user = decodeJwt(response.credential);
     if (!user) return;
+    const allowed = window.ALAB_ALLOWED_EMAILS || [];
+    if (allowed.length > 0 && !allowed.includes(user.email)) {
+      document.getElementById('auth-denied').style.display = '';
+      return;
+    }
+    document.getElementById('auth-denied').style.display = 'none';
     localStorage.setItem('gsi_user', JSON.stringify({
       name: user.name,
       email: user.email,
@@ -1169,10 +1179,18 @@ window.ALAB_PAGE_CONFIG = {
   }
 
   window.addEventListener('load', function () {
-    // Restore persisted session
+    // Restore persisted session (re-validate against allowlist)
     const stored = localStorage.getItem('gsi_user');
     if (stored) {
-      try { showSignedIn(JSON.parse(stored)); } catch { localStorage.removeItem('gsi_user'); }
+      try {
+        const u = JSON.parse(stored);
+        const allowed = window.ALAB_ALLOWED_EMAILS || [];
+        if (allowed.length > 0 && !allowed.includes(u.email)) {
+          localStorage.removeItem('gsi_user');
+        } else {
+          showSignedIn(u);
+        }
+      } catch { localStorage.removeItem('gsi_user'); }
     }
 
     if (typeof google === 'undefined' || !google.accounts) return;
