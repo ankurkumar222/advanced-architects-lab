@@ -274,21 +274,40 @@
       var base    = 'https://api.github.com/repos/'
                   + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo)
                   + '/contents/' + path.split('/').map(encodeURIComponent).join('/');
-      var sha = null;
-      var gr  = await fetch(base + '?ref=' + encodeURIComponent(c.branch),
-                  { headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' } });
-      if (gr.status === 200) sha = (await gr.json()).sha;
-      else if (gr.status !== 404) {
-        var ej = await gr.json().catch(function () { return {}; });
-        throw new Error('GET failed (' + gr.status + ') ' + (ej.message || ''));
+
+      // Always bypass cache so we never use a stale SHA
+      var fetchLiveSha = async function () {
+        var r = await fetch(
+          base + '?ref=' + encodeURIComponent(c.branch) + '&_=' + Date.now(),
+          { headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' },
+            cache: 'no-store' }
+        );
+        if (r.status === 200) return (await r.json()).sha;
+        if (r.status === 404) return null;
+        var ej = await r.json().catch(function () { return {}; });
+        throw new Error('GET failed (' + r.status + ') ' + (ej.message || ''));
+      };
+
+      var doPut = async function (sha) {
+        var body = { message: 'chore(audio): sync — ' + new Date().toISOString(),
+                     content: b64(payload), branch: c.branch };
+        if (sha) body.sha = sha;
+        return fetch(base, { method: 'PUT',
+          headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json',
+                     'Content-Type': 'application/json' },
+          body: JSON.stringify(body) });
+      };
+
+      var sha = await fetchLiveSha();
+      var pr  = await doPut(sha);
+
+      // 409 means SHA drifted between our GET and PUT — fetch fresh and retry once
+      if (pr.status === 409) {
+        status.textContent = 'conflict — retrying…';
+        sha = await fetchLiveSha();
+        pr  = await doPut(sha);
       }
-      var body = { message: 'chore(audio): sync — ' + new Date().toISOString(),
-                   content: b64(payload), branch: c.branch };
-      if (sha) body.sha = sha;
-      var pr = await fetch(base, { method: 'PUT',
-                headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json',
-                           'Content-Type': 'application/json' },
-                body: JSON.stringify(body) });
+
       if (!pr.ok) {
         var ej2 = await pr.json().catch(function () { return {}; });
         throw new Error('Commit failed (' + pr.status + ') ' + (ej2.message || ''));
