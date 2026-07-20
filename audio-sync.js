@@ -48,7 +48,7 @@
       '    <label>Owner<input id="gh-owner" type="text" placeholder="e.g. ankurkumar222"></label>',
       '    <label>Repo<input id="gh-repo" type="text" placeholder="e.g. advanced-architects-lab"></label>',
       '    <label>Branch<input id="gh-branch" type="text" value="main"></label>',
-      '    <label>File path<input id="gh-path" type="text" placeholder="audio-data/notes.json"></label>',
+      '    <label>File path<input id="gh-path" type="text" readonly style="opacity:.6;cursor:default"></label>',
       '    <label>Personal Access Token<input id="gh-token" type="password" placeholder="ghp_..."></label>',
       '    <label class="gh-remember"><input id="gh-remember" type="checkbox"> Remember token on this device</label>',
       '    <p class="gh-note">Token is used only from this page to call the GitHub API directly.',
@@ -233,7 +233,7 @@
     document.getElementById('gh-owner').value   = c.owner  || '';
     document.getElementById('gh-repo').value    = c.repo   || '';
     document.getElementById('gh-branch').value  = c.branch || 'main';
-    document.getElementById('gh-path').value    = c.path   || DEFAULT_GH_PATH;
+    document.getElementById('gh-path').value    = DEFAULT_GH_PATH;
     document.getElementById('gh-token').value   = getToken();
     document.getElementById('gh-remember').checked = !!localStorage.getItem(GH_TOK_LS);
     document.getElementById('gh-modal-msg').textContent = '';
@@ -247,10 +247,9 @@
       owner:  document.getElementById('gh-owner').value.trim(),
       repo:   document.getElementById('gh-repo').value.trim(),
       branch: document.getElementById('gh-branch').value.trim() || 'main',
-      path:   document.getElementById('gh-path').value.trim()
     };
-    if (!c.owner || !c.repo || !c.path) {
-      document.getElementById('gh-modal-msg').textContent = 'Owner, repo, and file path are required.';
+    if (!c.owner || !c.repo) {
+      document.getElementById('gh-modal-msg').textContent = 'Owner and repo are required.';
       return;
     }
     localStorage.setItem(GH_CFG_KEY, JSON.stringify(c));
@@ -271,13 +270,15 @@
   async function handleSync() {
     var c     = loadGhConfig();
     var token = getToken();
-    if (!c.owner || !c.repo || !c.path || !token) { openSettings(); return; }
+    if (!c.owner || !c.repo || !token) { openSettings(); return; }
     var btn    = document.getElementById('sync-btn');
     var status = document.getElementById('sync-status');
     btn.disabled = true; status.textContent = 'syncing…';
     try {
       var payload = JSON.stringify({ updatedAt: new Date().toISOString(), topics: loadData() }, null, 2);
-      var path    = c.path.replace(/^\/+/, '');
+      // Always use the page-defined path — never the globally stored one, which
+      // would cause every page to overwrite whichever file was last configured.
+      var path    = DEFAULT_GH_PATH.replace(/^\/+/, '');
       var base    = 'https://api.github.com/repos/'
                   + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo)
                   + '/contents/' + path.split('/').map(encodeURIComponent).join('/');
@@ -332,12 +333,12 @@
   async function handleLoad() {
     var c     = loadGhConfig();
     var token = getToken();
-    if (!c.owner || !c.repo || !c.path) { openSettings(); return; }
+    if (!c.owner || !c.repo) { openSettings(); return; }
     var btn    = document.getElementById('load-btn');
     var status = document.getElementById('sync-status');
     btn.disabled = true; status.textContent = 'loading from GitHub…';
     try {
-      var path = c.path.replace(/^\/+/, '');
+      var path = DEFAULT_GH_PATH.replace(/^\/+/, '');
       var url  = 'https://api.github.com/repos/'
                + encodeURIComponent(c.owner) + '/' + encodeURIComponent(c.repo)
                + '/contents/' + path.split('/').map(encodeURIComponent).join('/')
