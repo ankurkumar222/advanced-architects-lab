@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — The Architecture of a SQL Database</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:44px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  h4.sub-blk{
+    font-size:14px;color:var(--ink);margin:20px 0 6px;font-weight:600;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  ol.plain{margin:10px 0;padding-left:22px}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+  em{color:var(--accent);font-style:italic}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+  pre.sql{border-left-color:var(--q);color:#c3d5e8}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  table{
+    width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+    border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  }
+  th{
+    text-align:left;background:var(--panel-2);color:var(--accent);
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    font-weight:500;padding:10px 14px;border-bottom:1px solid var(--line);
+  }
+  td{padding:10px 14px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td strong{color:var(--ink)}
+
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin:18px 0;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:11px;color:var(--q);letter-spacing:.18em;text-transform:uppercase;padding-top:2px;white-space:nowrap}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 16px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    table{font-size:12.5px}
+    th,td{padding:8px 10px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Database Internals</div>
+  <h1>The Architecture of a SQL Database</h1>
+  <p class="sub">A mental model. Twenty problems from the relational model down to the write-ahead log, and the one tension every layer is fighting.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all insights</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#f1"><span class="num">—</span>The surface illusion</a></li>
+    <li><a href="#f2"><span class="num">—</span>What we're actually building</a></li>
+    <li><a href="#s1"><span class="num">#1</span>The relational revolution</a></li>
+    <li><a href="#s2"><span class="num">#2</span>Constraints: the silent guardians</a></li>
+    <li><a href="#s3"><span class="num">#3–4</span>The storage foundation</a></li>
+    <li><a href="#s4"><span class="num">#5–7</span>Indexes: the performance soul</a></li>
+    <li><a href="#s5"><span class="num">#8–10</span>The query engine</a></li>
+    <li><a href="#s6"><span class="num">#11–14</span>Transactions</a></li>
+    <li><a href="#s7"><span class="num">#15–16</span>Memory &amp; recovery</a></li>
+    <li><a href="#s8"><span class="num">#17–19</span>Scaling &amp; distribution</a></li>
+    <li><a href="#s9"><span class="num">#20</span>Putting it all together</a></li>
+    <li><a href="#s10"><span class="num">—</span>The complete architecture</a></li>
+    <li><a href="#s11"><span class="num">—</span>The core tension</a></li>
+    <li><a href="#s12"><span class="num">—</span>Final thought</a></li>
+  </ol>
+</div>
+
+<!-- ============ F1 ============ -->
+<section id="f1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">OPENING</span><h2>The surface illusion</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">From the outside, a SQL database looks deceptively simple:</p>
+<pre>App --> SELECT / INSERT / UPDATE / DELETE</pre>
+    <div class="note">But this abstraction masks a profound intellectual challenge: <strong>How do you build a system that stores relational data, answers expressive queries, and preserves correctness under concurrent updates?</strong></div>
+  </div>
+</section>
+
+<!-- ============ F2 ============ -->
+<section id="f2" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">OPENING</span><h2>What we're actually building</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="flow">                    +------------------+
+                    |  Clients / Apps  |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    | SQL Parser /     |
+                    | Query Layer      |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    | Optimizer        |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    | Execution Engine |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    | Storage Engine   |
+                    | tables / indexes |
+                    | WAL / buffer mgr |
+                    +------------------+</pre>
+    <p>This architecture exists to solve one core problem: <strong>take a declarative request and execute it efficiently while preserving all guarantees.</strong></p>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>The relational revolution</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede"><strong>What makes SQL DB fundamentally different from NoSQL?</strong></p>
+    <p>The deepest distinction isn't syntax — it's the <strong>data model</strong>.</p>
+    <p>SQL DB is built around:</p>
+    <ul>
+      <li><strong>Relations</strong> (tables) with structured schemas</li>
+      <li><strong>Joins</strong> that connect entities naturally</li>
+      <li><strong>Constraints</strong> that preserve data integrity</li>
+      <li><strong>Transactions</strong> that guarantee correctness</li>
+      <li><strong>Declarative querying</strong> where you say <em>what</em>, not <em>how</em></li>
+    </ul>
+
+    <h3 class="blk">Thought experiment</h3>
+<pre>Customers                      Orders
++----+--------+               +----+-------------+--------+
+| id | name   |               | id | customer_id | total  |
++----+--------+               +----+-------------+--------+
+| 1  | Ankur  |               | 10 | 1           | 500    |
+| 2  | Ravi   |               | 11 | 1           | 900    |
++----+--------+               +----+-------------+--------+</pre>
+    <p>SQL naturally asks: <em>join customers and orders, filter, aggregate, sort, group.</em> This is much richer than pure key-value lookup.</p>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>Constraints: the silent guardians</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A SQL DB is not just rows — it's <strong>enforced invariants</strong>:</p>
+    <ul>
+      <li>Primary key</li>
+      <li>Foreign key</li>
+      <li>Unique</li>
+      <li>Not null</li>
+      <li>Check constraints</li>
+    </ul>
+<pre>Orders.customer_id MUST reference Customers.id</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Key insight</span><span class="q-text">Why does enforcement in the database change how you think about it?</span><span class="hint">＋</span></div>
+      <div class="q-body">The database is <em>active</em> in preserving correctness, not just passively storing data. This is both a strength and a constraint — it guarantees integrity but limits flexibility.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03–04</span><h2>The storage foundation</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede"><strong>How is relational data actually stored?</strong></p>
+
+    <h3 class="blk">Page-oriented storage</h3>
+    <p>Internally, SQL DB stores data in <strong>fixed-size pages</strong> (typically 4KB–16KB):</p>
+<pre>Disk
+  |
+  +--> Page 1
+  +--> Page 2
+  +--> Page 3
+  +--> Page 4</pre>
+    <p>A table is not “just a list” — it's pages containing rows:</p>
+<pre>Table: orders
+Page 101: [row][row][row]
+Page 102: [row][row][row]
+Page 103: [row][row][row]</pre>
+
+    <h3 class="blk">Two storage models</h3>
+    <table>
+      <thead><tr><th>Heap style</th><th>Clustered / index-organized</th></tr></thead>
+      <tbody>
+        <tr><td>Rows stored wherever free space exists</td><td>Rows physically ordered by primary/cluster key</td></tr>
+        <tr><td>Insertion is fast but scans are scattered</td><td>Inserts maintain order but can be expensive</td></tr>
+        <tr><td>Secondary indexes point to row locations</td><td>Secondary indexes point to primary key</td></tr>
+      </tbody>
+    </table>
+    <div class="note">Tradeoff: heap is better for high-frequency inserts; clustered is better for range scans and ordered access.</div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05–07</span><h2>Indexes: the performance soul</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede"><strong>Indexes are one of the main hearts of a SQL DB.</strong> Without them, queries become table scans.</p>
+
+    <h3 class="blk">The classic B+ tree</h3>
+<pre class="state">               [50]
+              /      \
+          [20]        [80]
+         /   \       /    \
+      ...   ...    ...    ...</pre>
+    <p>Leaf nodes point to row locations or contain actual row data.</p>
+    <h4 class="sub-blk">Why B+ tree is central</h4>
+    <ul>
+      <li>Balanced (consistent performance)</li>
+      <li>Ordered (range scans possible)</li>
+      <li>Good for point lookup, range scans, sort-related access</li>
+    </ul>
+
+    <h3 class="blk">Composite indexes — problem #6</h3>
+    <p>Consider this query:</p>
+<pre class="sql">SELECT *
+FROM orders
+WHERE customer_id = 1001
+ORDER BY created_at DESC;</pre>
+    <p>The optimal index might be:</p>
+<pre>(customer_id, created_at)</pre>
+    <p>Index entries ordered like:</p>
+<pre>customer=1001, time=2026-04-01
+customer=1001, time=2026-04-02
+customer=1001, time=2026-04-03
+customer=1002, time=2026-04-01</pre>
+    <p>Now the database can directly seek to customer 1001 and scan ordered by time.</p>
+
+    <h3 class="blk">Covering indexes — problem #7</h3>
+    <p>Sometimes an index contains <em>enough</em> columns that the query can finish without touching the main table:</p>
+<pre class="sql">-- Index stores (department, name, salary)
+SELECT name, salary
+FROM employees
+WHERE department = 'Engineering';</pre>
+    <div class="note">The query is <strong>answered entirely from the index</strong> — no table access needed. This is a massive performance win.</div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08–10</span><h2>The query engine: declarative power</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede"><strong>This is the major differentiator of SQL DB.</strong> The user says <em>what</em> they want; the database decides <em>how</em> to execute it.</p>
+<pre class="flow">SQL text
+   |
+   v
+Parser
+   |
+   v
+Logical plan
+   |
+   v
+Optimizer
+   |
+   v
+Physical plan
+   |
+   v
+Execution</pre>
+
+    <h3 class="blk">The optimizer's job — problem #9</h3>
+    <p>The optimizer chooses among possible plans for the same query:</p>
+<pre>Query: Customers JOIN Orders</pre>
+    <p>Possible plans:</p>
+    <ol class="plain">
+      <li>Scan customers → probe orders index</li>
+      <li>Scan orders → hash join customers</li>
+      <li>Sort both → merge join</li>
+    </ol>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Key insight</span><span class="q-text">On what basis does the optimizer choose?</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>The optimizer picks based on estimated cost, considering:</p>
+        <ul><li>Table sizes</li><li>Index availability</li><li>Data distribution</li><li>Memory constraints</li></ul>
+      </div>
+    </div>
+
+    <h3 class="blk">Joins: signature strength &amp; pain point — problem #10</h3>
+    <p>SQL DB shines at joins, but they're computationally expensive.</p>
+    <h4 class="sub-blk">Nested loop join</h4>
+<pre>for each customer
+   find matching orders</pre>
+    <h4 class="sub-blk">Hash join</h4>
+<pre>build hash on smaller side
+probe with larger side</pre>
+    <h4 class="sub-blk">Merge join</h4>
+<pre>walk two sorted streams together</pre>
+    <div class="note">Tradeoff: each method has different performance characteristics — nested loops good for small left side, hash join good for memory, merge join good for pre-sorted data.</div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11–14</span><h2>Transactions: defining strength</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede"><strong>SQL DB is deeply about transactions.</strong></p>
+<pre class="sql">BEGIN;
+  debit A
+  credit B
+COMMIT;   -- or rollback on failure</pre>
+
+    <h3 class="blk">ACID: the four pillars</h3>
+    <table>
+      <thead><tr><th>ACID</th><th>Meaning</th><th>Key insight</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Atomicity</strong></td><td>All or nothing</td><td>No partial updates</td></tr>
+        <tr><td><strong>Consistency</strong></td><td>Constraints preserved</td><td>Database enforces invariants</td></tr>
+        <tr><td><strong>Isolation</strong></td><td>Transactions don't interfere</td><td>Concurrency without corruption</td></tr>
+        <tr><td><strong>Durability</strong></td><td>Committed changes persist</td><td>Recovery after crash</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="blk">Concurrency control — problem #12</h3>
+    <p>Two big families:</p>
+    <h4 class="sub-blk">Locking — traditional, simple</h4>
+<pre>Tx1 locks row R
+Tx2 waits</pre>
+    <h4 class="sub-blk">MVCC — modern, efficient</h4>
+<pre class="state">row has versions
+Tx1 sees old version
+Tx2 sees new version after commit</pre>
+    <p>Modern systems often use MVCC + locks where needed.</p>
+
+    <h3 class="blk">Isolation levels — problem #13</h3>
+    <p>Not every system gives the same guarantees:</p>
+    <table>
+      <thead><tr><th>Level</th><th>Guarantee</th><th>Tradeoff</th></tr></thead>
+      <tbody>
+        <tr><td>Read Uncommitted</td><td>Can read uncommitted writes</td><td>Fast but unsafe</td></tr>
+        <tr><td>Read Committed</td><td>Only see committed writes</td><td>Standard default</td></tr>
+        <tr><td>Repeatable Read</td><td>Same reads within transaction</td><td>More consistent</td></tr>
+        <tr><td>Serializable</td><td>Complete isolation</td><td>Most safe but costly</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="blk">The write-ahead log (WAL) — problem #14</h3>
+    <p>The durability backbone:</p>
+<pre class="flow">update row
+   |
+   v
+append change to WAL   &lt;-- CRITICAL: log first
+   |
+   v
+ack maybe after WAL durable
+   |
+   v
+data page flushed later</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Why it matters</span><span class="q-text">What does the WAL let the database do after a crash?</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <ul>
+          <li>Redo committed work (recovery)</li>
+          <li>Undo/ignore incomplete work (rollback)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 15–16</span><h2>Memory &amp; recovery</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+
+    <h3 class="blk">Buffer manager — problem #15</h3>
+    <p>Disk is slow, so SQL DB uses memory buffer pool for pages:</p>
+<pre class="flow">Disk pages &lt;--&gt; Buffer Pool &lt;--&gt; Query Execution</pre>
+    <p>When query needs a page:</p>
+    <ol class="plain">
+      <li>Check buffer pool</li>
+      <li>If miss → load from disk</li>
+      <li>If hit → use directly</li>
+    </ol>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Key insight</span><span class="q-text">What is the buffer manager, essentially?</span><span class="hint">＋</span></div>
+      <div class="q-body">The buffer manager is essentially a <em>cache for pages</em>, and its efficiency determines query performance.</div>
+    </div>
+
+    <h3 class="blk">Crash recovery — problem #16</h3>
+    <p>After a crash, recovery is non-negotiable:</p>
+<pre class="flow">Crash
+  |
+  v
+restart
+  |
+  v
+read checkpoint
+  |
+  v
+redo committed WAL entries
+  |
+  v
+undo incomplete work if needed</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Mental model</span><span class="q-text">Define recovery in one line — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">Recovery = bring data pages back to a transactionally consistent state using log + checkpoints.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 17–19</span><h2>Scaling &amp; distribution</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+
+    <h3 class="blk">Replication — problem #17</h3>
+    <p>Classic SQL DB often starts as single primary, then adds replication:</p>
+<pre class="flow">Primary (writes)
+  |
+  +--> Replica 1 (reads)
+  +--> Replica 2 (reads)</pre>
+    <p>Replication often based on WAL/binlog shipping — primary writes log, replicas replay those changes.</p>
+    <div class="note">Tradeoff: read scaling is easy; write scaling is hard.</div>
+
+    <h3 class="blk">Scaling tradeoffs — problem #18</h3>
+    <p>Single-node SQL DB gives strongest simplicity, but scale creates tradeoffs:</p>
+    <table>
+      <thead><tr><th>Pattern</th><th>Advantage</th><th>Problem</th></tr></thead>
+      <tbody>
+        <tr><td>Vertical scaling</td><td>Simple</td><td>Limited, expensive</td></tr>
+        <tr><td>Read replicas</td><td>Great for reads</td><td>Writes still bottleneck</td></tr>
+        <tr><td>Partitioning</td><td>Distributing data</td><td>Cross-partition queries</td></tr>
+        <tr><td>Sharding</td><td>Horizontal scaling</td><td>Complex, distributed transactions</td></tr>
+        <tr><td>Distributed SQL</td><td>Full scalability</td><td>Coordination overhead</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="blk">Schema design — problem #19</h3>
+    <p><strong>The tension:</strong> logical correctness vs physical performance.</p>
+    <h4 class="sub-blk">Normalization</h4>
+    <ul>
+      <li>Good: reduces duplication, preserves integrity</li>
+      <li>Bad: more joins, more overhead</li>
+    </ul>
+    <h4 class="sub-blk">Performance tricks</h4>
+    <ul>
+      <li>Denormalization</li>
+      <li>Materialized views</li>
+      <li>Careful indexing</li>
+    </ul>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Key insight</span><span class="q-text">Where does schema design sit in the whole picture?</span><span class="hint">＋</span></div>
+      <div class="q-body">SQL DB is deeply tied to schema design — good relational design matters, but performance requires physical optimization.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 20</span><h2>Putting it all together</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Example: orders query</h3>
+<pre class="sql">SELECT *
+FROM orders
+WHERE customer_id = 1001
+ORDER BY created_at DESC
+LIMIT 20;</pre>
+
+    <h4 class="sub-blk">Strong design</h4>
+    <ul>
+      <li>Table: orders (heap or clustered)</li>
+      <li>Index: (customer_id, created_at DESC)</li>
+    </ul>
+
+    <h4 class="sub-blk">Execution likely</h4>
+    <ol class="plain">
+      <li>Index seek to customer_id=1001</li>
+      <li>Walk newest rows in index order</li>
+      <li>Fetch top 20 (possibly from index alone if covering)</li>
+    </ol>
+
+    <div class="note">This is classic SQL strength: declarative query + efficient execution = powerful abstraction.</div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">ARCHITECTURE</span><h2>The complete architecture</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="flow">                     +----------------------+
+                     | Clients / Apps       |
+                     +----------+-----------+
+                                |
+                                v
+                     +----------------------+
+                     | SQL Parser           |
+                     +----------+-----------+
+                                |
+                                v
+                     +----------------------+
+                     | Optimizer            |
+                     +----------+-----------+
+                                |
+                                v
+                     +----------------------+
+                     | Execution Engine     |
+                     +----------+-----------+
+                                |
+            +-------------------+-------------------+
+            |                                       |
+            v                                       v
++---------------------------+           +---------------------------+
+| Buffer Manager / Cache    |           | Transaction / Lock / MVCC |
++-------------+-------------+           +-------------+-------------+
+              |                                       |
+              v                                       v
++---------------------------------------------------------------+
+| Storage Engine                                                |
+| tables / indexes / pages / WAL / checkpoints / recovery       |
++---------------------------------------------------------------+</pre>
+
+    <h3 class="blk">Optional distributed extension</h3>
+    <ul>
+      <li>primary/replica replication</li>
+      <li>partitioning/sharding</li>
+      <li>distributed transaction coordination</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">CORE</span><h2>The core tension</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Every SQL database wrestles with this fundamental challenge:</p>
+    <div class="note"><strong>How to provide strong correctness guarantees while achieving acceptable performance?</strong></div>
+    <p>This tension manifests everywhere:</p>
+    <ul>
+      <li>Indexes speed queries but slow writes</li>
+      <li>Transactions guarantee correctness but add overhead</li>
+      <li>Normalization preserves integrity but requires joins</li>
+      <li>Replication improves availability but adds complexity</li>
+    </ul>
+    <p><strong>The SQL DB is a study in tradeoffs:</strong> correctness vs performance, simplicity vs scalability, declarative ease vs implementation complexity.</p>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">CLOSING</span><h2>Final thought</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Building a SQL database means mastering:</p>
+    <ol class="plain">
+      <li><strong>The relational model</strong> (data organization)</li>
+      <li><strong>Storage</strong> (pages, indexes, buffers)</li>
+      <li><strong>Query optimization</strong> (plan selection, cost estimation)</li>
+      <li><strong>Transactions</strong> (ACID, concurrency, recovery)</li>
+      <li><strong>Distribution</strong> (replication, sharding, consensus)</li>
+    </ol>
+    <p>Each layer presents deep intellectual challenges — and the magic is making it all work together seamlessly for the user who just sees:</p>
+<pre>App --> SELECT / INSERT / UPDATE / DELETE</pre>
+    <div class="note">That's the power of a SQL database.</div>
+  </div>
+</section>
+
+<footer>Architects Lab · SQL Database · 20 problems</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

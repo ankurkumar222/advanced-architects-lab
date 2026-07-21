@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Designing a Distributed Tracing System</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+  em{color:var(--accent);font-style:italic}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+  pre.bad{border-left-color:#fc8181}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  .qblock{margin-top:24px}
+  .qblock > .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--q);margin-bottom:12px;
+  }
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin-bottom:8px;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:12px;color:var(--q);min-width:34px;padding-top:1px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 14px 62px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .q-body pre{margin:10px 0;font-size:12px}
+  .verdict{color:var(--ok);font-weight:600}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px;letter-spacing:.05em}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    .q-body{padding-left:16px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Observability</div>
+  <h1>Designing a Distributed Tracing System</h1>
+  <p class="sub">Two stages, fifteen problems, sixty-two questions. Read the problem, sit with the diagram, then open the question only after you have answered it yourself.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all answers</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s0"><span class="num">00</span>Two stages</a></li>
+    <li><a href="#s1"><span class="num">01</span>What is a trace really?</a></li>
+    <li><a href="#s2"><span class="num">02</span>Context propagation is the spine</a></li>
+    <li><a href="#s3"><span class="num">03</span>Who actually creates spans?</a></li>
+    <li><a href="#s4"><span class="num">04</span>Clocks lie</a></li>
+    <li><a href="#s5"><span class="num">05</span>Sampling is the real economics</a></li>
+    <li><a href="#s6"><span class="num">06</span>The ingest pipeline</a></li>
+    <li><a href="#s7"><span class="num">07</span>How should spans be stored?</a></li>
+    <li><a href="#s8"><span class="num">08</span>Trace assembly is the hard read</a></li>
+    <li><a href="#s9"><span class="num">09</span>What do people actually query?</a></li>
+    <li><a href="#s10"><span class="num">10</span>Cardinality is the silent killer</a></li>
+    <li><a href="#s11"><span class="num">11</span>Retention, tiering, cost</a></li>
+    <li><a href="#s12"><span class="num">12</span>Tracing must never hurt the app</a></li>
+    <li><a href="#s13"><span class="num">13</span>Multi-tenant fairness</a></li>
+    <li><a href="#s14"><span class="num">14</span>Derived signals from traces</a></li>
+    <li><a href="#s15"><span class="num">15</span>Span lifecycle is the soul</a></li>
+  </ol>
+</div>
+
+<!-- ============ 00 ============ -->
+<section id="s0" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">STAGE MAP</span><h2>Two stages</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">One user request touches forty services. A trace is the reconstructed causal story of that one request. Splitting into 2 stages makes it much easier to read:</p>
+    <ul>
+      <li><strong>Stage 1</strong> = how the trace is produced and shipped without hurting anyone</li>
+      <li><strong>Stage 2</strong> = how it is stored, reassembled and queried</li>
+    </ul>
+
+    <h3 class="blk">Stage 1 — produce path</h3>
+    <ul>
+      <li>request enters, root span starts</li>
+      <li>trace context propagates across every hop</li>
+      <li>each service emits spans locally</li>
+      <li>sampling decides what survives</li>
+      <li>SDK buffers, agent batches, collector receives</li>
+    </ul>
+<pre class="flow">Request -> Root Span -> Context Propagation -> Child Spans -> Sampler -> Buffer -> Agent -> Collector</pre>
+
+    <h3 class="blk">Stage 2 — consume path</h3>
+    <ul>
+      <li>collector normalizes and enriches</li>
+      <li>spans written to store, indexes updated</li>
+      <li>spans of one trace reassembled into a tree</li>
+      <li>user searches, opens waterfall, drills down</li>
+    </ul>
+<pre class="flow">Collector -> Queue -> Span Store + Index -> Assembly -> Search / Waterfall / Dependency Map
+                                    |
+                                    v
+                             Retention / Tiering</pre>
+
+    <div class="note">Core job: reconstruct one request's causal tree from thousands of independently emitted, partially sampled, clock-skewed fragments.</div>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>What is a trace really?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Before design, define the object clearly. A trace is not a log line. It is a tree of timed intervals.</p>
+<pre>Span
+----
+trace_id
+span_id
+parent_span_id
+service_name
+operation_name
+start_time
+duration
+status          (ok / error)
+attributes      (key-value tags)
+events          (timestamped points inside the span)
+links           (references to other traces)</pre>
+
+    <h3 class="blk">Trace as a tree</h3>
+<pre class="state">trace_id = T1
+
+  [api-gateway  /checkout]                span A (root)
+       |
+       +-- [order-svc  createOrder]       span B  parent=A
+       |         |
+       |         +-- [db  INSERT orders]  span D  parent=B
+       |
+       +-- [payment-svc  charge]          span C  parent=A
+                 |
+                 +-- [psp  POST /charge]  span E  parent=C</pre>
+
+    <h3 class="blk">Same trace as a waterfall</h3>
+<pre>time ----------------------------------------->
+
+A  |=========================================|   420ms
+B    |==============|                             150ms
+D      |=========|                                 90ms
+C                  |========================|     260ms
+E                    |====================|       210ms</pre>
+    <div class="note">The tree gives you causality. The waterfall gives you blame. You need both views from the same data.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q1</span><span class="q-text">Is a span one record with a duration, or two events (start and end)?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>One record:
+emit once at end, duration included
+simpler storage, but nothing visible while in flight
+
+Two events:
+emit start, emit end
+live view possible, but 2x volume and orphan risk</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q2</span><span class="q-text">Is a trace strictly a tree, or a DAG?</span><span class="hint">＋</span></div><div class="q-body"><p>A fan-in — one consumer batch triggered by many producers — has multiple causes. That is why <code>links</code> exist separately from <code>parent_span_id</code>.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q3</span><span class="q-text">Who generates trace_id, and what should it be?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>random 128-bit at first hop
+or
+derived from request id at edge</pre>
+        <p>Random avoids coordination. But then trace_id carries no routing information — think about whether you want it to.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q4</span><span class="q-text">What if a parent span never arrives?</span><span class="hint">＋</span></div><div class="q-body"><p>You have orphans. Do you drop them, show a synthetic parent, or render a forest instead of a tree?</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q5</span><span class="q-text">Should operation_name be free text?</span><span class="hint">＋</span></div><div class="q-body">
+<pre class="bad">GET /users/1001
+GET /users/1002
+GET /users/1003</pre>
+        <p>Three operations, or one? This single decision determines whether your aggregation is useful or useless.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>Context propagation is the spine</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Everything else is decoration. If context does not travel, you have no trace — only disconnected spans.</p>
+
+    <h3 class="blk">Two propagation problems, not one</h3>
+<pre>1. In-process
+   pass context across function calls, threads, async tasks
+
+2. Cross-process
+   pass context across the network boundary</pre>
+
+    <h3 class="blk">Cross-process sketch</h3>
+<pre class="flow">Service A
+   |
+   | HTTP headers:
+   |   traceparent: 00-{trace_id}-{span_id}-{flags}
+   |   tracestate:  vendor-specific
+   v
+Service B
+   |
+   | reads header -> trace_id kept
+   |               -> incoming span_id becomes parent_span_id
+   |               -> new span_id generated
+   v
+Service C</pre>
+
+    <h3 class="blk">The break</h3>
+<pre class="bad">A --header--> B --(header dropped)--> C --header--> D
+
+Result:
+trace T1 = { A, B }
+trace T2 = { C, D }     <- new root, no link to A
+
+One request, two unrelated traces.</pre>
+    <div class="note">One un-instrumented hop in the middle silently cuts every trace in half. Propagation coverage matters more than instrumentation depth.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q6</span><span class="q-text">How does context survive an async boundary inside one process?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>thread-local        -> breaks on thread pool handoff
+explicit parameter  -> correct but invasive
+async-local storage -> usual answer in modern runtimes</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q7</span><span class="q-text">How does context travel through a queue?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Producer writes context into message headers
+Consumer reads it back
+
+Producer span ends at publish
+Consumer span starts at receive</pre>
+        <p>Do you make the consumer a child, or a linked span in a new trace? Wait time in the queue is not the consumer's fault.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q8</span><span class="q-text">A nightly batch reads 10 million rows. One trace or ten million?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q9</span><span class="q-text">Should propagation be done by library, by service mesh sidecar, or both?</span><span class="hint">＋</span></div><div class="q-body"><p>Mesh gives free coverage but only sees network hops — it cannot see inside your process. Library sees everything but requires every team to adopt it.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q10</span><span class="q-text">Should you propagate business context (tenant_id, user tier) alongside trace context?</span><span class="hint">＋</span></div><div class="q-body"><p>Very useful for filtering. But baggage travels on every hop, costs bytes on every request, and can leak sensitive data outside your trust boundary.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>Who actually creates spans?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Three sources, three different levels of detail and cost.</p>
+<pre>1. Auto-instrumentation
+   framework hooks: HTTP server, HTTP client, DB driver, queue client
+   free coverage, generic naming
+
+2. Manual instrumentation
+   developer wraps a meaningful business step
+   best signal, requires discipline
+
+3. Infrastructure
+   mesh proxy, load balancer, gateway
+   no code change, but only edge-level view</pre>
+
+<pre class="flow">                +---------------------------+
+                |  one incoming request     |
+                +-------------+-------------+
+                              |
+      +-----------------------+----------------------+
+      |                       |                      |
+      v                       v                      v
+ mesh span              framework span         business span
+ (proxy in/out)         (HTTP handler)         (validateLimit)
+ free, coarse           free, generic          costly, precious</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q11</span><span class="q-text">What is the actual overhead of a span?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>allocation
+timestamp read
+attribute map
+serialization
+buffer append
+network export</pre>
+        <p>At 50k requests/sec with 20 spans each, that is 1M spans/sec from one service. Do the arithmetic before deciding instrumentation depth.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q12</span><span class="q-text">Should a span exist for every function, or only for boundaries?</span><span class="hint">＋</span></div><div class="q-body"><p>Boundaries — network, disk, lock, external call — are where time actually goes. Function-level spans usually produce noise, not insight.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q13</span><span class="q-text">Who owns naming consistency across 80 microservices?</span><span class="hint">＋</span></div><div class="q-body"><p>If <code>order-svc</code> calls it <code>createOrder</code> and <code>order-service</code> calls it <code>POST /orders</code>, no aggregation across the fleet is possible. This is a platform governance problem disguised as a technical one.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q14</span><span class="q-text">Should errors be a status field, a span event, or both?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>Clocks lie</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Spans come from different machines. Machine clocks disagree by milliseconds — sometimes seconds.</p>
+
+<pre class="bad">Reality:
+A calls B, so B must start after A
+
+Recorded:
+A.start = 10:00:00.500   (host 1)
+B.start = 10:00:00.480   (host 2, clock 40ms behind)
+
+Waterfall renders child starting before parent.
+Duration appears negative.</pre>
+
+<pre>What you can trust:
+  duration within one process   -> monotonic clock, reliable
+  causal order                  -> parent/child relationship, reliable
+
+What you cannot trust:
+  absolute timestamps across hosts
+  cross-host subtraction (network latency estimates)</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q15</span><span class="q-text">Should you record wall-clock time, monotonic duration, or both?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">Both.</span> Wall clock for ordering and search; monotonic for the duration itself, so duration never goes negative even if NTP steps the clock mid-span.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q16</span><span class="q-text">Do you correct skew at write time or at read time?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Write time:  stored data is "clean" but lies about what was observed
+Read time:   raw data preserved, renderer clamps child inside parent</pre>
+        <p>Read time is usually safer — you can change the correction later.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q17</span><span class="q-text">Can you compute network latency as (child.start − parent.start)?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">Not reliably.</span> That number contains clock skew plus queueing plus serialization. Treat it as a hint, never as a metric.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q18</span><span class="q-text">Is the trace timeline the parent's clock or a global clock?</span><span class="hint">＋</span></div><div class="q-body"><p>Anchoring everything to the root span's clock and expressing children as offsets makes the waterfall coherent, even if the absolute times are wrong.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>Sampling is the real economics</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">You cannot store every trace. The whole design question is <em>which</em> traces are worth keeping — and <em>when</em> you decide.</p>
+
+    <h3 class="blk">Head-based sampling</h3>
+    <p>Decide at the root, propagate the decision in the flag bit.</p>
+<pre class="flow">Root span
+   |
+   | roll dice: keep 1%
+   | sampled = true
+   v
+propagate flag in traceparent
+   |
+   +--> B honours flag -> emits
+   +--> C honours flag -> emits</pre>
+    <div class="note">Cheap, stateless, consistent — every service makes the same decision. But you decide before you know whether the request was interesting.</div>
+
+    <h3 class="blk">Tail-based sampling</h3>
+    <p>Buffer all spans of a trace, decide when the trace is complete.</p>
+<pre class="flow">all spans -> collector buffer (keyed by trace_id)
+                    |
+              wait for trace to settle
+                    |
+         +----------+-----------+
+         |                      |
+      had error?             was slow?
+      keep 100%              keep 100%
+                    |
+              otherwise keep 1%</pre>
+    <div class="note">You keep exactly the traces you needed. But the collector must hold every span of every in-flight trace in memory, and all spans of one trace must land on the same collector instance.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q19</span><span class="q-text">If you sample 1% at head, how do you ever catch the rare error?</span><span class="hint">＋</span></div><div class="q-body"><p>You mostly do not. That is the central argument for tail sampling — the failures you need are, by definition, rare.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q20</span><span class="q-text">Tail sampling needs all spans of a trace in one place. How do you route them there?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>hash(trace_id) -> collector shard
+
+Now collectors are stateful.
+Rebalancing them splits in-flight traces.</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q21</span><span class="q-text">How long do you buffer before declaring a trace complete?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>too short -> long traces get truncated, decision made on partial data
+too long  -> memory grows, decision latency grows</pre>
+        <p>This is the same shape as visibility timeout in a queue: a guess about how long work takes.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q22</span><span class="q-text">Should the sampling rate be per service, per endpoint, or per tenant?</span><span class="hint">＋</span></div><div class="q-body"><p>A flat global rate over-samples your busiest endpoint and under-samples the one that runs twice an hour. Rate-limiting per operation gives better coverage than probability.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q23</span><span class="q-text">If sampling is biased toward errors, are your latency percentiles still valid?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">No.</span> Sampled traces are for debugging. Percentiles must come from unsampled aggregates computed before the sampler — see problem 14.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q24</span><span class="q-text">Can head and tail sampling coexist?</span><span class="hint">＋</span></div><div class="q-body"><p>Often yes — a generous head sample to bound volume at source, then a selective tail sample to decide what is stored.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>The ingest pipeline</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Between the application and the database there are four buffers, and every one of them can drop your data.</p>
+
+<pre class="flow">App process
+   |
+   |  in-process SDK buffer          (bounded queue)
+   v
+Agent / sidecar
+   |
+   |  batching + compression         (per-node buffer)
+   v
+Collector
+   |
+   |  normalize, enrich, tail-sample (stateful)
+   v
+Durable queue
+   |
+   |  decouple ingest from storage
+   v
+Span store + index writers</pre>
+
+    <h3 class="blk">Where each buffer helps</h3>
+<pre>SDK buffer     -> absorbs export latency, keeps request path fast
+Agent          -> batches many processes on one host, one connection out
+Collector      -> central policy: sampling, redaction, enrichment
+Durable queue  -> storage can be slow or down without losing spans</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q25</span><span class="q-text">When the SDK buffer is full, what happens?</span><span class="hint">＋</span></div><div class="q-body">
+<pre class="bad">block the request thread   -> tracing has now caused an outage
+grow unbounded             -> OOM, tracing has now caused an outage
+drop spans + count drops   -> correct answer</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q26</span><span class="q-text">Should you drop oldest or newest when dropping?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q27</span><span class="q-text">Should partial traces be shipped, or only complete ones?</span><span class="hint">＋</span></div><div class="q-body"><p>The SDK cannot know when a trace is complete — it only sees its own process. Completeness is a collector-side concept.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q28</span><span class="q-text">Where does PII get stripped?</span><span class="hint">＋</span></div><div class="q-body"><p>SDK-side redaction is safest — the data never leaves the process. Collector-side is easier to update centrally. Most teams need both.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q29</span><span class="q-text">Does the collector need to be stateless?</span><span class="hint">＋</span></div><div class="q-body"><p>It would like to be. Tail sampling takes that away — see Q20.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q30</span><span class="q-text">What is the durability boundary? When is a span "safe"?</span><span class="hint">＋</span></div><div class="q-body"><p>Nobody acknowledges a span back to the application. Tracing is fire-and-forget by design — which means every buffer before the durable queue is a lossy hop you accepted on purpose.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>How should spans be stored?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Two completely different access patterns, so usually two storage shapes.</p>
+
+<pre>Access pattern 1 — "show me trace T1"
+   exact key lookup, return 40 spans
+
+Access pattern 2 — "slow checkout traces in the last hour"
+   search by service + operation + time + tags, return trace_ids</pre>
+
+    <h3 class="blk">Two-store model</h3>
+<pre class="flow">span batch
+   |
+   +--> SPAN STORE
+   |      key: trace_id (+ span_id)
+   |      value: raw span blob
+   |      write-once, read-by-key
+   |
+   +--> INDEX STORE
+          key: service + operation + time bucket
+          value: trace_id, duration, status, indexed tags</pre>
+
+<pre>SPAN STORE partitioned by hash(trace_id)
+   good: all spans of a trace land together -> assembly is one shard read
+   bad:  no time locality, retention deletes are scattered
+
+INDEX STORE partitioned by time + service
+   good: searches are bounded, old partitions dropped whole
+   bad:  hot partition on the busiest service in the current minute</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q31</span><span class="q-text">Should the partition key be trace_id or time+service?</span><span class="hint">＋</span></div><div class="q-body"><p>Those two answers optimize opposite queries. That is precisely why most systems run both stores rather than choosing.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q32</span><span class="q-text">Is a span ever updated after write?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">Effectively never.</span> Spans are immutable facts. That makes append-only, LSM-style storage a natural fit and makes retention a matter of dropping whole segments.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q33</span><span class="q-text">Should the raw span be stored as a blob or as columns?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Blob:    cheap write, whole-span read, no analytics
+Columnar: expensive write, but "p99 duration by operation" becomes a scan</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q34</span><span class="q-text">If the index write succeeds but the span write fails, what does the user see?</span><span class="hint">＋</span></div><div class="q-body"><p>A search result that opens into an empty trace. Which of the two writes should happen first, and should the reader tolerate the gap?</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q35</span><span class="q-text">One trace can span multiple time buckets. Which bucket owns it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>Trace assembly is the hard read</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Spans of one trace are emitted by different processes, at different times, over different networks. They arrive out of order, late, or not at all.</p>
+
+<pre>Emission order (real time):
+D ends first (90ms db call)
+B ends next
+E ends
+C ends
+A ends last  (root always finishes last)
+
+So the root — the thing you need to build the tree — arrives LAST.</pre>
+
+<pre class="bad">Arrival at storage:
+t+0.1s   D
+t+0.2s   B
+t+0.4s   E
+t+0.5s   C
+t+2.0s   A        <- retried export, agent restart, slow host
+t+45s    F        <- straggler from a lagging service
+
+Query at t+1.0s renders a broken forest.</pre>
+
+    <h3 class="blk">Two assembly strategies</h3>
+<pre>A. Assemble at read time
+   fetch all spans by trace_id, build tree in memory
+   always reflects latest data, cost paid per query
+
+B. Assemble at write time
+   buffer, wait a window, materialize the tree once
+   fast reads, but stragglers arrive after the tree is sealed</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q36</span><span class="q-text">When is a trace "complete"?</span><span class="hint">＋</span></div><div class="q-body"><p>There is no completion signal. Nobody knows how many spans a trace should have. Completeness is always a timeout, never a fact.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q37</span><span class="q-text">Could the root span carry an expected child count?</span><span class="hint">＋</span></div><div class="q-body"><p>The root does not know — children are created deep in services it never sees. This is why tracing systems are eventually consistent by nature.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q38</span><span class="q-text">If a span arrives after the trace was rendered, do you re-render?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q39</span><span class="q-text">How do you display a trace whose root is missing?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>synthetic root spanning min(start) to max(end)
++ explicit "incomplete trace" marker</pre>
+        <p>Silently drawing a partial tree as if it were whole is how people misdiagnose incidents.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q40</span><span class="q-text">Should the UI show what is missing, or only what is present?</span><span class="hint">＋</span></div><div class="q-body"><p>A gap in a waterfall usually means an un-instrumented hop. Making the gap visible turns a blind spot into a to-do item.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>What do people actually query?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Design the index around the real questions, not around the data model.</p>
+
+<pre>Q-type 1  "open trace abc123"                  key lookup
+Q-type 2  "slow checkouts, last 1h, p99"       time + service + duration filter
+Q-type 3  "traces with error in payment-svc"   time + service + status filter
+Q-type 4  "traces for order_id = 88213"        high-cardinality tag lookup
+Q-type 5  "what does order-svc depend on?"     aggregate over edges
+Q-type 6  "did latency change after deploy?"   compare two time windows</pre>
+
+<pre class="flow">Type 1  -> span store, one shard
+Type 2  -> index store, range scan on (service, time, duration)
+Type 3  -> index store, same shape, status filter
+Type 4  -> needs a tag index, and that is where cardinality bites
+Type 5  -> precomputed dependency graph, not a query over raw spans
+Type 6  -> precomputed aggregates, not sampled traces</pre>
+
+    <div class="note">Types 5 and 6 should never be answered by scanning stored traces. They are stream-derived, not search-derived.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q41</span><span class="q-text">Does search return traces or spans?</span><span class="hint">＋</span></div><div class="q-body"><p>The user thinks in traces; the index holds spans. A trace matches if <em>any</em> span matches — so the index returns span hits and you must deduplicate by trace_id.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q42</span><span class="q-text">"Slow trace" means slow root, or contains a slow span?</span><span class="hint">＋</span></div><div class="q-body"><p>Very different queries. A fast trace can contain a slow parallel branch that nobody waited on.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q43</span><span class="q-text">Should root-span duration be denormalized onto every child?</span><span class="hint">＋</span></div><div class="q-body"><p>It makes "slow trace" searchable from any span, at the cost of writing a value the child does not yet know — the root has not finished when the child is emitted.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q44</span><span class="q-text">Should the system support full-text search inside span attributes?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 10</span><h2>Cardinality is the silent killer</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">The attributes that make a trace useful for debugging are exactly the ones that destroy your index.</p>
+
+<pre>Low cardinality — safe to index
+   service_name      ~80 values
+   http.status_code  ~40 values
+   region            ~5 values
+
+High cardinality — precious but expensive
+   user_id           millions
+   order_id          billions
+   session_id        billions
+   sql.query_text    unbounded</pre>
+
+<pre class="bad">Index every attribute:
+   index size approaches data size
+   write amplification per span explodes
+   one badly-named tag can take down ingest</pre>
+
+    <h3 class="blk">Usual compromise</h3>
+<pre>allow-list of indexed attributes   -> cheap, predictable
+everything else stored but not indexed
++ separate inverted index for a few chosen high-cardinality keys
+  (order_id, trace-linking ids) with shorter retention</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q45</span><span class="q-text">Allow-list or deny-list for indexed attributes?</span><span class="hint">＋</span></div><div class="q-body"><p>Deny-list means an application team can break the platform by adding one tag. Allow-list means they must ask you first. Which failure do you prefer?</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q46</span><span class="q-text">Should high-cardinality indexes have shorter retention than spans?</span><span class="hint">＋</span></div><div class="q-body"><p>Usually yes. "Find the trace for this order" is an urgent question asked within hours, not months.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q47</span><span class="q-text">Should operation_name be normalized at ingest?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>GET /users/1001  ->  GET /users/{id}</pre>
+        <p>Without this, operation_name is high-cardinality and every aggregation is meaningless. With it, you lose the specific path unless you also keep it as an attribute.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q48</span><span class="q-text">Who is accountable when one service's tags blow up the index?</span><span class="hint">＋</span></div><div class="q-body"><p>This is problem 13 in disguise — a fairness question, not a storage question.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11</span><h2>Retention, tiering, cost</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Trace data is enormous, and its value decays faster than almost any other data you store.</p>
+
+<pre>Value curve:
+0 - 2 hours    incident debugging          very high
+2 - 48 hours   post-incident review        high
+2 - 30 days    regression comparison       medium
+30 days +      compliance / audit only     low</pre>
+
+<pre class="state">Tier 1  hot     0-2 days     fast store, fully indexed
+Tier 2  warm    2-14 days    cheaper store, reduced index
+Tier 3  cold    14-90 days   object storage, error traces only
+Tier 4  gone    beyond that  aggregates survive, traces do not</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q49</span><span class="q-text">Should retention be uniform, or per service / per tenant?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q50</span><span class="q-text">Should error traces live longer than successful ones?</span><span class="hint">＋</span></div><div class="q-body"><p>Almost always yes — and this argues for the sampling decision being recorded on the span, so retention can act on it later.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q51</span><span class="q-text">Is deletion a per-span operation or a segment drop?</span><span class="hint">＋</span></div><div class="q-body"><p>Per-span deletion at this volume is unaffordable. Time-partitioned segments that can be dropped whole is the only design that scales — which constrains your partitioning choice back in problem 7.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q52</span><span class="q-text">If a trace is 1% sampled, what did you actually pay for the other 99%?</span><span class="hint">＋</span></div><div class="q-body"><p>CPU in the app, bytes on the wire, and collector memory — all spent on data you then discarded. Head sampling exists to avoid exactly that cost; tail sampling accepts it deliberately.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 12</span><h2>Tracing must never hurt the app</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="note">The single non-negotiable rule: an observability system that can take down production is worse than no observability system.</div>
+
+<pre>Failure map
+App -> SDK buffer -> Agent -> Collector -> Queue -> Storage</pre>
+
+    <h3 class="blk">Case 1 — Collector unreachable</h3>
+<pre>agent retries
+buffer fills
+==> must drop, never block</pre>
+
+    <h3 class="blk">Case 2 — Collector slow, not down</h3>
+<pre class="bad">export takes 5s instead of 50ms
+if export is synchronous, every request pays 5s
+
+==> export must always be off the request path</pre>
+
+    <h3 class="blk">Case 3 — A service emits 100x normal spans</h3>
+<pre>bad deploy adds a span in a tight loop
+one service saturates the whole pipeline
+
+==> need per-source rate limits at the agent, not just at the collector</pre>
+
+    <h3 class="blk">Case 4 — Storage down</h3>
+<pre>durable queue absorbs it
+==> how deep, and what happens when the queue also fills?</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q53</span><span class="q-text">Should tracing failures be visible, or silent?</span><span class="hint">＋</span></div><div class="q-body"><p>Silent dropping is how teams end up debugging an incident with a trace that quietly lost half its spans. Emit a dropped-span counter as a metric — tracing needs its own observability.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q54</span><span class="q-text">Should there be a kill switch?</span><span class="hint">＋</span></div><div class="q-body"><p>A remotely-settable sample rate that can go to zero, taking effect without a redeploy, is the difference between a bad hour and a bad day.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q55</span><span class="q-text">What is the memory ceiling of the SDK, and who enforces it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q56</span><span class="q-text">Does the tracing system trace itself?</span><span class="hint">＋</span></div><div class="q-body"><p>Tempting, and a beautiful way to build an infinite loop. Usually the pipeline is monitored by metrics, not by its own traces.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 13</span><h2>Multi-tenant fairness</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Whether tenants are external customers or internal teams, the shape is the same.</p>
+
+<pre>Team A (payments)   50,000 spans/sec
+Team B (reporting)      200 spans/sec
+Team C (onboarding)   1,200 spans/sec</pre>
+
+<pre class="flow">                 +-----------------------+
+                 | Shared Trace Pipeline |
+                 +-----------+-----------+
+                             |
+          +------------------+------------------+
+          |                  |                  |
+          v                  v                  v
+       Team A             Team B             Team C</pre>
+
+    <p>Without controls, A's bad deploy erases B's and C's traces.</p>
+    <p>Need isolation:</p>
+    <ul>
+      <li>per-tenant ingest quotas</li>
+      <li>per-tenant sampling policy</li>
+      <li>per-tenant index and storage budgets</li>
+      <li>separate queues or partitions for the loudest tenants</li>
+    </ul>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q57</span><span class="q-text">Should quota enforcement be at the agent, the collector, or both?</span><span class="hint">＋</span></div><div class="q-body"><p>Agent-side is cheaper — the data never crosses the network. Collector-side is authoritative. Both, with the agent as the fast path.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q58</span><span class="q-text">When a tenant exceeds quota, do you drop or downsample?</span><span class="hint">＋</span></div><div class="q-body"><p>Dropping loses whole traces at random — usually worse than lowering the sample rate, which keeps whole traces and loses others cleanly.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q59</span><span class="q-text">Can one team's traces reveal another team's data?</span><span class="hint">＋</span></div><div class="q-body"><p>A trace crosses service boundaries by definition, so it crosses team boundaries too. Who is allowed to see the payment span inside the checkout trace?</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 14</span><h2>Derived signals from traces</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">The most valuable outputs of a tracing system are usually not traces.</p>
+
+<pre class="flow">span stream (pre-sampling)
+   |
+   +--> RED metrics       rate, errors, duration per operation
+   |
+   +--> service graph     edges derived from parent.service -> child.service
+   |
+   +--> SLO / alerting    error ratio per endpoint
+   |
+   +--> exemplars         link a p99 metric point to one real trace</pre>
+
+    <div class="note">Compute these from the <strong>unsampled</strong> stream. If you compute them after sampling, every number is biased by your sampling policy.</div>
+
+    <h3 class="blk">Service graph from spans</h3>
+<pre class="state">for each span with a parent:
+    edge = (parent.service_name -> span.service_name)
+    increment count, error count, latency histogram
+
+api-gateway ---> order-svc ---> postgres
+      |                \
+      |                 +-----> inventory-svc
+      +--------> payment-svc ---> psp-external</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q60</span><span class="q-text">Should metrics be derived from spans, or emitted independently?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>From spans:      one instrumentation, guaranteed consistency
+Independent:     survives tracing outage, cheaper, no sampling bias</pre>
+        <p>Most mature setups do both and reconcile — which raises the question of which one is authoritative during an incident.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q61</span><span class="q-text">The service graph shows an edge that no architecture diagram has. Who is wrong?</span><span class="hint">＋</span></div><div class="q-body"><p>The trace. Discovering undocumented dependencies is often the highest-value output of the whole system.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q62</span><span class="q-text">An exemplar links a metric spike to a stored trace — but the trace was sampled away. Now what?</span><span class="hint">＋</span></div><div class="q-body"><p>Either the exemplar forces that trace to be retained (sampling decision made by the metrics pipeline), or your exemplar is a dead link. This couples two systems that look independent.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 15</span><h2>Span lifecycle is the soul</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="state">          +-----------+
+          | STARTED   |   context created, clock read
+          +-----+-----+
+                |
+                v
+          +-----------+
+          |  ENDED    |   duration fixed, status set
+          +-----+-----+
+                |
+                v
+          +-----------+
+          | BUFFERED  |   in SDK queue
+          +--+-----+--+
+             |     |
+      export |     | buffer full
+             v     v
+        +----------+   +-----------+
+        | EXPORTED |   |  DROPPED  |
+        +----+-----+   +-----------+
+             |
+             v
+        +----------+
+        | SAMPLED  |   collector keeps or discards
+        +----+-----+
+             |
+             v
+        +----------+
+        | INDEXED  |   searchable
+        +----+-----+
+             |
+             v
+        +----------+
+        | EXPIRED  |   retention drops the segment
+        +----------+</pre>
+
+    <div class="note">Every arrow in this diagram is a place your data can silently disappear. Count them: there are six.</div>
+
+    <h3 class="blk">If I reduce everything to only the hardest core</h3>
+<pre class="flow">start a span
+-> propagate context across every hop
+-> decide early or late what is worth keeping
+-> ship it without ever blocking the request
+-> store it twice, by id and by search key
+-> reassemble a tree that has no completion signal
+-> answer the question before the incident ends
+-> and never, ever take production down doing it</pre>
+  </div>
+</section>
+
+<footer>Architects Lab · Distributed Tracing · 62 questions</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>
