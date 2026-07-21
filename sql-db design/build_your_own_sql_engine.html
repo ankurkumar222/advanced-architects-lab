@@ -333,6 +333,32 @@
     hr { margin: 2.5rem 0 1rem; border: 1px solid #ddd6cc; }
     body.dark hr { border-color: #3a3a4e; }
 
+    /* ── SQL Execution Model Animation (scoped: .sqlexec-) ── */
+    .sqlexec-wrap {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      max-width: 100%;
+      margin: 1.2rem 0 1rem;
+      padding: 20px 16px 24px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+    }
+    .sqlexec-title { font-size: 16px; font-weight: 600; color: #e6edf3; margin: 0 0 6px; }
+    .sqlexec-sub { font-size: 13px; color: #8b949e; margin: 0 0 18px; line-height: 1.6; }
+    .sqlexec-stage { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px 12px 6px; }
+    .sqlexec-stage svg { display: block; width: 100%; height: auto; }
+    .sqlexec-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: #8b949e; }
+    .sqlexec-btn { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer; min-width: 80px; transition: background 0.15s, border-color 0.15s; }
+    .sqlexec-btn:hover { background: #30363d; border-color: #8b949e; }
+    .sqlexec-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+    .sqlexec-legend { display: inline-flex; align-items: center; }
+    .sqlexec-speed { display: inline-flex; align-items: center; gap: 7px; }
+    .sqlexec-speed input[type="range"] { accent-color: #58a6ff; width: 90px; }
+    .sqlexec-note { margin-top: 16px; background: #161b22; border-left: 3px solid #f59e0b; padding: 11px 14px; font-size: 13px; line-height: 1.7; color: #8b949e; border-radius: 0 4px 4px 0; }
+    .sqlexec-note strong { color: #e6edf3; font-weight: 600; }
+    .sqlexec-note code { background: #21262d; color: #79c0ff; padding: 1px 5px; border-radius: 4px; font-family: 'IBM Plex Mono', Consolas, monospace; font-size: 12px; }
+
     @media (max-width: 600px) {
       h1 { font-size: 2rem; }
       .sticky-nav a { font-size: 0.6rem; padding: 0.1rem 0.5rem; }
@@ -420,6 +446,72 @@ FROM orders o JOIN users u ON o.uid = u.id
 │ Scan  │ ──────→ │ Filter │ ──────→ │ Join   │
 └───────┘         └────────┘         └────────┘
  (pull)            (pull)             (pull + spilling)</div>
+
+      <section class="sqlexec-wrap">
+        <h1 class="sqlexec-title">SQL execution model — iterator or push?</h1>
+        <p class="sqlexec-sub">
+          Left: the Volcano <em>pull</em> model — control descends via <code style="color:#79c0ff">next()</code>,
+          one tuple returns per call. Right: the <em>push</em> model — the scan drives, batches stream upward.
+        </p>
+        <div class="sqlexec-stage">
+          <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Animated comparison of pull-based and push-based query execution">
+            <text x="190" y="42" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="600">Iterator (pull)</text>
+            <text x="490" y="42" text-anchor="middle" fill="#e6edf3" font-size="15" font-weight="600">Push</text>
+            <line x1="190" y1="110" x2="190" y2="350" stroke="#30363d" stroke-width="1"/>
+            <line x1="490" y1="110" x2="490" y2="350" stroke="#30363d" stroke-width="1"/>
+            <g id="sqlexec-left">
+              <rect x="110" y="70"  width="160" height="40" rx="8" fill="#0f2d2a" stroke="#2ea198" stroke-width="1"/>
+              <text x="190" y="95"  text-anchor="middle" fill="#5eead4" font-size="14" font-weight="600">Result</text>
+              <rect x="110" y="150" width="160" height="40" rx="8" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+              <text x="190" y="175" text-anchor="middle" fill="#c9d1d9" font-size="14" font-weight="600">Project</text>
+              <rect x="110" y="230" width="160" height="40" rx="8" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+              <text x="190" y="255" text-anchor="middle" fill="#c9d1d9" font-size="14" font-weight="600">Filter</text>
+              <rect x="110" y="310" width="160" height="40" rx="8" fill="#241a33" stroke="#8957e5" stroke-width="1"/>
+              <text x="190" y="335" text-anchor="middle" fill="#c4a7f5" font-size="14" font-weight="600">Scan</text>
+            </g>
+            <g id="sqlexec-right">
+              <rect x="410" y="70"  width="160" height="40" rx="8" fill="#0f2d2a" stroke="#2ea198" stroke-width="1"/>
+              <text x="490" y="95"  text-anchor="middle" fill="#5eead4" font-size="14" font-weight="600">Result</text>
+              <rect x="410" y="150" width="160" height="40" rx="8" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+              <text x="490" y="175" text-anchor="middle" fill="#c9d1d9" font-size="14" font-weight="600">Project</text>
+              <rect x="410" y="230" width="160" height="40" rx="8" fill="#1c2128" stroke="#30363d" stroke-width="1"/>
+              <text x="490" y="255" text-anchor="middle" fill="#c9d1d9" font-size="14" font-weight="600">Filter</text>
+              <rect x="410" y="310" width="160" height="40" rx="8" fill="#241a33" stroke="#8957e5" stroke-width="1"/>
+              <text x="490" y="335" text-anchor="middle" fill="#c4a7f5" font-size="14" font-weight="600">Scan</text>
+            </g>
+            <g id="sqlexec-pull-call" opacity="0">
+              <circle id="sqlexec-call-dot" cx="172" cy="110" r="5" fill="#58a6ff"/>
+              <text id="sqlexec-call-label" x="160" y="114" text-anchor="end" fill="#58a6ff" font-size="12" font-family="Consolas, monospace">next()</text>
+            </g>
+            <circle id="sqlexec-pull-tuple" cx="208" cy="330" r="5" fill="#f59e0b" opacity="0"/>
+            <g id="sqlexec-batch-0" opacity="0">
+              <circle cx="482" cy="330" r="4" fill="#f59e0b"/><circle cx="492" cy="330" r="4" fill="#f59e0b"/><circle cx="502" cy="330" r="4" fill="#f59e0b"/>
+            </g>
+            <g id="sqlexec-batch-1" opacity="0">
+              <circle cx="482" cy="330" r="4" fill="#f59e0b"/><circle cx="492" cy="330" r="4" fill="#f59e0b"/><circle cx="502" cy="330" r="4" fill="#f59e0b"/>
+            </g>
+            <g id="sqlexec-batch-2" opacity="0">
+              <circle cx="482" cy="330" r="4" fill="#f59e0b"/><circle cx="492" cy="330" r="4" fill="#f59e0b"/><circle cx="502" cy="330" r="4" fill="#f59e0b"/>
+            </g>
+            <text x="190" y="382" text-anchor="middle" fill="#8b949e" font-size="12">one virtual call per tuple, per operator</text>
+            <text x="490" y="382" text-anchor="middle" fill="#8b949e" font-size="12">tight loops, data stays hot in cache</text>
+          </svg>
+        </div>
+        <div class="sqlexec-controls">
+          <button class="sqlexec-btn" id="sqlexec-play">⏸ Pause</button>
+          <span class="sqlexec-legend"><span class="sqlexec-dot" style="background:#58a6ff"></span>next() call — control flows down</span>
+          <span class="sqlexec-legend"><span class="sqlexec-dot" style="background:#f59e0b"></span>tuple / batch — data flows up</span>
+          <span class="sqlexec-speed">Speed <input type="range" id="sqlexec-speed" min="0.5" max="2" step="0.25" value="1"><span id="sqlexec-speed-val">1x</span></span>
+        </div>
+        <div class="sqlexec-note">
+          <strong>Trade-off:</strong> pull makes <code>LIMIT</code> trivial — just stop calling
+          <code>next()</code> — but pays a virtual function call per tuple per operator.
+          Push fuses operators into tight, vectorizable loops (Hyper, DuckDB, ClickHouse)
+          but needs explicit cancellation to stop early. Postgres still runs Volcano-style pull;
+          most modern analytical engines went push or vectorized hybrids.
+        </div>
+      </section>
+
       <div class="insight">🔹 Execution model isn't academic: it dictates memory management and spill logic. Every later operator must respect this.</div>
     </div>
     <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The execution model is not an implementation detail — it is the floor on which every other decision is built. A pull-based model that cannot spill will fail under real load, invisibly in staging, catastrophically in production. Every architectural pattern has a failure mode that only becomes visible at scale or under resource pressure. The senior engineering skill is knowing what each pattern fails on before selecting it, not discovering it during an incident.</p></div>
@@ -664,6 +756,69 @@ Snapshot rule: read only versions where
       });
     });
   })();
+</script>
+<script>
+(function () {
+  var playing = true, t0 = performance.now(), paused = 0, pauseStart = 0, speed = 1;
+  var call    = document.getElementById('sqlexec-pull-call');
+  var callDot = document.getElementById('sqlexec-call-dot');
+  var callLbl = document.getElementById('sqlexec-call-label');
+  var tuple   = document.getElementById('sqlexec-pull-tuple');
+  var batches = [
+    document.getElementById('sqlexec-batch-0'),
+    document.getElementById('sqlexec-batch-1'),
+    document.getElementById('sqlexec-batch-2')
+  ];
+  var btn      = document.getElementById('sqlexec-play');
+  var speedEl  = document.getElementById('sqlexec-speed');
+  var speedVal = document.getElementById('sqlexec-speed-val');
+  var TOP = 90, BOTTOM = 330, CYCLE = 3000, BATCH_CYCLE = 1400;
+
+  btn.addEventListener('click', function () {
+    playing = !playing;
+    if (!playing) { pauseStart = performance.now(); btn.textContent = '▶ Play'; }
+    else { paused += performance.now() - pauseStart; btn.textContent = '⏸ Pause'; }
+  });
+
+  speedEl.addEventListener('input', function () {
+    speed = parseFloat(speedEl.value);
+    speedVal.textContent = speed + 'x';
+  });
+
+  function frame(now) {
+    if (playing) {
+      var elapsed = (now - t0 - paused) * speed;
+      var t = (elapsed % CYCLE) / CYCLE;
+      if (t < 0.42) {
+        var p = t / 0.42;
+        var y = TOP + (BOTTOM - TOP) * p;
+        call.setAttribute('opacity', 1);
+        callDot.setAttribute('cy', y);
+        callLbl.setAttribute('y', y + 4);
+        tuple.setAttribute('opacity', 0);
+      } else if (t < 0.5) {
+        call.setAttribute('opacity', 0);
+        tuple.setAttribute('opacity', 0);
+      } else if (t < 0.92) {
+        var p2 = (t - 0.5) / 0.42;
+        tuple.setAttribute('opacity', 1);
+        tuple.setAttribute('cy', BOTTOM - (BOTTOM - TOP) * p2);
+        call.setAttribute('opacity', 0);
+      } else {
+        tuple.setAttribute('opacity', 0);
+      }
+      for (var i = 0; i < 3; i++) {
+        var tb = ((elapsed / BATCH_CYCLE) + i / 3) % 1;
+        var yb = BOTTOM - (BOTTOM - TOP) * tb;
+        var fade = tb < 0.08 ? tb / 0.08 : (tb > 0.92 ? (1 - tb) / 0.08 : 1);
+        batches[i].setAttribute('opacity', fade * 0.95);
+        batches[i].setAttribute('transform', 'translate(0,' + (yb - BOTTOM) + ')');
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
 <script src="../audio-module.js"></script>
 <script>
