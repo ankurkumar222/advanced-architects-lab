@@ -229,6 +229,16 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -285,6 +295,7 @@ Consumer B -> currently at offset 1
       <div class="q-answer"><div class="q-answer-inner">Closer to a <b>database commit log</b> that happens to support pub/sub semantics on top. A queue implies single consumption; a log implies durable, independently-replayable history.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Why does this "log" model make event replay possible at all?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Because reading never mutates or removes the underlying record. Replay is just <b>rewinding an offset pointer</b>. In a delete-after-ack queue, once it's gone, there's nothing to rewind to.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Kafka is not a faster queue — it's a different abstraction. The log model means the data outlives any one consumer. That's the feature, not a side effect.</p></div>
   </section>
 
   <!-- SEGMENT 2 : TEAL -->
@@ -326,6 +337,7 @@ commits offset = 103   // means "next time, start at 103"
       <div class="q-answer"><div class="q-answer-inner">Three things together: <b>offset commit timing</b>, <b>consumer group rebalancing</b>, and <b>replay from last committed position</b>.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Is offset commit timing more dangerous early or late — and why?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Commit <b>too early</b> risks logical <b>data loss</b>. Commit <b>too late</b> risks <b>duplicates</b>. Most systems bias toward "too late" and handle duplicates with idempotency, since loss is usually worse.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>With no broker to hide messages, correctness is your consumer's job. Offset commit timing is not a config detail — it's where your at-least-once guarantee is actually made or broken.</p></div>
   </section>
 
   <!-- SEGMENT 4 : VIOLET -->
@@ -397,6 +409,7 @@ C2 dies -> rebalance -> C1->P0,P1   C3->P2</pre>
       <div class="q-answer"><div class="q-answer-inner">Almost never. Different partitions are consumed independently and can drift arbitrarily.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q26</span><span class="q-text">In SQS, one message is "work for one consumer." In Kafka, one event can feed many independent systems. What changes in your design thinking?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">The topic becomes <b>shared infrastructure</b> — you design event schemas for many unknown future consumers, raising the investment needed in schema evolution.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Ordering in Kafka is scoped to a partition, not a topic. If you need ordering, you're really saying "I need a routing strategy." Design the key, not the cluster.</p></div>
   </section>
 
   <!-- SEGMENT 8 : GOLD -->
@@ -434,6 +447,7 @@ compacted view tends toward:  A->v3   B->v2</pre>
       <div class="q-answer"><div class="q-answer-inner">Usually <b>yes</b> — you'd pay for partition planning, offset management, and retention tuning for guarantees you never needed.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q32</span><span class="q-text">Your workload: the same event must feed 5 downstream systems, and new ones will appear later. Is SQS too weak?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>Yes</b> — SQS's delete-after-ack model fights fan-out to independent readers. This is Kafka's home turf.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Choosing Kafka for simple job dispatch is over-engineering. Choosing SQS for a shared event log is under-engineering. Knowing which one fits your use case is the actual skill.</p></div>
   </section>
 
   <!-- SEGMENT 10 : PURPLE -->

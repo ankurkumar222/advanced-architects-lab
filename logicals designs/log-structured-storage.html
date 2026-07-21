@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Log-Structured Storage</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+  pre.bad{border-left-color:#fc8181}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  .qblock{margin-top:24px}
+  .qblock > .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--q);margin-bottom:12px;
+  }
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin-bottom:8px;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:12px;color:var(--q);min-width:34px;padding-top:1px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 14px 62px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .q-body pre{margin:10px 0;font-size:12px}
+  .verdict{color:var(--ok);font-weight:600}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px;letter-spacing:.05em}
+  .q.open .hint{color:var(--ok)}
+
+  /* prose recap card (no Q number) */
+  .q.recap .qid{min-width:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase}
+  .q.recap .q-body{padding-left:16px}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    .q-body{padding-left:16px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Storage Engines</div>
+  <h1>Log-Structured Storage</h1>
+  <p class="sub">Looks simple: append data to a log. Then it becomes writes, reads, compaction, crash recovery, indexing, deletes, and three kinds of amplification.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all answers</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#f1"><span class="num">F1</span>Core idea</a></li>
+    <li><a href="#f2"><span class="num">F2</span>What is log-structured storage?</a></li>
+    <li><a href="#s1"><span class="num">01</span>How do we know the latest version?</a></li>
+    <li><a href="#s2"><span class="num">02</span>What happens to old stale data?</a></li>
+    <li><a href="#s3"><span class="num">03</span>How do deletes work?</a></li>
+    <li><a href="#s4"><span class="num">04</span>Writing safely across a crash</a></li>
+    <li><a href="#s5"><span class="num">05</span>Immutable segments and fast reads</a></li>
+    <li><a href="#s6"><span class="num">06</span>What exactly is being compacted?</a></li>
+    <li><a href="#s7"><span class="num">07</span>The three amplifications</a></li>
+    <li><a href="#s8"><span class="num">08</span>Designing the write path</a></li>
+    <li><a href="#s9"><span class="num">09</span>Designing the read path</a></li>
+    <li><a href="#s10"><span class="num">10</span>What happens on startup / restart?</a></li>
+    <li><a href="#s11"><span class="num">11</span>How should segments be organized?</a></li>
+    <li><a href="#s12"><span class="num">12</span>Is this just a log, or LSM-like?</a></li>
+  </ol>
+</div>
+
+<!-- ============ F1 ============ -->
+<section id="f1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>Core idea</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is one of those systems that looks simple at first: <strong>append data to a log</strong>. But once you go deeper, it becomes a very rich design problem:</p>
+<pre>writes
+reads
+compaction
+crash recovery
+indexing
+deletes
+space amplification
+read amplification
+merge policy</pre>
+
+    <p>In a log-structured storage system, instead of updating data in place, we mostly do:</p>
+<pre>old version stays
+new version is appended</pre>
+    <p>So storage becomes like a growing sequence of records.</p>
+
+    <h3 class="blk">Main mental model</h3>
+<pre>Traditional update:
+go to old place and overwrite
+
+Log-structured update:
+append new version at end
+later clean old versions</pre>
+
+    <h3 class="blk">Why people use it</h3>
+    <p>Because appends are usually good for:</p>
+    <ul>
+      <li>high write throughput</li>
+      <li>crash recovery simplicity</li>
+      <li>immutable segment design</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ F2 ============ -->
+<section id="f2" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>What is log-structured storage?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">In-place update model</h3>
+<pre>Disk / file
++----+----+----+----+----+----+
+| A  | B  | C  | D  | E  | F  |
++----+----+----+----+----+----+
+
+Update C
++----+----+----+----+----+----+
+| A  | B  | C' | D  | E  | F  |
++----+----+----+----+----+----+</pre>
+    <p>We go back and overwrite.</p>
+
+    <h3 class="blk">Log-structured model</h3>
+<pre class="state">Initial log
++----+----+----+----+
+| A  | B  | C  | D  |
++----+----+----+----+
+
+Update C
++----+----+----+----+----+
+| A  | B  | C  | D  | C' |
++----+----+----+----+----+</pre>
+    <p>Old C remains. New C' is appended.</p>
+<pre class="state">Another update
++----+----+----+----+----+----+
+| A  | B  | C  | D  | C' | C''|
++----+----+----+----+----+----+</pre>
+    <div class="note">Now the latest value of C is C''.</div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Log-structured storage makes writes fast by making reads and compaction do more work. Every design decision in an LSM engine flows from this single trade-off.</p></div>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>If old versions remain, how do we know the latest one?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Log</h3>
+<pre>offset 10 -> key=A value=1
+offset 20 -> key=B value=7
+offset 30 -> key=A value=2
+offset 40 -> key=C value=9
+offset 50 -> key=A value=3</pre>
+    <p>What is the latest value of A? The one with highest valid offset / newest sequence:</p>
+<pre>A = 3</pre>
+
+    <h3 class="blk">But scanning full log is bad</h3>
+<pre class="bad">Read A
+--> scan log
+--> find A at 10
+--> find A at 30
+--> find A at 50
+--> choose latest</pre>
+    <p>Works conceptually, terrible for performance.</p>
+
+    <h3 class="blk">So we build an index</h3>
+<pre>In-memory index
+
+A -> offset 50
+B -> offset 20
+C -> offset 40</pre>
+<pre class="flow">Read path:
+key A
+ |
+ v
+mem index says offset 50
+ |
+ v
+read record at offset 50</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q1</span><span class="q-text">If data is append-only, is the real system actually <code>log + index</code> rather than just log?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Yes. Very important.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q2</span><span class="q-text">If the index is in memory, what happens when machine restarts?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q3</span><span class="q-text">Can you rebuild index from log after crash?</span><span class="hint">＋</span></div><div class="q-body"><pre>yes
+but maybe slow</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q4</span><span class="q-text">Should index point to what?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>exact byte offset?</li><li>segment id + offset?</li><li>block id?</li><li>latest sequence number?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q5</span><span class="q-text">If key is updated 1 million times, do we want all historical entries forever?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>If appending is easy, what happens to old stale data?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Because append-only creates garbage.</p>
+<pre>write A=1
+write A=2
+write A=3
+write A=4
+
+Log becomes:
++-------------------------------+
+| A=1 | A=2 | A=3 | A=4         |
++-------------------------------+</pre>
+    <p>Only latest value matters for current state:</p>
+<pre>A=4 is live
+A=1 A=2 A=3 are stale</pre>
+
+    <h3 class="blk">Storage picture</h3>
+<pre>Segment 1:
++-----------------------------+
+| A=1 | B=1 | C=1 | D=1       |
++-----------------------------+
+
+Segment 2:
++-----------------------------+
+| A=2 | C=2 | E=1 | F=1       |
++-----------------------------+
+
+Segment 3:
++-----------------------------+
+| A=3 | B=2 | G=1 | H=1       |
++-----------------------------+</pre>
+    <p>Current live values might be:</p>
+<pre>A -> from seg3
+B -> from seg3
+C -> from seg2
+D -> from seg1
+E -> from seg2
+F -> from seg2
+G -> from seg3
+H -> from seg3</pre>
+    <p>Many old entries are dead.</p>
+
+    <h3 class="blk">So we need compaction / cleaning</h3>
+<pre class="flow">Old segments
+   |
+   v
+read them
+   |
+   v
+keep only latest live records
+   |
+   v
+write new compacted segments</pre>
+
+    <h3 class="blk">Compaction sketch</h3>
+<pre>Before compaction
+
+Seg1: [A1][B1][C1][D1]
+Seg2: [A2][C2][E1][F1]
+Seg3: [A3][B2][G1][H1]
+
+Latest live:
+A3 B2 C2 D1 E1 F1 G1 H1</pre>
+<pre class="state">After compaction
+
+Seg4: [A3][B2][C2][D1][E1][F1][G1][H1]</pre>
+    <p>Old segments can be deleted.</p>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q6</span><span class="q-text">If compaction removes old versions, is the system still truly append-only?</span><span class="hint">＋</span></div><div class="q-body">
+        <p>Interesting answer:</p>
+<pre>write path        = append-only
+storage lifecycle = append + rewrite + delete old segments</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q7</span><span class="q-text">What is the real tradeoff?</span><span class="hint">＋</span></div><div class="q-body"><pre>fast writes now
+cleaning cost later</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q8</span><span class="q-text">If workload is update-heavy, what happens?</span><span class="hint">＋</span></div><div class="q-body"><pre>same key rewritten many times
+garbage grows quickly
+compaction pressure rises</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q9</span><span class="q-text">If compaction is too aggressive, what happens?</span><span class="hint">＋</span></div><div class="q-body"><pre>high rewrite cost
+CPU cost
+I/O contention
+write amplification</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q10</span><span class="q-text">If compaction is too lazy, what happens?</span><span class="hint">＋</span></div><div class="q-body"><pre>wasted space
+slower reads
+longer restart rebuild
+worse cache efficiency</pre></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Compaction isn't housekeeping — it's how the system stays correct. If compaction falls behind, reads get slower and storage grows. Compaction lag is an early warning sign.</p></div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>How do deletes work in append-only storage?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">In in-place storage, delete may mean “remove or mark deleted at same place”. In log-structured storage, we usually append a <strong>tombstone</strong>.</p>
+
+    <h3 class="blk">Delete sketch</h3>
+<pre>write A=100
+write B=200
+delete A
+
+Log:
++----------------------------------+
+| A=100 | B=200 | A=TOMBSTONE      |
++----------------------------------+</pre>
+    <div class="note">Meaning: latest state of A = deleted.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q11</span><span class="q-text">Why can't we just physically erase old A=100 immediately?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Because old value may exist in old immutable segment.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q12</span><span class="q-text">If tombstone itself is later compacted away, when is it safe?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Only when system is sure no older value can come back from remaining segments.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q13</span><span class="q-text">How long should tombstones live?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q14</span><span class="q-text">What happens in replicated/distributed setup if one replica sees delete later than another?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q15</span><span class="q-text">Can delete be treated as just another version?</span><span class="hint">＋</span></div><div class="q-body">
+        <p><span class="verdict">Yes:</span></p>
+<pre>value version
+or
+delete version</pre>
+        <p>That is a clean mental model.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>How do we write safely without corrupting state on a crash?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">One major strength of log-structured systems is that crash handling can be elegant, because append has nice properties.</p>
+
+    <h3 class="blk">Write flow</h3>
+<pre class="flow">client write
+   |
+   v
+append record to active log segment
+   |
+   v
+flush / fsync as required
+   |
+   v
+update in-memory index</pre>
+    <p>But ordering matters.</p>
+
+    <h3 class="blk">Important crash scenario</h3>
+<pre class="bad">Wrong order
+1. update index in memory
+2. crash before log persisted</pre>
+    <p>After restart, index pointed to data that never became durable. Bad.</p>
+<pre class="state">Better order
+1. append to log buffer
+2. persist / checksum / fsync
+3. then expose as committed
+4. update in-memory structures</pre>
+
+    <h3 class="blk">Crash recovery sketch</h3>
+<pre>Log segment bytes:
+[record1][record2][record3][partial garbage....crash]
+
+Recovery:
+scan until last valid checksum / length boundary
+ignore torn tail</pre>
+
+    <div class="q recap">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say why ordering matters in your own words — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>In a log-structured storage system, the log must become durable first, and only after that should the system behave as if the write is real. Why? Because memory can lie after a crash.</p>
+        <p>If you update the in-memory index first and the machine crashes before the log record is actually flushed to disk, then after restart your system may think the data exists, but the durable storage does not contain it. That means the index was pointing to something that was never safely saved. This creates corruption or inconsistency.</p>
+        <p>So the safe idea is:</p>
+<pre>write to log -> persist it properly -> mark it committed / visible -> update memory structures</pre>
+        <p>This ordering ensures that whatever the system exposes as written already exists in durable form.</p>
+        <p>In recovery, the system reads the log from the start and trusts only the part that is fully valid. If the crash happened in the middle of writing the last record, the tail may contain partial or torn bytes. Using record length and checksum, recovery can detect where the last good record ends and simply ignore the broken tail. So append-only logs make crash recovery simpler, as long as write ordering is correct.</p>
+      </div>
+    </div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q16</span><span class="q-text">What is the actual source of truth after crash?</span><span class="hint">＋</span></div><div class="q-body"><pre class="state">the durable log
+not the in-memory index</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q17</span><span class="q-text">Can every in-memory structure be rebuilt from durable log?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">If yes, design is cleaner.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q18</span><span class="q-text">Do you need checksum per record, per block, or per segment?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q19</span><span class="q-text">What happens if crash occurs in middle of a record?</span><span class="hint">＋</span></div><div class="q-body"><p>Need record framing:</p><pre>[length][key][value][checksum]</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q20</span><span class="q-text">Is fsync after every write necessary?</span><span class="hint">＋</span></div><div class="q-body"><pre>safer
+slower</pre><p>So often we batch.</p></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A write that hasn't hit durable storage isn't really a write. The WAL is the line between what you promised your caller and what you can actually survive a crash with.</p></div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>If segments are immutable, how do reads stay fast?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Append-only alone is not enough. Fast reads require structure.</p>
+
+    <h3 class="blk">Segment model</h3>
+    <p>Instead of one giant infinite log, usually we use segments.</p>
+<pre>Segment 1
+Segment 2
+Segment 3
+Segment 4 (active write segment)
+
+old segments   = immutable
+current segment = appendable</pre>
+<pre class="state">+---------+  +---------+  +---------+  +---------+
+| Seg 1   |  | Seg 2   |  | Seg 3   |  | Seg 4   |
+| sealed  |  | sealed  |  | sealed  |  | active  |
++---------+  +---------+  +---------+  +---------+</pre>
+    <p>This gives many benefits:</p>
+    <ul>
+      <li>easier compaction</li>
+      <li>easier crash recovery</li>
+      <li>easier indexing</li>
+      <li>easier file lifecycle</li>
+    </ul>
+
+    <h3 class="blk">Read lookup options</h3>
+<pre>memtable / sparse index / bloom filter / block index</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q21</span><span class="q-text">If we keep full key→offset map in RAM, what happens at very large scale?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q22</span><span class="q-text">If index is sparse, what does read path become?</span><span class="hint">＋</span></div><div class="q-body"><pre>find segment
+find block
+scan small local area</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q23</span><span class="q-text">Should recent data be easier to read than old data?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Often yes, because recent data is more likely to be hot.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q24</span><span class="q-text">Is read amplification acceptable if write throughput improves massively?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q25</span><span class="q-text">Where should bloom filters be used?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">A great design question.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>What exactly is being compacted?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Compaction is not just “merge files”. It is:</p>
+<pre>determine live records
+drop stale versions
+preserve newest visible state
+preserve delete semantics
+rewrite into new clean segments</pre>
+<pre>Input segments:
+Seg1: [A1][B1][C1]
+Seg2: [A2][D1][E1]
+Seg3: [B2][A3][F1]
+
+Choose newest per key:
+A3 B2 C1 D1 E1 F1
+
+Write compacted output:
+Seg4: [A3][B2][C1][D1][E1][F1]</pre>
+
+    <h3 class="blk">How do we know A3 is newer than A2?</h3>
+    <p>Need version ordering by one of these:</p>
+<pre>- log position
+- sequence number
+- timestamp
+- hybrid logical clock
+- version vector in distributed system</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q26</span><span class="q-text">Should “newest” mean highest offset, latest timestamp, or latest sequence number?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">These are not always equivalent.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q27</span><span class="q-text">If clocks differ across machines, can timestamp-based newest be wrong?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Yes. Very dangerous in distributed systems.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q28</span><span class="q-text">If compactor runs while new writes are coming, what snapshot should it respect?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q29</span><span class="q-text">How do you prevent compactor from keeping an older value because index changed mid-run?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q30</span><span class="q-text">Should compaction be per segment pair, level, size tier, or time window?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Very important design choice.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>Write vs read vs space amplification</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is one of the deepest architect-level tradeoff zones.</p>
+    <p>In log-structured storage, data is first appended quickly, but later the system has to manage old and new versions, and that creates three kinds of extra cost.</p>
+
+    <h3 class="blk">1. Write amplification</h3>
+    <p>One small user write may be rewritten many times during compaction, so the system writes much more data internally than the user actually sent.</p>
+<pre>user wrote 1 MB
+system eventually writes 4 MB total internally</pre>
+
+    <h3 class="blk">2. Read amplification</h3>
+    <p>Reading one key may require checking multiple places, because the latest value could be in memory, a newer segment, or an older segment.</p>
+<pre>read key K
+check memtable
+check recent segment
+check older segment
+check disk block</pre>
+
+    <h3 class="blk">3. Space amplification</h3>
+    <p>Old stale data stays on disk until compaction cleans it up, so physical storage used can be much larger than the actual live data.</p>
+<pre>logical live data = 100 GB
+physical stored   = 300 GB</pre>
+
+    <h3 class="blk">Triangle sketch</h3>
+<pre class="flow">                +------------------+
+                |  Write Amplify   |
+                +------------------+
+                   /            \
+                  /              \
+                 /                \
+                v                  v
+      +----------------+    +----------------+
+      | Read Amplify   |    | Space Amplify  |
+      +----------------+    +----------------+</pre>
+    <div class="note">Usually reducing one hurts another.</div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q31</span><span class="q-text">If I compact aggressively, what happens?</span><span class="hint">＋</span></div><div class="q-body"><pre>space improves
+reads improve
+writes worsen</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q32</span><span class="q-text">If I compact lazily, what happens?</span><span class="hint">＋</span></div><div class="q-body"><pre>writes improve
+space worsens
+reads may worsen</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q33</span><span class="q-text">Which amplification matters most for my workload?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>write-heavy ingest store?</li><li>read-heavy KV store?</li><li>archival store?</li><li>SSD vs HDD?</li><li>cloud object storage?</li></ul></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Write amplification, read amplification, and space amplification cannot all be minimized at once. Choosing a storage engine means choosing which one you can live with.</p></div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>How do we design the write path?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Common write path</h3>
+<pre class="flow">Client write
+   |
+   v
+Memtable
+   |
+   v
+Append to WAL / active segment
+   |
+   v
+Ack after durability policy
+   |
+   v
+Later flush buffer to immutable segment</pre>
+    <p>Depending on the system, WAL and segment may be same or separate.</p>
+<pre class="flow">             +-------------------+
+write -----> | memory buffer     |
+             +---------+---------+
+                       |
+                       v
+             +-------------------+
+             | append log        |
+             +---------+---------+
+                       |
+                       v
+             +-------------------+
+             | fsync / durable   |
+             +-------------------+</pre>
+
+    <div class="q recap">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say the simple view in your own words — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>When a write comes, the system first updates the in-memory hashmap / memtable for fast access, but memory can be lost on crash, so before saying “write successful,” it also appends the write to disk in a crash-safe way. That disk append is called WAL (Write-Ahead Log) or active segment.</p>
+        <p>“fsync / durable” means forcing that appended log record to actually reach a stable disk, not just stay in the OS cache.</p>
+      </div>
+    </div>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q35</span><span class="q-text">If log itself is already append-only, why also use memtable/buffer?</span><span class="hint">＋</span></div><div class="q-body"><p>Because:</p><ul><li>fewer disk writes</li><li>batching</li><li>sorted flush possible</li><li>better throughput</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q36</span><span class="q-text">Should acknowledgment happen after memory only, OS page cache, fsync, or replication quorum?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">This changes durability semantics.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q37</span><span class="q-text">If system acknowledges before true durability, what failures are acceptable?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q38</span><span class="q-text">Does buffer preserve write order? Should it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>How do we design the read path?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="flow">Read key K
+   |
+   +--> check in-memory latest map?
+   |
+   +--> if not found, check recent immutable segments
+   |
+   +--> maybe use bloom filter to skip impossible segments
+   |
+   +--> find exact block/index
+   |
+   +--> return latest visible value</pre>
+
+    <h3 class="blk">Segment search sketch</h3>
+<pre>Newest segment first
+Seg 9  --> maybe K ?
+Seg 8  --> maybe K ?
+Seg 7  --> maybe K ?
+Seg 6  --> maybe K ?</pre>
+    <p>If no help, reads become expensive. So people add:</p>
+    <ul><li>bloom filters</li><li>block caches</li></ul>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q39</span><span class="q-text">Why search newest segment first?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Because latest version likely resides there.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q40</span><span class="q-text">If key does not exist, could read become more expensive than existing-key read?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Yes, unless bloom filters help.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q41</span><span class="q-text">Should absent-key optimization be a first-class design goal?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">In KV stores, yes, often important.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q42</span><span class="q-text">How much RAM should be spent on cache, index, bloom filters, memtable?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">This is a beautiful system design balance question.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 10</span><h2>What happens on startup / restart?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Restart picture</h3>
+<pre>System crashes
+memory gone
+disk segments remain</pre>
+    <p>Need to restore:</p>
+<pre>latest index
+active segment position
+valid committed tail
+compaction state if any</pre>
+
+    <h3 class="blk">Recovery sketch</h3>
+<pre class="flow">On startup:
+1. find segment files
+2. scan metadata / manifests
+3. rebuild or load indexes
+4. detect incomplete tail
+5. resume service</pre>
+
+    <h3 class="blk">Two design styles</h3>
+    <p><strong>A. Rebuild from data</strong></p>
+<pre>scan log / segments
+reconstruct index</pre>
+    <p>Simple, but maybe slow.</p>
+    <p><strong>B. Keep checkpoints / manifests</strong></p>
+<pre>load saved metadata
+do small delta replay</pre>
+    <p>Faster, more metadata complexity.</p>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q43</span><span class="q-text">Should restart time be proportional to total data size?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Bad at large scale.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q44</span><span class="q-text">What metadata must itself be durable?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q45</span><span class="q-text">If manifest says one thing and segment says another after crash, who wins?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q46</span><span class="q-text">Can startup trust previous compaction outputs immediately, or must it verify?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11</span><h2>How should segments be organized?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is where many systems diverge.</p>
+
+    <h3 class="blk">Segment lifecycle</h3>
+<pre class="state">active segment
+   |
+   v
+sealed immutable segment
+   |
+   v
+candidate for compaction
+   |
+   v
+obsolete after merge</pre>
+<pre class="state">ACTIVE ---> SEALED ---> COMPACTING ---> REPLACED ---> DELETED</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q47</span><span class="q-text">How big should a segment be?</span><span class="hint">＋</span></div><div class="q-body"><pre>too small -> too many files, too much metadata
+too large -> compaction becomes heavy, reads less localized</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q48</span><span class="q-text">Should segment size be fixed or adaptive?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q49</span><span class="q-text">Should segments be sorted by key internally after flush?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Huge design consequence.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q50</span><span class="q-text">What is easier to compact — unsorted append segments or sorted SSTable-like segments?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">That question leads toward LSM-style thinking.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 12</span><h2>Is this just a log, or does it become LSM-like?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Pure log-structured storage can mean raw append history. But many practical systems evolve toward something like:</p>
+<pre>write fast like a log
+organize immutable sorted segments
+compact/merge in background</pre>
+    <p>That is why log-structured storage and LSM-style storage are conceptually close in many systems.</p>
+<pre class="flow">Writes -> append
+Flush  -> immutable segment
+Merge  -> cleaner larger segment
+Reads  -> index + filters + segment search</pre>
+
+    <div class="qblock">
+      <div class="lbl">Questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q51</span><span class="q-text">At what point does “append-only log storage” become “multi-level merged storage”?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q52</span><span class="q-text">If segments are sorted, compaction is easier or harder?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Usually easier for merge logic, but flush path changes.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q53</span><span class="q-text">If segments are unsorted, write path is simpler or faster, but read path/compaction may get harder. Which side do you want to optimize?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>Architects Lab · Log-Structured Storage · 12 problems</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

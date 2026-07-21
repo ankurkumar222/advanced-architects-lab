@@ -151,6 +151,17 @@
 
   footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
   @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -299,6 +310,7 @@ KAFKA: stores how truth evolved
         <p>Exactly. Databases store current truth. Kafka stores how truth evolved.</p></div>
         <div class="insight"><b>Where this leaves us:</b> once you accept "history, not state," append-only isn't a storage optimization anymore — it's the only model consistent with what an event actually is. This is also the moment "database vs Kafka" stops being a fair comparison; they're answering different questions.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Events are facts about what happened. Facts don't get updated. If you design a system that needs to "correct" an event, you're not modeling events — you're modeling state, and you need a different tool.</p></div>
   </section>
 
   <!-- STAGE 3 -->
@@ -363,6 +375,7 @@ Eventually coordination cost EXCEEDS throughput gain.</pre></div>
         <div class="turn a"><div class="who">A</div><p>Exactly. Architecture is always balancing one bottleneck against another.</p></div>
         <div class="insight"><b>Where this leaves us:</b> partitions aren't a free scaling dial — they're a trade of coordination overhead for parallelism. Every later stage that touches partition count (sizing, rebalancing, controller load) is really just this same trade-off showing up again in a new place.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>More partitions means more parallelism — up to a point. Beyond that point, you're paying coordination cost for throughput you'll never see. Picking the right partition count is a capacity decision, not a "bigger is better" default.</p></div>
   </section>
 
   <!-- STAGE 5 -->
@@ -448,6 +461,7 @@ Fix: give the producer an IDENTITY + a SEQUENCE NUMBER
         <div class="turn a"><div class="who">A</div><p>Now you've entered the realm of exactly-once semantics. Notice how we arrived there naturally, from failure analysis — not because it was a feature on a slide.</p></div>
         <div class="insight"><b>Where this leaves us:</b> this is the pattern across the whole conversation — every "feature" (offsets, leaders, sequence numbers) showed up because a previous decision created a problem that needed solving, never because it was on a spec sheet.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>At-least-once delivery is what you get by default when retries exist. Exactly-once requires the consumer to be idempotent. You don't get to skip that design step — you just choose when to do it.</p></div>
   </section>
 
   <!-- STAGE 8 -->

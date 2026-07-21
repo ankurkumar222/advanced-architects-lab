@@ -282,6 +282,17 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
   .arrow{ display:none; }
   .diagram-block{ font-size:11.5px; }
 }
+
+.eng-philosophy{
+  margin-top:20px;padding:13px 17px;border-radius:6px;
+  background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+  border-left:3px solid #C2185B;font-size:.86rem;
+}
+.eng-philosophy .ep-label{
+  display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+  letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+}
+.eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -327,6 +338,7 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
     <div class="intro-box">
       A parcel moving through customs doesn't get fully inspected at one desk. Each checkpoint checks <strong>one thing</strong> — passport, ticket, baggage, gate — and passes it on. A web request works the same way. DNS never looks at HTTP. The Layer 4 balancer never looks at a URL path. The Gateway never picks the pod. <strong>No component tries to do the next one's job</strong> — and that's exactly what lets each layer scale, fail, and get replaced independently.
     </div>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Each layer in the request path does exactly one job. The moment a component tries to do the next layer's job too, you've created a dependency that makes both layers harder to change, scale, or replace.</p></div>
   </section>
 
   <section id="rl2">
@@ -393,6 +405,7 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
         </ul>
       </div>
     </div>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The Load Balancer and API Gateway are not competing — they operate at different altitudes. The LB decides who gets the connection. The Gateway decides what happens to the request. Confusing the two leads to putting business logic where it doesn't belong.</p></div>
   </section>
 
   <section id="rl6">
@@ -457,6 +470,7 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
    ├──▶ <span class="c-end">Server 2</span>
    └──▶ <span class="c-end">Server 3</span></div>
     <p class="diagram-caption">Two separate problems, solved by two separate systems — reaching the LB is a routing/DNS problem, picking the server is the LB's own problem.</p>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>"How do I reach the load balancer?" and "which backend should handle my request?" are two completely separate problems. They fail differently, scale differently, and need different solutions. Design them separately.</p></div>
   </section>
 
   <!-- ================= NEW: L4 USE CASE ================= -->

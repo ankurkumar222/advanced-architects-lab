@@ -287,6 +287,17 @@ section.divider{ border-top:1px solid var(--border); }
 footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size:13px; font-family:'JetBrains Mono', monospace; border-top:1px solid var(--border); margin-top:40px; }
 
 @media (max-width:640px){ .diagram-block{ font-size:11.5px; } }
+
+.eng-philosophy{
+  margin-top:20px;padding:13px 17px;border-radius:6px;
+  background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+  border-left:3px solid #C2185B;font-size:.86rem;
+}
+.eng-philosophy .ep-label{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:.67rem;font-weight:600;
+  letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+}
+.eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -342,6 +353,7 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
       </div>
     </div>
     <p class="lede" style="margin-top:18px;">A single client request can trigger 10+ East-West calls before a response goes back. This is the traffic a <strong>service mesh</strong> exists to manage — and the sidecar pattern is how it gets in position to do it.</p>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Load balancers solve North-South traffic. Service meshes solve East-West traffic. These are different problems. Applying the same tool to both usually means solving one problem well and the other poorly.</p></div>
   </section>
 
   <!-- ================= ANATOMY OF A POD ================= -->
@@ -382,6 +394,7 @@ footer{ text-align:center; padding:48px 24px 60px; color:var(--muted); font-size
       </button>
       <div class="reveal-a"><div class="reveal-a-inner">Think of a motorcycle sidecar: it travels everywhere the bike goes, starts and stops with it — but it isn't the engine, and it doesn't steer. It just carries something the rider doesn't want strapped to their own back. That's the whole idea. <strong>Monitoring, logging, and network policy are not your app's job</strong> — they're concerns that repeat identically across every service, regardless of whether that service is written in Go, Java, or Python. Push them into a sidecar once, and every app inherits them for free, upgraded on its own schedule, never touching app code.</div></div>
     </div>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>If cross-cutting concerns like retries, TLS, and observability live in the app code, you rewrite them in every service, in every language. A sidecar moves them to one place — deployed once, consistent everywhere, upgradeable without touching any app.</p></div>
   </section>
 
   <!-- ================= SIDECAR TYPES ACCORDION ================= -->
@@ -463,6 +476,7 @@ inside both apps</span></div>
       </button>
       <div class="reveal-a"><div class="reveal-a-inner">Nothing. The app's code is <em>identical</em> in both diagrams. It still just calls <code class="mono">payment-service:8080</code>. Traffic rules injected at pod startup silently redirect that call through the sidecar first. The app is unaware the mesh even exists.</div></div>
     </div>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The service mesh is infrastructure, not application code. The app calls a service name. The mesh handles retries, mTLS, and observability between them. The app doesn't need to know the mesh exists.</p></div>
   </section>
 
   <!-- ================= CONTROL PLANE VS DATA PLANE ================= -->
@@ -557,6 +571,7 @@ inside both apps</span></div>
       <span class="t1">A sidecar doesn't change what your app does.</span><br>
       <span class="t2">It changes what your app no longer has to do.</span>
     </div>
+    <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A passive sidecar is invisible when it fails. An in-path sidecar is a dependency — if it goes down, the pod loses network access. Know which kind you're running and design your availability model around it.</p></div>
   </section>
 
   <!-- ================= HOW THE SIDECAR EVEN GETS THERE ================= -->

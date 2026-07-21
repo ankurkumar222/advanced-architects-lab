@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Distributed Job Scheduler</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  .qblock{margin-top:24px}
+  .qblock > .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--q);margin-bottom:12px;
+  }
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin-bottom:8px;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:12px;color:var(--q);min-width:34px;padding-top:1px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 14px 62px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .q-body pre{margin:10px 0;font-size:12px}
+  .verdict{color:var(--ok);font-weight:600}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px;letter-spacing:.05em}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    .q-body{padding-left:16px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Distributed Systems</div>
+  <h1>Distributed Job Scheduler</h1>
+  <p class="sub">Foundations first, then nine main problems. Read the problem, sit with the diagram, then open the question only after you have answered it yourself.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all answers</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#f1"><span class="num">F1</span>Normal vs distributed scheduler</a></li>
+    <li><a href="#f2"><span class="num">F2</span>What is the real heart of this system?</a></li>
+    <li><a href="#f3"><span class="num">F3</span>State machine</a></li>
+    <li><a href="#f4"><span class="num">F4</span>Job definition vs job execution</a></li>
+    <li><a href="#s1"><span class="num">01</span>How do we know which jobs are due?</a></li>
+    <li><a href="#s2"><span class="num">02</span>Stopping two schedulers picking same job</a></li>
+    <li><a href="#s3"><span class="num">03</span>Should the scheduler also execute?</a></li>
+    <li><a href="#s4"><span class="num">04</span>How should workers execute jobs safely?</a></li>
+    <li><a href="#s5"><span class="num">05</span>Retry is not just retry</a></li>
+    <li><a href="#s6"><span class="num">06</span>Duplicate execution prevention</a></li>
+    <li><a href="#s7"><span class="num">07</span>Ordering and concurrency</a></li>
+    <li><a href="#s8"><span class="num">08</span>Scaling</a></li>
+    <li><a href="#s9"><span class="num">09</span>Failure handling</a></li>
+  </ol>
+</div>
+
+<!-- ============ F1 ============ -->
+<section id="f1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>Normal scheduler vs distributed scheduler</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre>Normal scheduler:
+one machine
+   |
+   +--> runs jobs</pre>
+<pre class="flow">Distributed scheduler:
+many machines
+   |
+   +--> share jobs
+   +--> balance load
+   +--> survive machine failure</pre>
+  </div>
+</section>
+
+<!-- ============ F2 ============ -->
+<section id="f2" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>What is the real heart of this system?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Not API. Not UI. Not dashboards. The real heart is this:</p>
+<pre>(1) Know WHICH job is due
+(2) Ensure ONLY ONE scheduler claims it
+(3) Ensure SOME worker executes it
+(4) Recover if something dies in between</pre>
+    <p>Main problem is <strong>NOT</strong>:</p>
+<pre>"how to run background jobs?"</pre>
+    <p>Main problem <strong>IS</strong>:</p>
+<pre class="flow">"how to run the right job,
+at the right time,
+on one owner,
+with safe recovery,
+under failure,
+without dangerous duplicates?"</pre>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The heart of a scheduler isn't timing — it's making sure the same job doesn't run twice. Design the ownership guarantee first, then worry about when to run.</p></div>
+  </div>
+</section>
+
+<!-- ============ F3 ============ -->
+<section id="f3">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>State machine</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="state">          +-----------+
+          | SCHEDULED |
+          +-----+-----+
+                |
+                v
+          +-----------+
+          | CLAIMED   |
+          +-----+-----+
+                |
+                v
+          +-----------+
+          |DISPATCHED |
+          +-----+-----+
+                |
+                v
+          +-----------+
+          | RUNNING   |
+          +--+-----+--+
+             |     |
+      success|     |fail
+             v     v
+       +---------+  +-----------+
+       |SUCCESS  |  | RETRY_WAIT|
+       +---------+  +-----+-----+
+                          |
+                          v
+                     +---------+
+                     | DLQ     |
+                     +---------+</pre>
+  </div>
+</section>
+
+<!-- ============ F4 ============ -->
+<section id="f4">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>Job definition vs job execution</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre>JOB DEFINITION  !=  JOB EXECUTION</pre>
+<pre>Job Definition
+--------------
+"Run report every hour"
+
+Execution records
+-----------------
+10:00 run -> success
+11:00 run -> fail
+11:05 retry -> success
+12:00 run -> success</pre>
+    <p>If you mix both into one row, complexity rises fast. Think of it like this: <strong>Job Definition is the rule, and Job Execution is each actual attempt to follow that rule.</strong></p>
+    <p>Example: “Run report every hour” is just one definition. But every time it actually runs — 10:00 success, 11:00 fail, 11:05 retry success, 12:00 success — those are separate execution records.</p>
+    <p>If you keep both in one row, that one row has to keep changing for every attempt, retry, failure, and history entry, which becomes messy. So we separate them: one row says what should happen, many rows say what actually happened each time.</p>
+
+<pre>JOB_DEFINITION
+--------------
+job_id = 101
+name = hourly_report
+schedule = every 1 hour
+next_run_time = 12:00
+status = ACTIVE
+payload = report_config_A</pre>
+<pre>JOB_EXECUTION
+-------------
+exec_id = 9001   job_id = 101   slot=10:00   attempt=1   SUCCESS
+exec_id = 9002   job_id = 101   slot=11:00   attempt=1   FAILED
+exec_id = 9003   job_id = 101   slot=11:00   attempt=2   SUCCESS
+exec_id = 9004   job_id = 101   slot=12:00   attempt=1   RUNNING</pre>
+
+    <h3 class="blk">How scheduler should work</h3>
+<pre>Step 1  Scheduler reads only JOB_DEFINITION
+        Find jobs where next_run_time <= now
+
+Step 2  Create a new JOB_EXECUTION row for that run
+        For 11:00 slot: create execution record
+
+Step 3  Send that execution to worker
+
+Step 4  Worker updates only JOB_EXECUTION
+        not the definition again and again
+
+Step 5  After dispatch, update JOB_DEFINITION.next_run_time
+        to next schedule time</pre>
+
+<pre class="flow">JOB_DEFINITION
+   |
+   | scheduler sees next_run_time = due
+   v
+create JOB_EXECUTION row
+   |
+   v
+dispatch to worker
+   |
+   v
+worker runs
+   |
+   v
+update JOB_EXECUTION status</pre>
+
+    <p>Because now both things are clean:</p>
+    <h3 class="blk">Definition table answers</h3>
+    <ul>
+      <li>what job is this?</li>
+      <li>when should it run next?</li>
+      <li>is it active?</li>
+    </ul>
+    <h3 class="blk">Execution table answers</h3>
+    <ul>
+      <li>what happened at 10:00?</li>
+      <li>did retry happen?</li>
+      <li>how many failures?</li>
+      <li>how long did it take?</li>
+    </ul>
+    <div class="note">If you mix both in one row, that becomes confusing.</div>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>How do we know which jobs are due?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Time line</h3>
+<pre>09:00 ---- 09:01 ---- 09:02 ---- 09:03 ---- 09:04
+
+Job A due at 09:01
+Job B due at 09:03
+Job C due at 09:03
+Job D due at 09:04</pre>
+    <p>Store next_run_time:</p>
+<pre>+--------------------------------------+
+| job_id | next_run_time | status      |
++--------------------------------------+
+| A      | 09:01         | scheduled   |
+| B      | 09:03         | scheduled   |
+| C      | 09:03         | scheduled   |
+| D      | 09:04         | scheduled   |
++--------------------------------------+</pre>
+    <p>Scheduler asks:</p>
+<pre>SELECT jobs
+WHERE next_run_time &lt;= now
+AND status = 'scheduled'</pre>
+    <div class="note">Give me all jobs whose planned run time has come or passed, and which have not yet started / completed / failed.</div>
+
+    <div class="qblock">
+      <div class="lbl">Thoughtful-Q</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q1</span><span class="q-text">If you have 500 million jobs, can you still scan by time efficiently?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Bad:
+scan full table
+
+Good:
+index by next_run_time</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q2</span><span class="q-text">If many jobs are due at exactly 09:00, what happens?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>09:00 bucket explodes
+A A A A A A A A A A A A</pre>
+        <p>Do you:</p>
+        <ul><li>dispatch all at once?</li><li>batch them?</li><li>rate limit them?</li><li>prioritize them?</li></ul>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q3</span><span class="q-text">Should next_run_time be in one global table, or partitioned by shard / tenant?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q4</span><span class="q-text">If one tenant schedules 10 million jobs for the same minute, should it affect all other tenants?</span><span class="hint">＋</span></div><div class="q-body">
+<pre class="flow">                 Distributed Job Scheduler
+                 +-----------------------+
+                 | shared system         |
+                 +-----------------------+
+                    /        |         \
+                   /         |          \
+                  v          v           v
+           Tenant A     Tenant B     Tenant C
+          (Customer1)  (Customer2)  (Customer3)</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q5</span><span class="q-text">Do you compute recurring schedules lazily or pre-generate future instances?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Option A
+Store cron only
+Compute next occurrence after every run
+
+Option B
+Materialize future runs ahead of time</pre>
+        <p>Which is simpler? Which scales better? Which is safer?</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>How do we stop two schedulers from picking the same job?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre>           +-------------+
+           | Job X due   |
+           +-------------+
+              /       \
+             /         \
+            v           v
+       Scheduler S1   Scheduler S2</pre>
+    <p>Both see same row. Both try to dispatch. That causes duplicates.</p>
+
+    <h3 class="blk">Option A — Claim with lease</h3>
+<pre>Before claim:
++----------------------------------+
+| Job X | due | unclaimed          |
++----------------------------------+
+
+S1 does atomic claim:
+    claimed_by = S1
+    lease_until = now + 30s
+
++--------------------------------------------------+
+| Job X | due | claimed_by=S1 | lease_until=09:05  |
++--------------------------------------------------+</pre>
+    <p>Now S2 cannot claim it.</p>
+
+    <h3 class="blk">Option B — Shard ownership</h3>
+<pre class="flow">hash(job_id) or hash(tenant_id)
+          |
+          v
+      shard number
+          |
+          v
+ owned by one scheduler node
+
+Jobs
+ |
+ +--> shard 1 --> Scheduler S1
+ +--> shard 2 --> Scheduler S2
+ +--> shard 3 --> Scheduler S3</pre>
+    <p>Then only the owner scans that shard.</p>
+<pre>Option A:
+everyone can see job, but only one can claim it
+
+Option B:
+only one scheduler is allowed to look at that job's group</pre>
+
+    <div class="qblock">
+      <div class="lbl">Thought-Q</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q6</span><span class="q-text">Which is better?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Lease per job
+vs
+Shard ownership + local claim</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q7</span><span class="q-text">If shard ownership is used, what happens when one scheduler dies?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>S2 dies
+who takes shard 2?
+how fast?
+how safely?</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q8</span><span class="q-text">If lease duration is too long, what happens?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>worker/scheduler dies
+job remains stuck until lease expires</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q9</span><span class="q-text">If lease duration is too short, what happens?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>slow processing
+lease expires too early
+another node reclaims
+duplicate dispatch</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q10</span><span class="q-text">Who is the source of truth for claim ownership?</span><span class="hint">＋</span></div><div class="q-body">
+        <ul><li>DB row?</li><li>distributed lock service?</li><li>consensus layer?</li><li>partition ownership in queue?</li></ul>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q11</span><span class="q-text">What is worse: temporary delay, duplicate run, or missed run?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Your answer changes the architecture.</span></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A distributed lock can lie. If the machine holding the lock crashes before releasing it, the lock is held by a ghost. Always design for what happens when the lock holder disappears.</p></div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>Scheduler should decide time, but should it also execute?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="note">No.</div>
+    <h3 class="blk">Why not</h3>
+<pre>Bad model:
+
+Scheduler --> executes job directly</pre>
+    <p>Problem: scheduler becomes —</p>
+    <ul>
+      <li>time checker</li>
+      <li>business executor</li>
+      <li>retry engine</li>
+      <li>concurrency controller</li>
+      <li>failure handler</li>
+    </ul>
+    <p>Too many roles.</p>
+    <h3 class="blk">Better</h3>
+<pre class="flow">Scheduler ---> Queue ---> Worker</pre>
+    <p>This split is very important.</p>
+
+    <div class="qblock">
+      <div class="lbl">Thought-Q</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q12</span><span class="q-text">What is the scheduler's real responsibility?</span><span class="hint">＋</span></div><div class="q-body">
+        <p>Pick one:</p>
+        <ul><li>A) decide due jobs</li><li>B) execute jobs</li><li>C) both</li></ul>
+        <p><span class="verdict">Only one answer scales cleanly.</span></p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q13</span><span class="q-text">If job execution takes 40 minutes, should scheduler care?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q14</span><span class="q-text">If downstream services are slow, should due-time scanning stop?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">It should not.</span> That is why dispatch and execution should be separated.</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q15</span><span class="q-text">If queue is down but DB is up, what should scheduler do?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>due jobs found
+but cannot dispatch
+
+claim and wait?
+do not claim?
+mark as pending dispatch?
+retry publishing?</pre>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>How should workers execute jobs safely?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Workers pull jobs and execute them.</p>
+<pre class="flow">Queue ---> Worker ---> Business action ---> Update result</pre>
+    <p>But the real problem is crash handling.</p>
+
+    <h3 class="blk">Worker execution sketch</h3>
+<pre>Job arrives
+   |
+   v
+acquire execution lease
+   |
+   v
+RUN
+   |
+   +--> success --> mark done
+   |
+   +--> failure --> retry / dead letter</pre>
+
+    <div class="qblock">
+      <div class="lbl">Thought-Q</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q16</span><span class="q-text">When should a job become RUNNING?</span><span class="hint">＋</span></div><div class="q-body">
+        <ul><li>when scheduler dispatches?</li><li>when queue accepts message?</li><li>when worker actually starts?</li></ul>
+        <p><span class="verdict">These are very different meanings.</span></p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q17</span><span class="q-text">If worker crashes after making side effect but before updating DB, what then?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Worker ----> Payment API success
+Worker crashes
+DB still says not completed
+retry may happen</pre>
+        <p><span class="verdict">This is one of the deepest questions.</span></p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q18</span><span class="q-text">Should worker be stateless?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Usually yes.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q19</span><span class="q-text">Where should large job payload live?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Queue message should be small
+payload_ref should point elsewhere</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q20</span><span class="q-text">Should worker poll queue, or should queue push to worker?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Polling gives simpler control in many systems.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>Retry is not just retry</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Retry is actually business correctness design.</p>
+<pre>Attempt 1 ----fail----> wait 10s
+Attempt 2 ----fail----> wait 1m
+Attempt 3 ----fail----> wait 5m
+Attempt 4 ----fail----> DLQ</pre>
+    <p>But not every failure is same:</p>
+<pre>network timeout        -> retry maybe yes
+5xx from downstream    -> retry yes
+validation error       -> retry no
+duplicate conflict     -> depends</pre>
+
+    <div class="qblock">
+      <div class="lbl">Thought-Q</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q21</span><span class="q-text">Should retry be based on job type or error type?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q22</span><span class="q-text">If a retry happens 3 hours later, is it still correct business-wise?</span><span class="hint">＋</span></div><div class="q-body">
+        <p>Example:</p>
+        <ul>
+          <li>sending reminder email: maybe yes</li>
+          <li>fraud block action: maybe no</li>
+          <li>stock order execution: maybe dangerous</li>
+        </ul>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q23</span><span class="q-text">Should retries keep original schedule time or new execution time?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q24</span><span class="q-text">Does retry preserve job ordering?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Job A fails
+Job B succeeds
+retry A later
+
+Now order changed</pre>
+        <p>Is that acceptable?</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q25</span><span class="q-text">Where should retry state live?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>queue only?</li><li>DB only?</li><li>both?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q26</span><span class="q-text">Should failed jobs re-enter same queue or separate retry queue?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Retry and idempotency are different things. Retry is what the caller does. Idempotency is what the system guarantees. Build the system to be idempotent, and retries become harmless.</p></div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>Duplicate execution prevention</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">In distributed systems, duplicates are normal unless you design carefully.</p>
+
+    <h3 class="blk">Duplicate paths</h3>
+<pre>duplicate can happen because:
+
+1) two schedulers dispatch same job
+2) queue redelivers
+3) worker lease expires too early
+4) worker crashes after side effect
+5) publish succeeded but ack lost</pre>
+
+    <h3 class="blk">Important mental model</h3>
+<pre>Exactly-once execution
+is usually a dream at system boundary
+
+What we usually do:
+At-least-once processing
++
+idempotent execution</pre>
+
+    <h3 class="blk">Idempotency sketch</h3>
+<pre>execution_key = job_id + scheduled_slot
+
+same key comes again
+downstream detects duplicate
+and ignores second one</pre>
+
+    <div class="qblock">
+      <div class="lbl">Thought-provoking questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q27</span><span class="q-text">Where should dedup happen?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>scheduler?</li><li>queue consumer?</li><li>worker?</li><li>downstream service?</li><li>all of them?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q28</span><span class="q-text">What is the correct dedup key?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>job_id only?</li><li>job_id + scheduled_time?</li><li>job_id + attempt_no?</li><li>business entity key?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q29</span><span class="q-text">If a daily job runs twice on same day, should second run be blocked?</span><span class="hint">＋</span></div><div class="q-body"><p><span class="verdict">Maybe yes.</span> But what if first run partially failed?</p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q30</span><span class="q-text">If you dedup too aggressively, could you suppress legitimate reruns?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q31</span><span class="q-text">Which is more dangerous: duplicate email, duplicate money transfer, or duplicate report generation?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">The business domain decides architecture depth.</span></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>In a distributed system, "did this already run?" is not automatically a yes or no. Duplicate prevention is something you build deliberately — it doesn't come for free.</p></div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>Ordering and concurrency</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Listed in the main problem map, notes not yet written.</p>
+    <div class="note">Placeholder — add content here when you work this one out. Q32–Q36 belong to this section.</div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>Scaling</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">The real scaling question is not “can we add more machines?”</p>
+    <div class="note">The real question is: can we add more machines without creating more duplicates, more coordination cost, and more hot partitions?</div>
+
+    <h3 class="blk">Scaling sketch</h3>
+<pre class="flow">                 +------------------+
+                 | jobs table       |
+                 +------------------+
+                        |
+          +-------------+-------------+
+          |             |             |
+          v             v             v
+       shard 1       shard 2       shard 3
+          |             |             |
+          v             v             v
+         S1            S2            S3</pre>
+<pre>Workers:
+Queue partitions
+   |      |      |
+   v      v      v
+  W1     W2     W3</pre>
+
+    <div class="qblock">
+      <div class="lbl">Thought-provoking questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q37</span><span class="q-text">What should be sharded by?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>tenant_id?</li><li>job_id?</li><li>schedule bucket?</li><li>job type?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q38</span><span class="q-text">If you shard by tenant, what happens to a huge tenant?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q39</span><span class="q-text">If you shard by job_id hash, what happens to per-tenant fairness?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q40</span><span class="q-text">What is your hot spot?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>one minute with too many due jobs?</li><li>one tenant?</li><li>one cron expression?</li><li>one queue partition?</li><li>one popular concurrency key?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q41</span><span class="q-text">At what scale does DB scanning become the bottleneck?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q42</span><span class="q-text">At what scale does coordination become the bottleneck instead?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>Failure handling</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Failure point map</h3>
+<pre class="flow">[DB stores job]
+      |
+      v
+[Scheduler claims]
+      |
+      v
+[Scheduler publishes]
+      |
+      v
+[Worker receives]
+      |
+      v
+[Worker executes]
+      |
+      v
+[Result saved]</pre>
+    <p>Failure can happen at every arrow.</p>
+
+    <h3 class="blk">Case 1 — Scheduler crashes after claim, before publish</h3>
+<pre>claim success
+publish not done
+scheduler dies</pre>
+    <p>Question: how is job recovered?</p>
+
+    <h3 class="blk">Case 2 — Publish succeeds, but scheduler crashes before marking dispatched</h3>
+<pre>queue has message
+DB may still show old state</pre>
+    <p>Now what is truth?</p>
+
+    <h3 class="blk">Case 3 — Worker gets message, starts work, crashes mid-way</h3>
+<pre>RUNNING
+but unfinished</pre>
+    <p>How to detect? How long to wait? Who retries?</p>
+
+    <h3 class="blk">Case 4 — Worker completes business side effect, but result update fails</h3>
+<pre>side effect done
+status not updated</pre>
+    <div class="note">Most dangerous practical case.</div>
+
+    <div class="qblock">
+      <div class="lbl">Thought-provoking questions</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q43</span><span class="q-text">Do you want recovery to be lease-based, replay-based, or manual repair-based?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q44</span><span class="q-text">What state transitions are allowed?</span><span class="hint">＋</span></div><div class="q-body">
+<pre class="state">SCHEDULED -> CLAIMED -> DISPATCHED -> RUNNING -> SUCCESS</pre>
+        <p>Can it jump backwards?</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q45</span><span class="q-text">If queue says message delivered, but DB says not dispatched, which one do you trust?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q46</span><span class="q-text">Can your system reconstruct truth after a crash from logs alone?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q47</span><span class="q-text">What is the smallest atomic unit you really need?</span><span class="hint">＋</span></div><div class="q-body">
+        <ul><li>DB update only?</li><li>queue publish only?</li><li>DB + queue together?</li></ul>
+        <p><span class="verdict">This question drives whether you need outbox-like design.</span></p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<footer>Architects Lab · Distributed Job Scheduler · 47 questions</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

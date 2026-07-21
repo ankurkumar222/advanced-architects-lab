@@ -152,6 +152,16 @@
 
   footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
   @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 </head>
 <body>
@@ -250,6 +260,7 @@ Three independent stories. Nobody is comparing them.</pre></div>
         <div class="turn b"><div class="who">B</div><p>Mutual fund units are allotted based on NAV cut-off once a payment is confirmed. If a premature or incorrect match marks a failed payment as settled, units get allotted against money that was never actually received — and units, unlike a database row, can't just be silently reversed.</p></div>
         <div class="insight"><b>Where this leaves us:</b> correctness-first isn't a soft preference — it's the constraint that shapes the entire matching design that follows. Every later stage — matching thresholds, break states, audit trails — exists to protect this one priority, never to make the system faster at the expense of it.</div>
       </div></div></div>
+      <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Reconciliation is not just about finding errors — it's about proving correctness. Speed is useful, but a fast wrong match is worse than a slow right one.</p></div>
       <div class="audio-panel" id="audio-panel-st1"></div>
   </section>
 
@@ -327,6 +338,7 @@ MATCH: narration field carries our key back to us.</pre></div>
         <div class="turn b"><div class="who">B</div><p>Yes — exact match preferred wherever the correlation key survives; fuzzy match only as a last resort, and even then it routes to mandatory manual confirmation rather than auto-closing.</p></div>
         <div class="insight"><b>Where this leaves us:</b> precision-over-recall becomes the design principle behind everything downstream — the exception queue in stage 9, the immutable audit trail in stage 12, the split-match guardrails in stage 13. Every one of those exists because silence is the one outcome this system is never allowed to produce.</div>
       </div></div></div>
+      <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>In financial systems, a missed mismatch is silent and dangerous. A false alarm just slows the team down. Know which failure your business can tolerate less, and design for that one.</p></div>
       <div class="audio-panel" id="audio-panel-st4"></div>
   </section>
 
@@ -430,6 +442,7 @@ N-WAY (one status per correlation key):
         <div class="turn b"><div class="who">B</div><p>That's not a delivery duplicate, it's two legitimate source events with two different <code>source_event_id</code>s — both must reconcile independently. The dedupe key is scoped per source's own event id precisely so it never collapses two real, distinct transactions into one.</p></div>
         <div class="insight"><b>Where this leaves us:</b> idempotency has to be enforced upstream, at ingestion, per source. Anything that reaches the matching stage as noise stays noise — matching logic can never fully clean up what ingestion let through dirty.</div>
       </div></div></div>
+      <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A reconciliation run that isn't idempotent is dangerous. Running it twice on the same data must produce the same result. Without this, retries create new errors instead of fixing them.</p></div>
       <div class="audio-panel" id="audio-panel-st8"></div>
   </section>
 

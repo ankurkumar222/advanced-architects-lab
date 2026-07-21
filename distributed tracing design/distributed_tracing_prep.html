@@ -229,6 +229,17 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -286,6 +297,7 @@ Traces are causality and timing graphs.</pre>
       <div class="q-answer"><div class="q-answer-inner"><b>"Where exactly did the latency happen?"</b> Logs can tell you a step took 500ms if someone logged it, but only a span tree can show you that step's 500ms against the total request time and against its siblings.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">If someone says "we already have distributed traceability" but really means "we have a shared correlation ID," what's missing?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Everything that makes tracing tracing: <b>span hierarchy, durations, parallelism visibility, and a reconstructable execution path</b>. A shared ID is necessary but nowhere near sufficient.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A shared correlation ID tells you what happened. Tracing tells you how it happened — in what order, inside what, and for how long. Those are different questions, and you need both.</p></div>
   </section>
 
   <!-- SEGMENT 2 : TEAL -->
@@ -332,6 +344,7 @@ Because now we know who called whom, in what nesting, for how long.</pre>
       <div class="q-answer"><div class="q-answer-inner">You can conclude they <b>belong to the same request</b>. You cannot conclude <b>who called whom, whether they ran sequentially or in parallel, or which one's failure caused the other's</b>. That's the exact gap between logging correlation and tracing.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">Should every downstream service just forward the trace_id it received, or create a new span correctly?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>Create a new child span</b>, with its own span_id and the incoming span_id set as its parent_id. Forwarding trace_id alone without creating a proper child span destroys the causal tree even though the trace still "looks" connected.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The span tree is only as good as its weakest propagation link. One service that forwards trace_id without creating a proper child span breaks the causal chain for every downstream service after it.</p></div>
   </section>
 
   <!-- SEGMENT 4 : VIOLET -->
@@ -382,6 +395,7 @@ API Span -> publish message -> Queue/Topic -> Worker Span
       <div class="q-answer"><div class="q-answer-inner">The trace <b>silently ends at publish</b> — the worker either starts a brand-new, disconnected trace, or (worse) inherits stale context that misattributes its work to the wrong request. Either way, you lose the ability to answer "what happened to this event after it was published."</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Should business metadata (tenant_id, experiment_id, region) travel as tracing "baggage," or stay in logs and span tags?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Sparingly, as baggage, only if <b>every downstream service genuinely needs it for its own decisions</b> (e.g. routing by tenant). Baggage propagates on every hop and adds overhead — most metadata belongs on the <b>span itself as a tag</b>, visible for that span only, not forced onto the whole trace.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Trace context propagation is invisible plumbing — when it works, no one notices. When it breaks, you lose the entire cross-service story. It deserves the same care as any API contract.</p></div>
   </section>
 
   <!-- SEGMENT 6 : LIME -->
@@ -476,6 +490,7 @@ sample priority traffic (tail sampling)</pre>
       <div class="q-answer"><div class="q-answer-inner">Yes — this is a very strong practice. It's what lets you pivot from <b>"I found a slow span in the trace waterfall" to "now show me the exact logs for that span"</b> in one click, instead of manually correlating timestamps across systems.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q35</span><span class="q-text">If someone asks "why is checkout slow," is the better first stop logs or the trace waterfall?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Usually the <b>trace waterfall</b> — it immediately shows which service/span dominates total time. Logs are the right next step once you know <em>where</em> to look, to understand <em>why</em> that specific step was slow.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Logs and traces solve different problems. Traces find where the time went. Logs explain why. The right workflow is: trace first to locate, then logs to understand. Using logs alone for latency debugging is reading a story backwards.</p></div>
   </section>
 
   <!-- SEGMENT 10 : PURPLE -->

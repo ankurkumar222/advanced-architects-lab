@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Build Your Own OAuth 2.0</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+  .arrow{color:var(--accent)}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  /* numbered steps */
+  ol.steps{counter-reset:st;list-style:none;padding-left:0;margin:14px 0}
+  ol.steps li{
+    counter-increment:st;position:relative;padding-left:38px;margin:10px 0;
+  }
+  ol.steps li::before{
+    content:counter(st);position:absolute;left:0;top:1px;
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;
+    width:24px;height:22px;display:flex;align-items:center;justify-content:center;
+  }
+
+  .qblock{margin-top:24px}
+  .qblock > .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--q);margin-bottom:12px;
+  }
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin-bottom:8px;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:12px;color:var(--q);min-width:34px;padding-top:1px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 14px 62px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .q-body pre{margin:10px 0;font-size:12px}
+  .verdict{color:var(--ok);font-weight:600}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px;letter-spacing:.05em}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    .q-body{padding-left:16px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Auth &amp; Identity</div>
+  <h1>Build Your Own OAuth 2.0</h1>
+  <p class="sub">Short, super clear, builder mindset. Four endpoints, one token store, and the questions an architect asks before shipping any of it.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all answers</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s1"><span class="num">01</span>🧠 Core idea</a></li>
+    <li><a href="#s2"><span class="num">02</span>🏗️ Real-life analogy</a></li>
+    <li><a href="#s3"><span class="num">03</span>🔄 Flow (ultra simple)</a></li>
+    <li><a href="#s4"><span class="num">04</span>🧩 If YOU were building OAuth</a></li>
+    <li><a href="#s5"><span class="num">05</span>🧾 Rough sketch</a></li>
+    <li><a href="#s6"><span class="num">06</span>🔐 Key concepts</a></li>
+    <li><a href="#s7"><span class="num">07</span>🧠 Architect thinking</a></li>
+    <li><a href="#s8"><span class="num">08</span>🚀 One-line summary</a></li>
+  </ol>
+</div>
+
+<!-- ============ 01 ============ -->
+<section id="s1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">CORE</span><h2>🧠 Core idea (1 line)</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="note">OAuth 2.0 = “Let users log in via another trusted system and give your app a temporary permission token instead of password.”</div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">ANALOGY</span><h2>🏗️ Real-life analogy</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <ul>
+      <li>🧑 You (user)</li>
+      <li>🏦 Bank (Google)</li>
+      <li>🍽️ Restaurant (your app)</li>
+    </ul>
+<pre class="flow">You don't give bank password to restaurant
+You give a verified slip (token)</pre>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">FLOW</span><h2>🔄 Flow (ultra simple)</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <ol class="steps">
+      <li>User <span class="arrow">→</span> clicks “Login with Google”</li>
+      <li>App <span class="arrow">→</span> redirects to Google</li>
+      <li>Google <span class="arrow">→</span> returns CODE</li>
+      <li>App <span class="arrow">→</span> exchanges CODE <span class="arrow">→</span> TOKEN</li>
+      <li>App <span class="arrow">→</span> uses TOKEN <span class="arrow">→</span> get user data</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">BUILD</span><h2>🧩 If YOU were building OAuth (system design)</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+
+    <h3 class="blk">1. /authorize — login + give CODE</h3>
+    <p>User logs in here. You generate:</p>
+<pre>code -> user_id, client_id, expiry</pre>
+
+    <h3 class="blk">2. /token — CODE → TOKEN</h3>
+    <p>Backend calls this.</p>
+<pre>input:  code + client_secret
+output: access_token</pre>
+
+    <h3 class="blk">3. Token store</h3>
+<pre>Option A:
+access_token -> user_id, expiry
+
+Option B:
+JWT (no DB lookup)</pre>
+
+    <h3 class="blk">4. /userinfo — protected API</h3>
+<pre>Authorization: Bearer token</pre>
+    <p>Return user data.</p>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Authorization is easy to build in a way that works. The hard part is building it so the failure modes — token leakage, scope creep, stolen refresh tokens — can't happen accidentally.</p></div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">SKETCH</span><h2>🧾 Rough sketch</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="flow">User
+  │
+  ▼
+Client App ───────▶ /authorize (login)
+  │                     │
+  │                     ▼
+  │               returns CODE
+  │
+  ▼
+/token (exchange) ───▶ TOKEN
+  │
+  ▼
+/userinfo ───────────▶ user data</pre>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">CONCEPTS</span><h2>🔐 Key concepts</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <ul>
+      <li><strong>CODE</strong> → temporary (safer)</li>
+      <li><strong>TOKEN</strong> → permission slip</li>
+      <li><strong>No password sharing</strong></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">ARCHITECT</span><h2>🧠 Architect thinking</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q1</span><span class="q-text">Expiry?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Short-lived tokens.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q2</span><span class="q-text">Scaling?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">JWT (stateless).</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q3</span><span class="q-text">Security?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Protect token + use HTTPS.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q4</span><span class="q-text">Revocation?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Blacklist tokens.</span></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A good security design creates clear boundaries so that a bug in one part of the system can't accidentally give access to another. Isolation is the main tool.</p></div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">SUMMARY</span><h2>🚀 One-line summary</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="note">OAuth = “Login somewhere else, get a secure token, use it to access data.”</div>
+  </div>
+</section>
+
+<footer>Architects Lab · OAuth 2.0</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

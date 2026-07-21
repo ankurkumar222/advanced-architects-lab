@@ -229,6 +229,16 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -294,6 +304,7 @@ what happens when step 2 succeeds and step 3 fails?</pre>
       <div class="q-answer"><div class="q-answer-inner">Not automatically. A response can be lost <b>after</b> the remote side effect already happened — so the caller and the callee can genuinely disagree about whether a step succeeded. Reconciliation and idempotent retries exist specifically because "ask again and get the same answer" isn't guaranteed for free.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Is the real problem a data transaction, or a business workflow?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Almost always a <b>business workflow</b>. Framing it as "how do I make the data transactional" pulls you toward 2PC and locking. Framing it as "how does the business outcome stay correct" pulls you toward saga, compensation, and accepting that some steps will temporarily disagree before converging.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The goal of a distributed transaction isn't consistency of data — it's correctness of the business outcome. Design from the outcome backward, not from the database constraint forward.</p></div>
   </section>
 
   <!-- SEGMENT 2 : DATA VS BUSINESS ATOMICITY -->
@@ -390,6 +401,7 @@ happened" — it's a new, separate, reversing action.</pre>
       <div class="q-answer"><div class="q-answer-inner"><b>Reversible steps first, irreversible steps as late as possible.</b> If you reserve inventory (reversible) before charging payment (harder to cleanly reverse), a late failure only needs the cheap, safe compensation. Ordering by reversibility is one of the highest-leverage saga design decisions available.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Are compensating actions themselves required to be idempotent?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>Absolutely.</b> A compensation triggered twice by a retried failure event can otherwise <b>over-compensate</b> — refunding a customer twice, releasing inventory twice. Compensations need the same idempotency-key discipline as forward actions, not less.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A saga is only as reliable as its compensations. Design the compensation for every forward step before you commit to the saga pattern — don't leave it for later.</p></div>
   </section>
 
   <!-- SEGMENT 6 : ORCHESTRATION VS CHOREOGRAPHY -->
@@ -444,6 +456,7 @@ Idempotency: same idempotency key -> same business effect,
       <div class="q-answer"><div class="q-answer-inner">It needs to uniquely identify <b>this specific business intent</b>, not just this specific HTTP call — often something like <code>order_id + saga_step</code> or a caller-supplied <code>payment_intent_id</code>. A key that's too broad (e.g. just <code>order_id</code> for every step) collapses distinct actions together; too narrow (e.g. a fresh UUID per retry) defeats the purpose entirely.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Should every step in a saga have its own idempotency model, or can one key cover the whole workflow?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>Each step needs its own.</b> "Charge payment" and "reserve inventory" are separate side effects with separate retry risk — a single workflow-level key can't distinguish "step 2 was retried" from "step 3 was retried," so each step's own idempotency key is what actually prevents duplicate effects at the point where they'd occur.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The outbox and idempotency aren't extras — they are what make a saga actually safe. A saga without both is a workflow that looks correct until a crash reveals it wasn't.</p></div>
   </section>
 
   <!-- SEGMENT 8 : STATE MACHINE & TIMEOUT TRUTH -->
@@ -492,6 +505,7 @@ Payment request times out. Did the charge happen?
       <div class="q-answer"><div class="q-answer-inner"><b>No</b> — true exactly-once across networked services, brokers, and external systems is extremely difficult to guarantee and dangerous to promise casually. The realistic, honest target is <b>at-least-once delivery plus idempotent handling</b>, which together produce an <em>effectively-once</em> business outcome without overclaiming a guarantee the infrastructure can't actually deliver.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q36</span><span class="q-text">Which failures should trigger automatic compensation, and which should route to reconciliation or manual review instead?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">A <b>known, confirmed failure</b> (e.g. inventory service explicitly returned "out of stock") is safe to compensate automatically. An <b>unknown outcome</b> (e.g. a timeout, an ambiguous external response) should route to reconciliation rather than automatic compensation, precisely because automatic compensation on an unknown outcome risks double-acting on something that may have already succeeded.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A timeout means "unknown," not "failed." Treating an unknown outcome as a confirmed failure is where most duplicate payments and ghost transactions come from.</p></div>
   </section>
 
   <!-- SEGMENT 10 : OUR DEPLOYMENT -->

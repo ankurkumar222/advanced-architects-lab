@@ -229,6 +229,17 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -299,6 +310,7 @@ Client --TCP conn--> LB --TCP conn--> Backend      Client --HTTP req--> LB (read
       <div class="q-answer"><div class="q-answer-inner">Both, layered — very common in practice. An L4 layer often sits at the very edge (fast, cheap, absorbs connection-level load and DDoS-style volume), and hands traffic to an L7 layer that does the smart, content-aware routing. Treating "L4 or L7" as a single platform-wide choice is usually the wrong framing; the real design question is <b>which layer owns which responsibility</b>.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">Why does this "level" decision have to happen before anything else in the design?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Because it constrains every later decision — what the LB can see (headers? cookies? just IP/port?), what fairness even means, whether content-based routing is possible at all, and whether TLS termination is even a meaningful question. Picking an algorithm before picking a level is designing the interior of a house before deciding whether it has a foundation.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Picking an algorithm before picking a layer is answering the wrong question. L4 balances connections. L7 balances requests. Those are different things, and the system behaves differently depending on which one you're actually balancing.</p></div>
   </section>
 
   <!-- SEGMENT 2 -->
@@ -366,6 +378,7 @@ Hash-based (sticky-ish): hash(client_id) -> backend   (A->S2, B->S1, C->S2)</pre
       <div class="q-answer"><div class="q-answer-inner">Because it can create <b>oscillation</b>: the LB sees Server A is momentarily fast, floods it with traffic, A slows down under the new load, the LB swings everything to Server B, B slows down too — a herd effect where the "smart" policy destabilizes the very thing it was trying to optimize. Some damping/randomness is usually needed to prevent this.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q16</span><span class="q-text">What's the one-sentence senior framing for "which algorithm should we use"?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">The choice isn't about which algorithm is "best" in the abstract — it's about naming the resource that actually constrains your backends (CPU? connections? memory? external dependency slots?) and choosing the algorithm whose signal tracks that resource, while keeping enough randomness/damping to avoid instability.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>No balancing algorithm is universally "better." The right one is the one whose signal matches what's actually scarce on your backends. Get that wrong and you're distributing work "evenly" while still overloading the same server.</p></div>
   </section>
 
   <!-- SEGMENT 5 -->
@@ -390,6 +403,7 @@ Types:  1. TCP check (can a connection even open?)
       <div class="q-answer"><div class="q-answer-inner">Because these two thresholds control <b>flapping</b>. Too sensitive (remove after 1 failure, re-add after 1 success) and a backend can bounce in and out of the pool on transient blips, causing routing instability. Too lax and a genuinely broken backend keeps receiving traffic for too long. The right values depend on how expensive a false removal is versus how expensive a missed detection is.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q20</span><span class="q-text">Should health check depth be uniform across all services, or does it vary?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">It should vary deliberately. A stateless, low-risk service might be fine with a shallow HTTP check. A payment or settlement path, where "looks alive but can't actually complete a transaction" is expensive to discover late, usually justifies a deeper (but rate-limited and cached) check — the depth should track the cost of being wrong, not be a platform-wide default nobody revisited.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A health check that says "200 OK" while real requests are failing is not a health check — it's a false signal. The depth of the check should match the cost of being wrong about it.</p></div>
   </section>
 
   <!-- SEGMENT 6 -->
@@ -470,6 +484,7 @@ Case 4 — partial overload:  S1 CPU 95%, S2 40%, S3 35% — react before S1 ful
       <div class="q-answer"><div class="q-answer-inner">Those connections are lost unless the client or protocol can reconnect and the new LB node (or entry mechanism) picks it back up cleanly — which is exactly why traffic-entry availability (segment 2) and failure handling aren't separate concerns; an LB node failure is a failure at both layers simultaneously.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q34</span><span class="q-text">S1 is at 95% CPU but hasn't failed yet. Should the LB react now, or wait for an actual failure?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">The stronger design reacts before full failure — reducing traffic share to S1 as its load signal rises is cheaper than waiting for it to fail outright and then recovering. Waiting for hard failure treats the LB as purely reactive; watching leading indicators makes it preventive.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Retrying on failure is not a free operation — it has semantics. For idempotent reads, retry is safe. For writes without idempotency guarantees, it can silently create duplicates. Know what you're retrying before you retry it.</p></div>
   </section>
 
   <!-- SEGMENT 10 -->

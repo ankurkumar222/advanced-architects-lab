@@ -225,6 +225,17 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -293,6 +304,7 @@
         Ingest throughput: 50k–100k spans/sec sustained, 3x burst. Added latency to the caller: &lt;5ms p99 — must be fire-and-forget. Single-trace query latency: &lt;500ms p95. Hot retention: 24–72h. Cold/compliance retention: 90 days minimum for regulated flows (allotment, redemption, disbursal). Consistency: eventual is fine for trace assembly (spans arrive out of order); durability of an <em>accepted</em> span is the real non-negotiable. Availability: the ingest path must degrade by dropping spans, never by slowing or blocking the caller.
         <span class="why"><b>Why this framing:</b> the single NFR that shapes everything else is the last one — tracing must never become the reason the real system is slow or down. Every later trade-off (tail sampling's memory cost, backpressure policy, agent design) gets judged against that one sentence.</span>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The single rule for any observability system: it must never become the reason the real system is slow or down. When in doubt, drop the trace data — never block the request.</p></div>
   </section>
 
   <!-- SEGMENT 2 : CORE DECISION -->
@@ -367,6 +379,7 @@ Dashboards / Alerting / on-call tooling</pre>
         Because tracing must never become a source of latency or failure for the <em>real</em> request. The agent absorbs batching, local retry, and backpressure so the SDK's call is a local, fire-and-forget write — not a network call whose failure the business request has to survive.
         <span class="why"><b>Why this isn't over-engineering:</b> without the agent, a slow or unavailable ingestion gateway directly threatens every traced service's own availability — the exact violation of the segment-1 NFR that tracing exists to observe, not cause.</span>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Each component in this diagram exists because of a specific requirement from earlier — not because it looked clean. A component you can't trace to a requirement is a component you probably don't need.</p></div>
   </section>
 
   <!-- SEGMENT 4 : API DESIGN -->
@@ -522,6 +535,7 @@ on_buffer_full(new_trace_id):
         There's no free answer here — you have to pick one and make it observable. Silently dropping without a counter is the worst option, because it turns a capacity problem into an invisible data-quality problem nobody can diagnose later.
         <span class="why"><b>Why forcing an early decision beats outright rejection:</b> a slightly-early, partial-trace decision degrades gracefully — if the error/slow tag has already arrived, that signal is still captured even on a forced decision. Rejecting new spans outright instead creates a hole specifically in the newest traces, which is usually the worse failure mode for an on-call engineer debugging something that just happened.</span>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>When the buffer is full, there is no clean answer — you're choosing between imperfect options. Make that failure mode explicit, measurable, and observable. "Silently drop" is never acceptable in a system built for observability.</p></div>
   </section>
 
   <!-- SEGMENT 7 : SUPPORTING SUBSYSTEM -->
@@ -587,6 +601,7 @@ even if the root span never closes.</pre>
         At every transition that can be retried after a failure without the caller knowing whether it already happened: span ingestion (agent retry on a network blip — dedup on span_id), the DECIDED transition (the <code>buf.decided</code> guard), and the hot-to-cold tier move (a retried partial move must not double-write or leave a trace in two places).
         <span class="why"><b>Why "everywhere" is too vague to be useful:</b> naming the specific transitions forces you to check each one has an actual guard, rather than asserting idempotency as a general property of the system. A transition without a concrete dedup key or guard is a transition that <em>will</em> corrupt state under retry — in a distributed pipeline that's the normal operating condition, not a rare edge case.</span>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Every state that waits on an external event needs a forced-exit timeout. Without one, a single stuck upstream becomes a silent, unbounded memory leak. The state machine is only as reliable as its least-protected state.</p></div>
   </section>
 
   <!-- SEGMENT 9 : SCALING ITSELF -->

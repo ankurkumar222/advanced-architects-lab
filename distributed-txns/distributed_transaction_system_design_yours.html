@@ -215,6 +215,16 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -284,6 +294,7 @@
         Scope OUT: the coordinator does <b>not</b> guarantee exactly-once delivery to participants, does <b>not</b> own participant-side business logic, and does <b>not</b> attempt cross-saga transactions (one saga can't atomically depend on another's outcome).
         <div class="why-line"><b>Why it matters:</b> every one of those is a tempting scope-creep target — "what if we just also handled cross-saga dependencies" is exactly how coordinators turn into unmaintainable god-services. Scoping out exactly-once specifically forces every participant team to own their own idempotency, which is the correct place for that responsibility to live.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The scope of a coordinator defines its blast radius. Every responsibility you pull in makes the system harder to reason about when something goes wrong. Scope out exactly what the coordinator should not own.</p></div>
   </section>
 
   <!-- SEGMENT 2 -->
@@ -303,6 +314,7 @@
         <b>Saga with compensation, at-least-once step execution.</b> 2PC is rejected here specifically because your NFR target (2k/s saga starts, 99.95% availability) is incompatible with blocking every participant on a coordinator-driven prepare phase — and MOFSL/NSDL/PolicyBazaar are external systems that categorically cannot join a 2PC protocol at all.
         <div class="why-line"><b>Why this is the load-bearing decision:</b> this single choice determines everything downstream — your data model needs a compensation log (segment 5), your state machine needs a COMPENSATING state (segment 8), and your APIs need a compensate-callback endpoint (segment 4). Get this wrong and every later segment inherits the mistake.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The choice between orchestration and choreography is not a style preference — it determines where complexity lives. Choreography spreads control across services; orchestration centralizes it. Pick based on where you want to debug failures, not what sounds more modern.</p></div>
   </section>
 
   <!-- SEGMENT 3 -->
@@ -528,6 +540,7 @@ function execute_next_step(saga_id):
         The <b>MAX_ATTEMPTS → MANUAL_REVIEW</b> transition in the reconciliation loop is the guaranteed exit — every other state either completes, fails cleanly, or eventually times its way into reconciliation, and reconciliation itself is bounded by attempt count, not by external system behavior. Idempotency plugs in at exactly three points: the step invocation (segment 4's callback keying), the compensation invocation (segment 5's compensation_map + its own idempotency_key), and the lease acquisition (segment 6 — re-acquiring an expired lease you already held must be a no-op, not a new lease).
         <div class="why-line"><b>Why "guaranteed exit" has to be a design decision, not a hope:</b> without an explicit attempt ceiling, PENDING_RECONCILIATION can retry indefinitely against a participant that will never answer — that's not resilience, it's an invisible resource leak (open sagas, held leases, growing reconciliation_queue) that looks fine on a dashboard until it isn't.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A state machine without a guaranteed exit is a trap. Every failure state needs a ceiling — max attempts, a timeout, or a manual review queue. Open-ended retries are not resilience; they are deferred incidents.</p></div>
   </section>
 
   <!-- SEGMENT 9 -->

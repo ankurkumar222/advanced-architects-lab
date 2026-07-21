@@ -287,6 +287,7 @@
   .topic-nosql   { --topic-color: #10B981; --topic-color2: #047857; --topic-tint: rgba(16,185,129,0.09); }
   .topic-sql     { --topic-color: #F43F5E; --topic-color2: #9F1239; --topic-tint: rgba(244,63,94,0.09);  }
   .topic-sidecar { --topic-color: #EC4899; --topic-color2: #9D174D; --topic-tint: rgba(236,72,153,0.09); }
+  .topic-logical { --topic-color: #F97316; --topic-color2: #C2410C; --topic-tint: rgba(249,115,22,0.09); }
 
   @media (prefers-color-scheme: dark) {
     .topic-kafka   { --topic-tint: rgba(99,102,241,0.15); }
@@ -296,6 +297,7 @@
     .topic-nosql   { --topic-tint: rgba(16,185,129,0.15); }
     .topic-sql     { --topic-tint: rgba(244,63,94,0.15);  }
     .topic-sidecar { --topic-tint: rgba(236,72,153,0.15); }
+    .topic-logical { --topic-tint: rgba(249,115,22,0.15); }
   }
   :root[data-theme="dark"] .topic-kafka   { --topic-tint: rgba(99,102,241,0.15); }
   :root[data-theme="dark"] .topic-tracing { --topic-tint: rgba(168,85,247,0.15); }
@@ -304,6 +306,7 @@
   :root[data-theme="dark"] .topic-nosql   { --topic-tint: rgba(16,185,129,0.15); }
   :root[data-theme="dark"] .topic-sql     { --topic-tint: rgba(244,63,94,0.15);  }
   :root[data-theme="dark"] .topic-sidecar { --topic-tint: rgba(236,72,153,0.15); }
+  :root[data-theme="dark"] .topic-logical { --topic-tint: rgba(249,115,22,0.15); }
 
   /* ── Card Grid ── */
   .topic-notes {
@@ -802,7 +805,7 @@
         <div class="topic-group-header">
           <span class="topic-group-icon"></span>
           <span class="topic-group-title">Distributed Transactions</span>
-          <span class="topic-note-count">3 notes</span>
+          <span class="topic-note-count">4 notes</span>
         </div>
         <div class="topic-notes">
 
@@ -844,6 +847,20 @@
                 <span class="tag">Build Session</span>
                 <span class="tag">2PC</span>
                 <span class="tag">Coordinator</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="distributed-txns/distributed_transaction_design.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Distributed Transactions — The Design Session</div>
+              <p class="note-box-desc">A deep design review covering when 2PC is justified, why saga is a product decision as much as a technical one, and how compensation differs from rollback — built around real mutual fund and settlement flows.</p>
+              <div class="note-box-footer">
+                <span class="tag">2PC</span>
+                <span class="tag">Saga</span>
+                <span class="tag">Build Session</span>
                 <span class="note-box-arrow">→</span>
               </div>
             </div>
@@ -1014,6 +1031,116 @@
                 <span class="tag">Kubernetes</span>
                 <span class="tag">mTLS</span>
                 <span class="tag">Observability</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+        </div>
+      </div>
+
+      <!-- ── Logical Designs ── -->
+      <div class="topic-group topic-logical">
+        <div class="topic-group-header">
+          <span class="topic-group-icon"></span>
+          <span class="topic-group-title">Logical Designs</span>
+          <span class="topic-note-count">7 notes</span>
+        </div>
+        <div class="topic-notes">
+
+          <a class="note-box" href="logicals designs/distributed-job-scheduler.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Distributed Job Scheduler — Design &amp; Internals</div>
+              <p class="note-box-desc">How to design a job scheduler that guarantees at-least-once execution across nodes — covering distributed locks, leader election, idempotency, and failure recovery patterns.</p>
+              <div class="note-box-footer">
+                <span class="tag">Scheduler</span>
+                <span class="tag">Distributed Locks</span>
+                <span class="tag">Idempotency</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/log-structured-storage.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Log-Structured Storage — LSM Trees &amp; SSTables</div>
+              <p class="note-box-desc">Why sequential writes are faster than random writes, how compaction trades write amplification for read performance, and the durability promise that WAL files make.</p>
+              <div class="note-box-footer">
+                <span class="tag">LSM</span>
+                <span class="tag">WAL</span>
+                <span class="tag">Compaction</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/nosql-database-design.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">NoSQL Database — Logical Design Patterns</div>
+              <p class="note-box-desc">Access-pattern-first design for wide-column and document stores — partition key decisions, denormalization tradeoffs, and why schema thinking never left NoSQL.</p>
+              <div class="note-box-footer">
+                <span class="tag">Partition Key</span>
+                <span class="tag">Access Patterns</span>
+                <span class="tag">Wide-Column</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/oauth2-build-your-own.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">OAuth2 — Build Your Own Auth Flow</div>
+              <p class="note-box-desc">Design an OAuth2 server from scratch — covering authorization code flow, token lifecycle, security boundaries, and failure modes that shallow implementations miss.</p>
+              <div class="note-box-footer">
+                <span class="tag">OAuth2</span>
+                <span class="tag">Auth</span>
+                <span class="tag">Tokens</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/social-network-design.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Social Network — Feed &amp; Graph Design</div>
+              <p class="note-box-desc">How to design a read-optimized social graph at scale — fan-out strategies, celebrity hot partition handling, and why ranking is a product decision as much as a technical one.</p>
+              <div class="note-box-footer">
+                <span class="tag">Fan-out</span>
+                <span class="tag">Graph</span>
+                <span class="tag">Feed Ranking</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/sqs-queue-design.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">SQS-Style Queue — Design &amp; Internals</div>
+              <p class="note-box-desc">Building a durable message queue — visibility timeouts, at-least-once delivery, dead-letter queues, and why failure handling is the real design challenge.</p>
+              <div class="note-box-footer">
+                <span class="tag">Queue</span>
+                <span class="tag">At-least-once</span>
+                <span class="tag">DLQ</span>
+                <span class="note-box-arrow">→</span>
+              </div>
+            </div>
+          </a>
+
+          <a class="note-box" href="logicals designs/reconciliation_system_design.html">
+            <div class="note-box-accent"></div>
+            <div class="note-box-body">
+              <div class="note-box-title">Reconciliation System — Design &amp; Internals</div>
+              <p class="note-box-desc">How to design a system that detects and resolves discrepancies between data sources — covering idempotent runs, precision vs recall tradeoffs, and correctness-first architecture.</p>
+              <div class="note-box-footer">
+                <span class="tag">Reconciliation</span>
+                <span class="tag">Idempotency</span>
+                <span class="tag">Correctness</span>
                 <span class="note-box-arrow">→</span>
               </div>
             </div>

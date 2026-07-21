@@ -151,6 +151,17 @@
 
   footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
   @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -255,6 +266,7 @@ They all funnel into ONE physical write path.</pre>
         <div class="turn b"><div class="who">B</div><p>Deliberately, and with eyes open — because the workload here is millions of independent writes per key, not complex multi-table joins. We're not choosing NoSQL because joins are unfashionable; we're choosing it because the join isn't the expensive operation we actually need to be fast at.</p></div>
         <div class="insight"><b>Where this leaves us:</b> optimizing for write scale forces a partition-first architecture — data has to be split across independent nodes before anything else is designed. Every later stage is a direct consequence of having already accepted that trade.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>We're not choosing NoSQL because joins are unfashionable. We're choosing it because the join isn't the expensive operation we need to be fast at. Always know what you're giving up, and why the tradeoff is worth it for your specific workload.</p></div>
   </section>
 
   <!-- STAGE 2 -->
@@ -311,6 +323,7 @@ They all funnel into ONE physical write path.</pre>
         <div class="turn b"><div class="who">B</div><p>For that specific pattern, yes — and that's the honest trade, not a flaw I can engineer away. Hashing is the right default because write-hotspotting from sequential IDs is the more damaging, more common failure; range scans on onboarding date can be served from a separate, purpose-built index instead of forcing the primary partition key to do both jobs.</p></div>
         <div class="insight"><b>Where this leaves us:</b> the partition key decides who suffers — either new writes concentrate on one node, or range scans scatter across all of them. There's no key that avoids both; there's only a key that decides which pain the system is built to tolerate. This exact trade resurfaces in stage 11, once real-world data stops being evenly sized.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>There is no partition key that is perfect for all queries. Pick the key that makes your most critical query fast and accept that every other query pays a cost. That's a real design decision, not a failure.</p></div>
   </section>
 
   <!-- STAGE 4 -->
@@ -363,6 +376,8 @@ They all funnel into ONE physical write path.</pre>
         <div class="turn a"><div class="who">A</div><p>So the trade-off isn't decided once, at the architecture level — it's decided per operation?</p></div>
         <div class="turn b"><div class="who">B</div><p>Exactly — and that's the honest answer, not a dodge. Pretending one global CP-or-AP choice fits every read in the system is the buzzword version of this problem. The real design has to let each operation state its own requirement.</p></div>
         <div class="insight"><b>Where this leaves us:</b> consistency versus availability isn't a setting you flip once at system design time — it's a decision the system has to be capable of making differently for every single read. That capability doesn't exist yet; building it is exactly what the next two stages are for.</div>
+      </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Consistency vs availability is not a one-time system-level choice. Different data needs different answers. A user's current balance needs consistency. A product recommendation feed can tolerate staleness. Design each read's guarantee separately.</p></div>
       </div></div></div>
   </section>
 

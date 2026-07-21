@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Designing a Social Network</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+  pre.bad{border-left-color:#fc8181}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  /* recall card */
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin:24px 0 0;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:11px;color:var(--q);letter-spacing:.18em;text-transform:uppercase;padding-top:2px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 16px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Distributed Systems</div>
+  <h1>Designing a Social Network</h1>
+  <p class="sub">Eighteen main problems, from the relation edge up to the event backbone. Read the problem, sit with the diagram, then open the recap only after you have explained it to yourself.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all recaps</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s1"><span class="num">01</span>Modelling follow / unfollow</a></li>
+    <li><a href="#s2"><span class="num">02</span>Why we often store two edges</a></li>
+    <li><a href="#s3"><span class="num">03</span>Shaping the primary key / index</a></li>
+    <li><a href="#s4"><span class="num">04</span>Why cursor pagination matters</a></li>
+    <li><a href="#s5"><span class="num">05</span>Sharding the relation graph</a></li>
+    <li><a href="#s6"><span class="num">06</span>What kind of graph is this really?</a></li>
+    <li><a href="#s7"><span class="num">07</span>Designing the feed</a></li>
+    <li><a href="#s8"><span class="num">08</span>What exactly is a feed item?</a></li>
+    <li><a href="#s9"><span class="num">09</span>Ranking is not just sorting by time</a></li>
+    <li><a href="#s10"><span class="num">10</span>How should reactions be modelled?</a></li>
+    <li><a href="#s11"><span class="num">11</span>Counting is deceptively hard</a></li>
+    <li><a href="#s12"><span class="num">12</span>Notifications are not same as feed</a></li>
+    <li><a href="#s13"><span class="num">13</span>Messaging unread indicator</a></li>
+    <li><a href="#s14"><span class="num">14</span>Post / media storage</a></li>
+    <li><a href="#s15"><span class="num">15</span>Tags on photos / relative coordinates</a></li>
+    <li><a href="#s16"><span class="num">16</span>Search and discovery</a></li>
+    <li><a href="#s17"><span class="num">17</span>Blocking, muting, privacy</a></li>
+    <li><a href="#s18"><span class="num">18</span>The event-driven backbone</a></li>
+  </ol>
+</div>
+
+<!-- ============ 01 ============ -->
+<section id="s1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>How should we model follow / unfollow?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A naive design says:</p>
+<pre>Table: follows
+follower_id
+followee_id</pre>
+    <p>Is this only “follow”? Or is this a generic relationship system?</p>
+    <h3 class="blk">Better abstraction</h3>
+<pre>Table: relations
+
+from_user_id
+to_user_id
+relation_type
+state
+position
+created_at
+updated_at</pre>
+    <p>Example:</p>
+<pre>from=A
+to=B
+relation_type=FOLLOW
+state=ACTIVE
+position=timestamp</pre>
+<pre class="flow">+----+         +----+
+| A  | ------> | B  |
++----+         +----+
+
+Stored as edge:
+(from=A, to=B, type=FOLLOW, state=ACTIVE)</pre>
+
+    <h3 class="blk">Why “relations” is a stronger design than “follows”</h3>
+    <p>Because the product grows.</p>
+<pre>Today:
+    follow
+
+Tomorrow:
+    close friend
+    mute
+    block
+    subscribe
+    favorite creator
+    hidden connection
+    private circle</pre>
+    <div class="note">So low-level naming should be one level more abstract. Weak abstraction: <strong>follows</strong>. Stronger abstraction: <strong>relations</strong>.</div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A social graph is read far more than it is written. Design the storage for how data is read, not how it was created.</p></div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>Why do we often store two edges?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">When A follows B, product asks two kinds of questions:</p>
+<pre>- whom do I follow?
+- who follows me?</pre>
+    <p>If we only store one row:</p>
+<pre>   A -> B</pre>
+    <p>Then one direction is easy, the reverse may become expensive depending on sharding/indexing. So many systems store two directional entries.</p>
+<pre>A follows B
+
+and
+
+B followed_by A</pre>
+<pre class="flow">Single relationship in product: A follows B
+
+Stored internally as 2 edges:
+
+1) A --FOLLOWING--> B
+2) B --FOLLOWED_BY--> A</pre>
+    <p>Or visually:</p>
+<pre class="flow">         +----+                +----+
+          | A  |                | B  |
+          +----+                +----+
+             \                    /
+              \                  /
+      FOLLOWING \              / FOLLOWED_BY
+                 \            /
+                  \          /
+                   +--------+</pre>
+    <p>More practical sketch:</p>
+<pre>=======================
+Row 1: source=A, dest=B, type=FOLLOWING
+Row 2: source=B, dest=A, type=FOLLOWED_BY</pre>
+
+    <h3 class="blk">Why this helps</h3>
+    <p>Now these queries become local and cheap:</p>
+<pre>who do I follow?      -> source = A, type = FOLLOWING
+who follows me?       -> source = A, type = FOLLOWED_BY</pre>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>How should the primary key / index be shaped?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A beginner thinks:</p>
+<pre>PRIMARY KEY (source_id, destination_id)</pre>
+    <p>But an architect asks: <strong>What are my dominant query patterns?</strong></p>
+    <p>If main query is:</p>
+    <ul>
+      <li>show followers of X</li>
+      <li>newest first</li>
+      <li>paginate fast</li>
+      <li>skip deleted</li>
+      <li>fetch next page by cursor</li>
+    </ul>
+    <p>then the query pattern matters more than “uniqueness elegance”.</p>
+
+    <h3 class="blk">Possible model</h3>
+<pre>relations
+---------
+source_id
+destination_id
+relation_type
+state
+position</pre>
+    <p>where:</p>
+    <ul>
+      <li><strong>position</strong> could be timestamp / snowflake / score</li>
+      <li><strong>state</strong> could be ACTIVE / DELETED / ARCHIVED</li>
+    </ul>
+<pre>INDEX (source_id, relation_type, state, position DESC, destination_id)
+
+or if only one relation type exists for this table:
+
+INDEX (source_id, state, position DESC, destination_id)</pre>
+    <p>And key/index can be shaped around read pattern.</p>
+<pre>For source = A
+
++---------------------------------------------+
+| source | state  | position | destination    |
++---------------------------------------------+
+| A      | ACTIVE | 9005     | U17            |
+| A      | ACTIVE | 9004     | U88            |
+| A      | ACTIVE | 9003     | U02            |
+| A      | DELETD | 9002     | U13            |
++---------------------------------------------+</pre>
+
+    <h3 class="blk">Why this index</h3>
+<pre>WHERE source_id = A
+ AND state = 'ACTIVE'
+ORDER BY position DESC
+LIMIT 20</pre>
+    <p>So index should start with:</p>
+<pre>==========================
+source_id       -> find all edges of A
+state (+ type)  -> skip deleted/inactive rows early
+position DESC   -> already sorted newest first
+destination_id  -> last column / covering / uniqueness support</pre>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>Why cursor pagination matters so much</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Offset pagination becomes expensive at deep pages.</p>
+<pre class="bad">Bad:
+   SELECT ...
+   FROM relations
+   WHERE source_id = A
+   ORDER BY position DESC
+   LIMIT 20 OFFSET 100000;</pre>
+<pre class="state">Better:
+   WHERE source_id = A
+   AND position &lt; last_seen_position
+   ORDER BY position DESC
+   LIMIT 20;</pre>
+<pre class="bad">Bad:
+[read first 100000 rows] -> discard -> return 20</pre>
+<pre class="state">Good:
+jump directly to cursor position -> return 20</pre>
+<pre>Page 1:
+9005, 9004, 9003
+
+Client sends last_seen = 9003
+
+Page 2:
+position &lt; 9003
+=> 9002, 9001, 9000</pre>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>How should we shard the relation graph?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A common approach: <strong>shard by source_user_id</strong>.</p>
+    <p>Why? Because many core queries are:</p>
+<pre>show people I follow
+show my followers
+paginate my adjacency list</pre>
+<pre class="flow">shard = hash(source_user_id) % N
+
+source A -> shard 2
+source B -> shard 7
+source C -> shard 1</pre>
+    <p>All adjacency for source A stays together in one shard. That avoids cross-shard query for source-based scans.</p>
+
+    <h3 class="blk">But now the hard question</h3>
+    <p>If celebrity X has 200 million followers:</p>
+<pre>- source = X
+- huge adjacency list
+- single logical hotspot</pre>
+    <div class="note">Now shard-by-source creates giant hot partitions.</div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Celebrities create hot partitions. Shard a social graph for your worst-case user — the one with 10 million followers — not for the average one.</p></div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>What kind of graph is this really?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">People hear “social graph” and jump to graph database. But not all graph problems are the same. There are roughly two worlds:</p>
+
+    <h3 class="blk">World A — shallow adjacency graph</h3>
+    <p>Queries like:</p>
+    <ul><li>who follows me?</li><li>who do I follow?</li><li>mutuals</li><li>followers count</li></ul>
+
+    <h3 class="blk">World B — deep traversal graph</h3>
+    <p>Queries like:</p>
+    <ul><li>2-hop / 3-hop paths</li><li>people you may know via multiple relationship hops</li><li>graph shortest path / community search</li></ul>
+
+    <p>Twitter-like follow graph mostly leans toward large adjacency lists, shallow traversals. LinkedIn-style “2nd degree”, “3rd degree”, professional path graph leans more into traversal richness.</p>
+<pre>Twitter-like:
+A -> [very large list of edges]
+Need fast read/write on huge adjacency
+
+LinkedIn-like:
+A -> B -> C -> D
+Need traversal intelligence</pre>
+<pre class="flow">Query - go through my friend list
+        -> go to all who I follow</pre>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>Designing the feed is the true battlefield</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A social network without feed is just storage. The real magic is:</p>
+<pre>Who posted?
+Who should see it?
+When should they see it?
+In what order?</pre>
+    <p>Feed is where scale and product meet.</p>
+
+    <h3 class="blk">1. Fanout-on-write</h3>
+    <p>When the author posts, push feed entry to followers.</p>
+<pre class="flow">Author posts
+   |
+   v
+find followers
+   |
+   v
+write feed entry into follower timelines</pre>
+
+    <h3 class="blk">2. Fanout-on-read</h3>
+    <p>When the reader opens the app, fetch posts from people they follow and assemble live.</p>
+<pre class="flow">Reader opens feed
+   |
+   v
+find followees
+   |
+   v
+fetch recent posts from them
+   |
+   v
+merge + sort + rank</pre>
+
+    <h3 class="blk">Hybrid feed design — the practical answer</h3>
+    <p>A strong real-world idea:</p>
+    <ul>
+      <li>normal users → fanout on write</li>
+      <li>celebrities / huge fanout accounts → fanout on read</li>
+    </ul>
+<pre class="flow">               +----------------------+
+               | New Post by Author   |
+               +----------+-----------+
+                          |
+               +----------+-----------+
+               | fanout size check    |
+               +----------+-----------+
+                          |
+              +-----------+------------+
+              |                        |
+              v                        v
+      normal author              celebrity author
+      fanout on write            fanout on read</pre>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Push-on-write means fast reads but expensive writes for large followings. Pull-on-read is cheap to write but slow to serve. Most systems end up with a hybrid based on follower count.</p></div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>What exactly is a feed item?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A feed item is not necessarily the full post.</p>
+<pre>feed_item
+---------
+viewer_id    -> who will see the post
+post_id      -> which post to show
+producer_id  -> who created the post
+reason       -> why this post is shown
+score        -> how important/relevant this post is
+created_at   -> when this feed entry was created</pre>
+    <p>Then the full post can be fetched separately. This makes fanout lighter.</p>
+<pre>Feed table for U1
+
++-----------------------------------------+
+| viewer | post_id | producer | score     |
++-----------------------------------------+
+| U1     | P90     | A        | 0.92      |
+| U1     | P81     | B        | 0.88      |
+| U1     | P33     | C        | 0.71      |
++-----------------------------------------+</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>We are trying to solve how to store a user's home feed efficiently.</p>
+        <p>The key idea is that a feed item is usually not the full post itself. Instead, it is a light entry that says something like: “show post P90 to user U1, made by A, because of this reason, with this score.” Then the real post content can be fetched separately when needed.</p>
+        <p>This makes the feed table smaller, faster, and easier to fan out to many users. In short, we are not copying the whole post again and again into every user's feed — we are mostly storing a reference plus some feed-related metadata.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>Ranking is not just sorting by time</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Simple feed:</p>
+<pre>ORDER BY created_at DESC</pre>
+    <p>Real social feed:</p>
+<pre>score =
+    freshness
+  + affinity
+  + content quality
+  + media boost
+  + interaction velocity
+  + creator importance
+  - spam signals</pre>
+<pre>Post candidates for user U
+
+P1: new but weak affinity
+P2: older but strong affinity
+P3: viral content from close friend
+
+score decides order
+not time alone</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>We are trying to solve how posts should be ordered in the feed. A beginner may think feed should just show the newest post first, but real social apps do more than that.</p>
+        <p>Here we rank posts using many signals together: how new the post is, how close the viewer is to that creator, how engaging or high-quality the content is, whether it is getting fast reactions, and whether it looks spammy. So instead of saying “latest always wins,” the system says “best post for this user at this moment should come first.”</p>
+        <p>In short, ranking means the feed is ordered by importance and relevance, not only by time.</p>
+      </div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Ranking is a product decision wrapped in an engineering problem. "Most relevant" is not a database query — it requires signals, freshness rules, and a computation budget someone has to pay for.</p></div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 10</span><h2>How should reactions be modeled?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Do not create a narrow likes table if reaction types can expand.</p>
+    <h3 class="blk">Better abstraction</h3>
+<pre>reactions
+---------
+user_id
+post_id
+reaction_type
+state
+created_at</pre>
+    <p>Possible values:</p>
+<pre>LIKE
+LOVE
+HAHA
+WOW
+SAD
+ANGRY</pre>
+    <p>And usually one user should have only one active reaction per post.</p>
+<pre>User U reacts to Post P
+
+(U, P, LIKE)
+
+Later changes to LOVE
+
+(U, P, LOVE)</pre>
+    <p>Need uniqueness by:</p>
+<pre>UNIQUE(user_id, post_id)</pre>
+    <p>if only one active reaction allowed.</p>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>We are trying to solve how to store reactions on a post in a smart way. Instead of making a small table only for “likes,” the idea is to make a more general reactions table, because today it may be like, but tomorrow it can also be love, haha, wow, sad, or angry. So we store the user's reaction in one flexible structure with fields like user, post, reaction type, and state.</p>
+        <p>If one user is allowed to have only one active reaction on one post, then we keep a uniqueness rule on (user_id, post_id). That means the same user cannot keep both LIKE and LOVE active on the same post at the same time — if they change reaction, we update that one row instead of creating many rows.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11</span><h2>Counting is deceptively hard</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Follower count, following count, like count, comment count, unread count. These look simple, but become hot.</p>
+<pre class="bad">Bad idea:
+SELECT COUNT(*)
+FROM relations
+WHERE source = X AND type = FOLLOWED_BY AND state = ACTIVE</pre>
+    <p>on every profile render.</p>
+    <h3 class="blk">Better</h3>
+    <ul>
+      <li>maintain materialized counters</li>
+      <li>update asynchronously</li>
+      <li>allow slight lag</li>
+    </ul>
+<pre class="flow">User follows A
+   |
+   v
+write relation edge
+   |
+   v
+emit event
+   |
+   v
+counter updater
+   |
+   v
+A.follower_count += 1</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>We are trying to solve how to show numbers like follower count, like count, comment count, or unread count without making the system slow. At first it looks easy — just count rows from the database each time. But on a big social app, doing that on every profile or post view becomes expensive.</p>
+        <p>So we keep ready-made counters that get updated when actions happen, often through an async background flow. In short, instead of counting everything again and again, we store the number separately and update it as new actions come in. This makes the app fast, even if the count is slightly delayed for a few seconds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 12</span><h2>Notifications are not same as feed</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="note">Very important distinction.</div>
+    <p>A user may receive:</p>
+<pre>- a notification
+- a feed item
+- both
+- neither</pre>
+    <p>Example:</p>
+    <ul>
+      <li>someone liked your post → notification maybe yes</li>
+      <li>celebrity posted → feed yes, notification maybe no</li>
+      <li>DM received → notification yes, feed no</li>
+    </ul>
+<pre class="flow">Action happens
+   |
+   +--> feed candidate
+   |
+   +--> notification candidate
+   |
+   +--> unread badge update</pre>
+    <p>These are different pipelines.</p>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>A notification is a direct alert to a user, like “someone liked your post” or “you got a message.”</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 13</span><h2>Messaging unread indicator</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A near-real-time unread indicator is not only “count”. Sometimes product wants:</p>
+    <ul>
+      <li>count of unread threads</li>
+      <li>latest senders</li>
+      <li>instant websocket badge</li>
+      <li>reset when user opens inbox</li>
+    </ul>
+    <p>So an in-memory fast store is useful.</p>
+<pre class="flow">A sends msg to B
+      |
+      v
+ save message durable
+      |
+      v
+ update unread state in Redis
+      |
+      v
+ if B online -> push badge via WebSocket</pre>
+
+    <h3 class="blk">Sorted set style idea</h3>
+    <p>Instead of only count:</p>
+<pre>Unread senders for B = [i, j, k, b]</pre>
+    <p>Then:</p>
+<pre>count = size of set
+UI can show names
+clear on inbox-open</pre>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>We are solving one simple product problem: how to show an unread message badge fast, like “3 unread” on chat or inbox.</p>
+        <p>But unread is not always just a number — sometimes product also wants to show which senders are unread, update the badge instantly, and clear it as soon as the user opens messages. So the idea is: first save the actual message safely in the database, then update a very fast store like Redis for unread info, and if the user is online, push the new badge instantly through WebSocket.</p>
+        <p>In short, the DB is used to safely keep the real message, while Redis is used to quickly show and update the unread badge in real time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 14</span><h2>Post / media storage</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Media is usually not in primary relational DB.</p>
+<pre class="flow">Client uploads media
+   |
+   v
+object storage
+   |
+   v
+metadata DB stores references</pre>
+<pre class="flow">+---------+      +------------------+      +------------------+
+| Client  | ---> | Object Storage   | ---> | CDN              |
++---------+      +------------------+      +------------------+
+       \
+        \
+         v
+   +------------------+
+   | Metadata DB      |
+   | post_id, owner   |
+   | media_url, etc   |
+   +------------------+</pre>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 15</span><h2>Tags on photos / relative coordinates</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Absolute pixels are fragile because image dimensions vary after resize.</p>
+    <p>Better: normalized coordinate ratios, or bounding box ratios.</p>
+<pre>Image width  = W
+Image height = H
+
+Tag box:
+x1/W, y1/H, x2/W, y2/H</pre>
+<pre class="bad">Instead of:
+(400px, 210px)</pre>
+<pre class="state">Store:
+(0.52, 0.31)</pre>
+    <p>So same tag still works after image resize.</p>
+
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recap</span><span class="q-text">Say it in your own words first — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>Facebook does not store photo tags using fixed pixels like 400px from the left and 210px from the top, because that breaks when the same photo is resized into a thumbnail, preview, or full-screen version.</p>
+        <p>Instead, it stores the tag position as a ratio or percentage of the image size, such as 0.52 of the width and 0.31 of the height. This means the tag stays on the same face even when the photo becomes bigger or smaller. In simple words, instead of saving the exact distance, it saves the relative position inside the photo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 ============ -->
+<section id="s16">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 16</span><h2>Search and discovery are different from source-of-truth</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Do not overload OLTP DB for discovery.</p>
+    <h3 class="blk">Source-of-truth DB is for</h3>
+<pre>- creating users
+- writing posts
+- writing relations
+- reading exact objects</pre>
+    <h3 class="blk">Search / discovery system is for</h3>
+<pre>- hashtag search
+- people search
+- keyword query
+- trending content
+- suggestions</pre>
+<pre class="flow">source of truth write
+      |
+      v
+event stream
+      |
+      v
+search index / recommendation systems</pre>
+  </div>
+</section>
+
+<!-- ============ 17 ============ -->
+<section id="s17">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 17</span><h2>Blocking, muting, privacy</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This changes many downstream systems.</p>
+    <p>If A blocks B:</p>
+    <ul>
+      <li>B should maybe not see A profile</li>
+      <li>B should maybe not send messages</li>
+      <li>A's content should disappear from B feed</li>
+      <li>recommendation should stop suggesting them</li>
+    </ul>
+    <div class="note">So block is not just one edge — it changes many read paths.</div>
+<pre class="flow">A blocks B
+   |
+   +--> relation updated
+   +--> feed visibility changes
+   +--> messaging permissions change
+   +--> search visibility changes
+   +--> recommendation suppression</pre>
+  </div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section id="s18">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 18</span><h2>What is the right event-driven backbone?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Most large social networks become event-heavy systems.</p>
+    <h3 class="blk">Actions generate events</h3>
+<pre>- post_created
+- relation_changed
+- reaction_added
+- comment_added
+- message_sent
+- block_created</pre>
+    <h3 class="blk">These events feed</h3>
+<pre>- counters
+- notifications
+- search indexing
+- feed generation
+- recommendation features
+- analytics</pre>
+<pre class="flow">User action
+   |
+   v
++------------------+
+| Source DB write  |
++--------+---------+
+         |
+         v
++------------------+
+| Event stream     |
++---+---+---+---+--+
+    |   |   |   |
+    v   v   v   v
+ counters feed notif search</pre>
+  </div>
+</section>
+
+<footer>Architects Lab · Social Network · 18 problems</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

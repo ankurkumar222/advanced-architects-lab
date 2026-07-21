@@ -151,6 +151,17 @@
 
   footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
   @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -246,6 +257,7 @@
         <div class="turn b"><div class="who">B</div><p>Fairness optimizes the load balancer's own bookkeeping, not the user's experience. Optimizing for latency means the algorithm has to know something about current server state — not just take turns.</p></div>
         <div class="insight"><b>Where this leaves us:</b> latency-first rules out any algorithm that can't see real server state, which immediately rules out pure round-robin as the final answer — it just doesn't know enough to be right. Stage 3 has to build the mechanism that actually knows.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Fairness optimizes the load balancer's metrics. Latency optimizes the user's experience. When they conflict, optimize for the user. A balanced count that routes requests to a busy server is not actually fair.</p></div>
   </section>
 
   <!-- STAGE 2 -->
@@ -317,6 +329,7 @@ Next request --> Server B (fewer open, presumed less loaded)</pre></div>
         <div class="turn b"><div class="who">B</div><p>Nothing's wrong with it — it's necessary. But it's not sufficient by itself, because a server can pass a shallow "are you up" ping while its actual dependency — say, its connection to NSDL — is the part that's actually broken.</p></div>
         <div class="insight"><b>Where this leaves us:</b> a raw ping tells you the process is running, not that it can do its job. That gap between "alive" and "actually useful" is exactly what forces the next argument — active checks alone were never going to be the full picture.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>"Zero connections" looks like the best server to send traffic to — until the server is dead. Health and load are two separate signals. Never use one as a proxy for the other.</p></div>
   </section>
 
   <!-- STAGE 5 -->
@@ -342,6 +355,7 @@ Next request --> Server B (fewer open, presumed less loaded)</pre></div>
         <div class="turn b"><div class="who">B</div><p>Both, deliberately layered — active checks for baseline liveness at low frequency to keep cost bounded, passive observation on real traffic for fast reaction during actual load. Neither one alone is honest about the trade-off; together they cover each other's blind spot.</p></div>
         <div class="insight"><b>Where this leaves us:</b> health isn't a single boolean fact — it's an estimate, assembled from two different signals with two different costs and two different blind spots. That estimate is about to get harder to trust the moment there's more than one load balancer, which is exactly stage 9's problem.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Active checks find failures before traffic hits them. Passive checks find failures faster once traffic is flowing. Neither alone is enough — use both, and be honest about each one's blind spot.</p></div>
   </section>
 
   <!-- STAGE 6 -->

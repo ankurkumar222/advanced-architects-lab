@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Designing an SQS-like Queue</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  /* ---------- header ---------- */
+  header{
+    padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px;
+  }
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:640px;margin:0}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0;
+  }
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- table of contents ---------- */
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{
+    color:var(--ink-dim);text-decoration:none;font-size:13.5px;
+    display:flex;gap:10px;
+  }
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  /* ---------- sections ---------- */
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{
+    font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em;
+  }
+  .chev{
+    color:var(--ink-dim);font-family:var(--mono);font-size:13px;
+    transition:transform .22s;
+  }
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+
+  /* ---------- ascii diagrams ---------- */
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+
+  /* ---------- callout ---------- */
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  /* ---------- recall cards ---------- */
+  .qblock{margin-top:24px}
+  .qblock > .lbl{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--q);margin-bottom:12px;
+  }
+  .q{
+    border:1px solid var(--line);border-radius:8px;
+    background:var(--panel-2);margin-bottom:8px;overflow:hidden;
+  }
+  .q-head{
+    display:flex;gap:12px;align-items:flex-start;
+    padding:12px 16px;cursor:pointer;user-select:none;transition:.15s;
+  }
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{
+    font-family:var(--mono);font-size:12px;color:var(--q);
+    min-width:34px;padding-top:1px;
+  }
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{
+    display:none;padding:0 16px 14px 62px;
+    font-size:14px;color:var(--ink-dim);
+  }
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .q-body pre{margin:10px 0;font-size:12px}
+  .verdict{color:var(--ok);font-weight:600}
+  .hint{
+    font-family:var(--mono);font-size:11px;color:var(--line);
+    padding-top:2px;letter-spacing:.05em;
+  }
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+    .q-body{padding-left:16px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Distributed Systems</div>
+  <h1>Designing an SQS-like Queue</h1>
+  <p class="sub">Two stages, seventeen problems, seventy-two questions. Read the problem, sit with the diagram, then open the question only after you have answered it yourself.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all answers</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#s0"><span class="num">00</span>Two stages</a></li>
+    <li><a href="#s1"><span class="num">01</span>What is a queue message really?</a></li>
+    <li><a href="#s2"><span class="num">02</span>How do producers write messages?</a></li>
+    <li><a href="#s3"><span class="num">03</span>How should messages be stored?</a></li>
+    <li><a href="#s4"><span class="num">04</span>How do consumers receive messages?</a></li>
+    <li><a href="#s5"><span class="num">05</span>Visibility timeout is the real heart</a></li>
+    <li><a href="#s6"><span class="num">06</span>Ack / delete is deeper than it looks</a></li>
+    <li><a href="#s7"><span class="num">07</span>What delivery guarantee do we provide?</a></li>
+    <li><a href="#s8"><span class="num">08</span>Failure scenarios are the real design</a></li>
+    <li><a href="#s9"><span class="num">09</span>Scaling the queue</a></li>
+    <li><a href="#s10"><span class="num">10</span>Ordering changes everything</a></li>
+    <li><a href="#s11"><span class="num">11</span>Delay queues and scheduled messages</a></li>
+    <li><a href="#s12"><span class="num">12</span>Dead-letter queues</a></li>
+    <li><a href="#s13"><span class="num">13</span>Multi-tenant fairness</a></li>
+    <li><a href="#s14"><span class="num">14</span>Metadata vs payload path</a></li>
+    <li><a href="#s15"><span class="num">15</span>State machine is the soul</a></li>
+    <li><a href="#s16"><span class="num">16</span>What is the source of truth?</a></li>
+    <li><a href="#s17"><span class="num">17</span>Frontend / broker / storage separation</a></li>
+    <li><a href="#s18"><span class="num">18</span>SQL implementation</a></li>
+  </ol>
+</div>
+
+<!-- ============ 00 ============ -->
+<section id="s0" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">STAGE MAP</span><h2>Two stages</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">For an SQS-like system, splitting into 2 stages makes it much easier to read.</p>
+    <p>This split is better because:</p>
+    <ul>
+      <li><strong>Stage 1</strong> = how message enters safely</li>
+      <li><strong>Stage 2</strong> = how message leaves safely</li>
+    </ul>
+
+    <h3 class="blk">Stage 1 — write path + storage path</h3>
+    <ul>
+      <li>Producer sends message</li>
+      <li>API routes it</li>
+      <li>partition leader stores and replicates it</li>
+      <li>message becomes available</li>
+    </ul>
+<pre class="flow">Producer -> API -> Router -> Partition Leader -> Replicas -> Available Index</pre>
+
+    <h3 class="blk">Stage 2 — read path + visibility timeout + delete/retry</h3>
+    <ul>
+      <li>Consumer receives message</li>
+      <li>queue marks it inflight</li>
+      <li>consumer processes</li>
+      <li>delete on success</li>
+      <li>redelivery on timeout/failure</li>
+    </ul>
+<pre class="flow">Consumer -> Receive -> Inflight/Visibility Timeout -> Process -> Delete
+                                         |
+                                         v
+                                   Timeout / Retry / DLQ</pre>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>What is a queue message really?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Before design, define the object clearly. A message is not only a payload.</p>
+<pre>Message
+-------
+message_id
+queue_id
+payload
+attributes
+enqueue_time
+visibility_deadline
+receive_count
+status
+replication info
+optional ordering key
+optional dedup key</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q1</span><span class="q-text">Is a queue message just payload, or is it really a state machine object?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q2</span><span class="q-text">Should receive_count be inside a durable message state, or derived from logs?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q3</span><span class="q-text">Should visibility timeout mutate the message row, or live separately as a lease record?</span><span class="hint">＋</span></div><div class="q-body">
+        <p>When a consumer takes a message from queue, the message is not deleted immediately. It is only hidden for some time.</p>
+<pre>Before receive:
+Message M1 = visible
+
+Consumer gets M1
+
+After receive:
+Message M1 = hidden for 30 sec</pre>
+        <p>This hidden period is called <strong>visibility timeout</strong>.</p>
+<pre>MESSAGE TABLE
++----------------------------------------------+
+| msg_id | payload | state      |
++----------------------------------------------+
+| M1     | hello   | AVAILABLE  |
++----------------------------------------------+</pre>
+        <p>And separate lease table stores temporary ownership:</p>
+<pre>LEASE TABLE
++------------------------------------------------------+
+| msg_id | consumer_id | lease_until                   |
++------------------------------------------------------+
+| M1     | C1          | now + 30 sec                  |
++------------------------------------------------------+</pre>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q4</span><span class="q-text">Which metadata is essential for correctness, and which is optional for convenience?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A message is a unit of work, not just data. The envelope — ID, visibility timeout, delivery count — is what makes it possible to retry, deduplicate, and route failures safely.</p></div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>How do producers write messages?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">From producer's viewpoint:</p>
+<pre>SendMessage(payload)
+   |
+   v
+queue returns success</pre>
+    <p>But what does “success” mean internally?</p>
+<pre class="flow">Producer
+   |
+   v
++-------------------+
+| Queue API Node    |
++---------+---------+
+          |
+          v
++-------------------+
+| choose partition  |
++---------+---------+
+          |
+          v
++-------------------+
+| write to replicas |
++---------+---------+
+          |
+          v
+ack producer</pre>
+
+    <h3 class="blk">More detailed flow</h3>
+<pre class="flow">Producer
+   |
+   | SendMessage
+   v
++------------------+
+| Frontend Node    |
++------------------+
+   |
+   | hash(queue_id or ordering key)
+   v
++------------------+
+| Partition Leader |
++------------------+
+   |
+   +--> Replica 1
+   +--> Replica 2
+   +--> Replica 3
+   |
+   v
+ quorum / durable commit
+   |
+   v
+return message_id</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q5</span><span class="q-text">When should producers get a success response?</span><span class="hint">＋</span></div><div class="q-body">
+        <p>Pick one:</p>
+        <ul>
+          <li>A) after leader memory write</li>
+          <li>B) after leader disk write</li>
+          <li>C) after replication quorum</li>
+          <li>D) after all replicas persist</li>
+        </ul>
+        <p>Each answer changes latency, durability, and throughput.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q6</span><span class="q-text">If the leader accepts a message but crashes before replication, does the message exist?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q7</span><span class="q-text">Can the producer retry blindly after timeout?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Producer sends
+network timeout
+producer retries</pre>
+        <p>Did the first writer succeed or not? This leads to dedup questions.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q8</span><span class="q-text">Should queue assign message_id, or producer supply idempotency key too?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q9</span><span class="q-text">If the write path is very durable, does the read path become more expensive?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>How should messages be stored?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Do we store queue as:</p>
+    <ul>
+      <li>single table?</li>
+      <li>partitioned log?</li>
+      <li>linked list?</li>
+      <li>heap by priority?</li>
+    </ul>
+<pre>Queue
+  -> split into partitions
+
+Partition
+  -> append-only or segment-based storage</pre>
+<pre class="flow">Queue Q1
+ |
+ +--> Partition 0
+ |      M1, M2, M3 ...
+ |
+ +--> Partition 1
+ |      M4, M5, M6 ...
+ |
+ +--> Partition 2
+        M7, M8, M9 ...</pre>
+    <div class="note">A big queue is usually not “one queue”. It is: one logical queue = many physical partitions.</div>
+    <p>It means more generally: one logical queue is split into many smaller physical pieces so multiple machines / disks / threads can handle it.</p>
+
+    <h3 class="blk">First: is queue storage SQL or NoSQL?</h3>
+    <p>It can be built on SQL, or on NoSQL, or on custom log files.</p>
+    <p>The real idea is: how do we store messages so that —</p>
+<pre>- writes are fast
+- reads are scalable
+- multiple consumers can work in parallel
+- one machine does not become bottleneck</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q10</span><span class="q-text">What should the partitioning key be?</span><span class="hint">＋</span></div><div class="q-body">
+        <ul><li>random hash?</li><li>queue_id?</li><li>tenant_id?</li><li>ordering key?</li><li>message group?</li></ul>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q11</span><span class="q-text">If you randomly partition, how do you preserve ordering?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q12</span><span class="q-text">If you partition by ordering key, what happens to hot keys?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q13</span><span class="q-text">Should messages be append-only, or should state changes rewrite rows?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q14</span><span class="q-text">Can storage remain append-only while visibility/deletes are handled via metadata index?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">This is a very strong architectural question.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>How do consumers receive messages?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre>Consumer --> ReceiveMessage</pre>
+    <p>But read path is not just read. It is:</p>
+<pre>find available message
++ lease it temporarily
++ hide it from others
++ return it</pre>
+    <p>That is the real logic.</p>
+<pre class="flow">Consumer
+   |
+   | ReceiveMessage
+   v
++-------------------+
+| Queue Frontend    |
++---------+---------+
+          |
+          v
++-------------------+
+| find AVAILABLE    |
+| message           |
++---------+---------+
+          |
+          v
++-------------------+
+| mark invisible    |
+| until T + timeout |
++---------+---------+
+          |
+          v
+return message</pre>
+<pre class="state">AVAILABLE  --->  INFLIGHT  --->  DELETED
+                   |
+                   |
+                   +----> timeout expires
+                             |
+                             v
+                         AVAILABLE again</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q15</span><span class="q-text">Is receive operation just a read, or actually a read + lease acquisition?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q16</span><span class="q-text">Should lease acquisition be atomic with fetch?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">It usually must be.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q17</span><span class="q-text">If two consumers poll same partition at same moment, how do we stop double delivery?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q18</span><span class="q-text">Should a consumer fetch from one partition, many partitions, or let broker decide?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q19</span><span class="q-text">Should long polling exist?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>Consumer asks
+"No message right now"
+
+Should system:
+- return immediately?
+- hold request and wait a bit?</pre>
+        <p>This affects efficiency a lot.</p>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>Visibility timeout is the real heart</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is perhaps the most SQS-like part. A consumer should receive a message, but the queue should not delete it immediately.</p>
+    <div class="note">Why? Because consumers may crash.</div>
+    <p>So queue does this: message delivered, but only hidden temporarily. This is a <strong>visibility timeout</strong>.</p>
+<pre>Time ----->
+
+Message M1
+AVAILABLE --> delivered to C1 --> invisible for 30s
+
+t0         t1                    t2
+|----------|---------------------|
+
+If C1 acks before t2
+   -> delete
+
+If C1 crashes and no ack by t2
+   -> visible again</pre>
+<pre class="state">+----------------------+
+| Message M1           |
+| state = INFLIGHT     |
+| visible_at = 10:05   |
+| leased_to = C1       |
++----------------------+</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q20</span><span class="q-text">What is visibility timeout really?</span><span class="hint">＋</span></div><div class="q-body">
+        <ul><li>a timer?</li><li>a state field?</li><li>a temporary lease?</li><li>all of the above?</li></ul>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q21</span><span class="q-text">If a consumer takes longer than a timeout, what happens?</span><span class="hint">＋</span></div><div class="q-body">
+<pre>C1 still processing
+timeout expires
+C2 receives same message</pre>
+        <p>Now duplicates happen.</p>
+      </div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q22</span><span class="q-text">Should consumers extend visibility timeout while processing?</span><span class="hint">＋</span></div><div class="q-body"><pre>heartbeat / touch / extend lease</pre></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q23</span><span class="q-text">If visibility timeout is too short, duplicates rise. If too long, stuck messages recover slowly. How do you choose it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q24</span><span class="q-text">Should each message have the same timeout, or should the timeout be dynamic by job type?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The visibility timeout is the queue's heartbeat. Too short and you get duplicate processing. Too long and a crashed consumer holds work hostage. Tune it to your worst-case processing time, not your average.</p></div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>Ack / delete is deeper than it looks</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">After consumer finishes work:</p>
+<pre>Consumer --> DeleteMessage</pre>
+    <p>Sounds simple. But real question is:</p>
+    <ul>
+      <li>What exactly is being deleted?</li>
+      <li>How do we know this consumer still owns it?</li>
+      <li>What if delete arrives after timeout?</li>
+    </ul>
+<pre class="flow">Consumer C1 gets M1
+   |
+   v
+processes M1
+   |
+   v
+DeleteMessage(receipt_handle)</pre>
+    <p>Need ownership token:</p>
+<pre>Receipt_handle = proof that this receive attempt owns message</pre>
+
+    <h3 class="blk">Why receipt_handle is needed</h3>
+    <p>When a consumer gets a message, queue gives not only the message, but also a special temporary token.</p>
+<pre>ReceiveMessage()
+   ->
+message = M1
+receipt_handle = R123</pre>
+    <p>This token means: “Right now, this consumer is the valid owner of this delivery of M1”.</p>
+
+    <h3 class="blk">Why not delete by only message_id?</h3>
+    <p>Because same message can be delivered again later.</p>
+<pre>Step 1:
+C1 gets M1
+receipt_handle = R123
+
+Step 2:
+C1 is slow
+visibility timeout expires
+
+Step 3:
+Queue gives M1 again to C2
+receipt_handle = R999</pre>
+    <p>Now message M1 has been delivered twice. If old consumer C1 later says <code>DeleteMessage(M1)</code>, that is dangerous.</p>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q25</span><span class="q-text">Should delete use message_id only?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Usually not enough.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q26</span><span class="q-text">Why is a receipt handle better than plain message_id?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q27</span><span class="q-text">Can a stale consumer accidentally delete a newer delivery?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q28</span><span class="q-text">Should delete physically remove data immediately, or mark tombstone and compact later?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>What delivery guarantee do we really provide?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Possible guarantees: at-most-once, at-least-once.</p>
+    <p>For SQS-like systems, common reality is:</p>
+<pre>At-least-once delivery
+possible duplicates
+consumer should be idempotent</pre>
+
+    <h3 class="blk">Guarantee sketch</h3>
+<pre class="flow">Producer write acknowledged
+   -> Message stored durably
+   -> Consumer receives
+   -> Consumer crashes before delete</pre>
+    <div class="note">Message comes again. So duplicates are natural.</div>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q29</span><span class="q-text">Which is worse for your use case?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>duplicate delivery?</li><li>lost message?</li><li>delayed delivery?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q30</span><span class="q-text">Can a queue give exactly-once delivery across network, storage, and consumer crash boundaries?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Very hard.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q31</span><span class="q-text">Should the queue guarantee dedup, or should applications handle idempotency?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q32</span><span class="q-text">For money transfer messages, is at-least-once alone acceptable?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Probably not without strong idempotency.</span></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>At-least-once is not a bug — it is a design choice that puts the responsibility for handling duplicates on the consumer. Every service reading from this queue needs to be built with that in mind.</p></div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>Failure scenarios are the real design</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Failure map</h3>
+<pre class="flow">Producer -> Frontend -> Leader -> Replicas -> Consumer -> Delete</pre>
+    <p>Failure can happen anywhere.</p>
+
+    <h3 class="blk">Case 1 — Producer timeout after send</h3>
+<pre>Producer sends M1
+Leader stores it
+network timeout before response
+
+==> producer retries M1</pre>
+
+    <h3 class="blk">Case 2 — Consumer gets message, crashes before delete</h3>
+<pre>Receive M1
+processing started
+consumer dies
+visibility timeout expires
+
+==> M1 comes again</pre>
+    <p>This is a normal retry model.</p>
+
+    <h3 class="blk">Case 3 — Leader crashes after acknowledging producer</h3>
+<pre>Leader says success
+then crashes
+
+==> followers may or may not have message</pre>
+
+    <h3 class="blk">Case 4 — Delete succeeds on one node but not replicated fully</h3>
+<pre>message considered deleted?
+or resurrected later?</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q33</span><span class="q-text">What is the atomic durability boundary for enqueue?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q34</span><span class="q-text">What is the atomic durability boundary for delete?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q35</span><span class="q-text">If a leader dies, can a new leader know which messages were definitely committed?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">This points to replicated log / quorum thinking.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q36</span><span class="q-text">Do you need consensus, or is primary-replica good enough?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q37</span><span class="q-text">Can you tolerate message resurrection after failover?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q38</span><span class="q-text">How will you explain your delivery semantics honestly to users?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Very important architect question.</span></div></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Failure handling is the real design of a queue. A system that hasn't modeled what happens with dead letters, poison messages, and crashed consumers isn't ready for production.</p></div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>Scaling the queue</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A single queue node is easy. Distributed queue means:</p>
+    <ul>
+      <li>more producers</li><li>more messages</li><li>more consumers</li>
+      <li>more partitions</li><li>more replicas</li><li>more coordination</li>
+    </ul>
+<pre class="flow">                +----------------------+
+                |   Queue Namespace    |
+                +----------+-----------+
+                           |
+         +-----------------+-----------------+
+         |                 |                 |
+         v                 v                 v
+   +-----------+     +-----------+     +-----------+
+   |Partition 0|     |Partition 1|     |Partition 2|
+   +-----+-----+     +-----+-----+     +-----+-----+
+         |                 |                 |
+      replicas          replicas          replicas</pre>
+    <p>Consumers may read different partitions.</p>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q39</span><span class="q-text">What do we scale first?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>frontend nodes?</li><li>partition count?</li><li>consumer count?</li><li>replica count?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q40</span><span class="q-text">What is the real bottleneck?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>network?</li><li>disk?</li><li>replication?</li><li>visibility bookkeeping?</li><li>hot partitions?</li></ul></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q41</span><span class="q-text">Can you increase partition count later without breaking ordering or consumer expectations?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q42</span><span class="q-text">If one partition becomes hot, can you split it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q43</span><span class="q-text">If the queue promises FIFO per group, does scaling become harder?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Yes, much harder.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 10</span><h2>Ordering changes everything</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">Standard queue</h3>
+    <ul><li>fast</li><li>high throughput</li><li>duplicates possible</li></ul>
+    <h3 class="blk">FIFO-style queue</h3>
+    <ul><li>preserve order</li><li>dedup support</li><li>usually lower parallelism</li><li>hot group bottlenecks</li></ul>
+<pre>Standard Queue
+M1 M2 M3 M4
+
+Consumers may see:
+M2, M1, M4, M3
+
+FIFO Queue
+M1 -> M2 -> M3 -> M4
+must preserve order</pre>
+
+    <h3 class="blk">Message group idea</h3>
+<pre>group A: A1 -> A2 -> A3
+group B: B1 -> B2 -> B3
+
+Can run:
+A1 and B1 in parallel
+
+But not:
+A2 before A1
+B2 before B1</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q44</span><span class="q-text">What exactly does FIFO mean?</span><span class="hint">＋</span></div><div class="q-body"><ul><li>global FIFO?</li><li>per partition FIFO?</li><li>per message group FIFO?</li></ul><p><span class="verdict">Huge difference.</span></p></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q45</span><span class="q-text">Can you preserve global order at a very high scale?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Very hard.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q46</span><span class="q-text">Does FIFO reduce throughput because one slow message blocks later messages in same group?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q47</span><span class="q-text">Should ordering be strict, or can you offer “best effort ordered within shard”?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11</span><h2>Delay queues and scheduled messages</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A strong queue often supports: enqueue now, deliver later. This adds another dimension: <strong>time</strong>.</p>
+<pre>Producer sends M1 with delay 5 min
+
+t0 ---------------------- t+5
+message stored            message becomes visible</pre>
+<pre class="state">DELAYED ---> AVAILABLE ---> INFLIGHT ---> DELETED</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q48</span><span class="q-text">Should delayed messages live in the same partition storage or separate time-index?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q49</span><span class="q-text">If millions of delayed messages become visible at the same second, what happens?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q50</span><span class="q-text">Does scheduled delivery turn the queue into a mini scheduler?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Yes, partially.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 12</span><h2>Dead-letter queues</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Some messages fail repeatedly. You do not want infinite retry loops.</p>
+<pre>M1 received -> fail
+M1 received -> fail
+M1 received -> fail
+receive_count > threshold
+        |
+        v
+      DLQ</pre>
+<pre class="flow">Main Queue ---> Consumer fails repeatedly ---> Dead Letter Queue</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q51</span><span class="q-text">Should DLQ move happen by broker or consumer?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q52</span><span class="q-text">Should max_receive_count be per queue, per message type, or per consumer group?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q53</span><span class="q-text">Is DLQ a failure handling mechanism, or just a visibility mechanism for humans?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q54</span><span class="q-text">Who re-drives DLQ messages back?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 13</span><h2>Multi-tenant fairness</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Suppose:</p>
+<pre>Tenant A = 10 million msgs/min
+Tenant B = 100 msgs/min
+Tenant C = 500 msgs/min</pre>
+    <p>Without controls, A can dominate.</p>
+<pre class="flow">                 +-----------------------+
+                 | Shared Queue Service  |
+                 +-----------+-----------+
+                             |
+          +------------------+------------------+
+          |                  |                  |
+          v                  v                  v
+       Tenant A           Tenant B           Tenant C</pre>
+    <p>Need isolation:</p>
+    <ul><li>rate limits</li><li>partition quotas</li><li>fair scheduling</li><li>tenant-aware throttling</li></ul>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q55</span><span class="q-text">Should all tenants share the same partitions?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q56</span><span class="q-text">Should big tenants get dedicated partitions?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q57</span><span class="q-text">Can one tenant fill storage and harm others?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q58</span><span class="q-text">Should fairness be on the write path, read path, or both?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 14</span><h2>Metadata vs payload path</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Sometimes the payload is huge. A strong queue may not want giant messages inline.</p>
+<pre class="flow">Producer
+  |
+  +--> store payload in blob/object store
+  |
+  +--> enqueue reference</pre>
+    <p>Queue stores:</p>
+<pre>message_id
+payload_ref
+attributes</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q59</span><span class="q-text">Should queue store full payload, or only a pointer for large messages?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q60</span><span class="q-text">If payload and queue message are in different systems, what is the atomicity model?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q61</span><span class="q-text">Can queue messages exist while payload upload failed?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q62</span><span class="q-text">Can a payload exist while the enqueue fails?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 15</span><h2>State machine is the soul</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="state">          +-----------+
+          | ENQUEUED  |
+          +-----+-----+
+                |
+                v
+          +-----------+
+          | AVAILABLE |
+          +-----+-----+
+                |
+         receive/lease
+                |
+                v
+          +-----------+
+          | INFLIGHT  |
+          +--+-----+--+
+             |     |
+       delete|     |timeout
+             v     v
+        +--------+ +-----------+
+        |DELETED | |AVAILABLE  |
+        +--------+ +-----------+</pre>
+    <p>Add delayed state if needed:</p>
+<pre class="state">DELAYED -> AVAILABLE -> INFLIGHT -> DELETED</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q63</span><span class="q-text">Should DELETED be physical removal or logical tombstone?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q64</span><span class="q-text">Should AVAILABLE and ENQUEUED be same thing?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q65</span><span class="q-text">Do you need explicit INFLIGHT state, or can lease metadata imply it?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q66</span><span class="q-text">Can one message be inflight to two consumers during network partition?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">How do you reason about that?</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 ============ -->
+<section id="s16">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 16</span><h2>What is the source of truth?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Is source of truth:</p>
+    <ul><li>leader memory?</li><li>leader disk?</li><li>replicated log?</li><li>message index DB?</li><li>lease table?</li></ul>
+    <p>Source of truth should be:</p>
+<pre>durable replicated partition log / storage
++
+lease/visibility metadata derived or persisted safely</pre>
+    <div class="note">Source of truth = the place we trust most to know whether a message really exists.</div>
+    <p>That is why we choose: <strong>durable replicated log / storage</strong>.</p>
+    <h3 class="blk">Why</h3>
+    <ul>
+      <li>durable → survives crash</li>
+      <li>replicated → exists on multiple machines</li>
+      <li>rebuildable → index/lease info can be recreated from it</li>
+    </ul>
+    <h3 class="blk">Not these</h3>
+    <ul>
+      <li>leader memory → lost on crash</li>
+      <li>leader disk only → only one machine copy</li>
+      <li>message index DB → mainly for fast lookup</li>
+      <li>lease table → only says who temporarily owns the message</li>
+    </ul>
+<pre>real truth = stored message
+index      = helper
+lease      = temporary ownership</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q67</span><span class="q-text">If the storage log says a message exists but the lease index says deleted, which one wins?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q68</span><span class="q-text">Can you reconstruct the queue state after a crash from durable records alone?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q69</span><span class="q-text">How much derived index can you rebuild, and how much must be persisted?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 17 ============ -->
+<section id="s17">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 17</span><h2>Frontend / broker / storage separation</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">For cleaner architecture, split responsibilities.</p>
+<pre class="flow">+----------------------+
+| Queue API Frontends  |
+| auth / routing       |
++----------+-----------+
+           |
+           v
++----------------------+
+| Partition Leaders    |
+| write/read/lease     |
++----------+-----------+
+           |
+           v
++----------------------+
+| Replica Storage      |
+| durable data         |
++----------------------+</pre>
+
+    <div class="qblock">
+      <div class="lbl">Recall</div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q70</span><span class="q-text">Should the front end be stateless?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Usually yes.</span></div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q71</span><span class="q-text">Should consumer read always go through the leader, or can followers serve some reads?</span><span class="hint">＋</span></div><div class="q-body">Open question — reason it out before moving on.</div></div>
+      <div class="q"><div class="q-head" tabindex="0"><span class="qid">Q72</span><span class="q-text">Can lease ownership be granted by followers safely?</span><span class="hint">＋</span></div><div class="q-body"><span class="verdict">Usually dangerous.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section id="s18">
+  <div class="sec-head" tabindex="0"><span class="tag">IMPLEMENTATION</span><h2>SQL implementation</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <h3 class="blk">One server (usually called partitioning, not true sharding)</h3>
+    <ul>
+      <li><strong>PostgreSQL</strong> — table partitioning inside one database instance.</li>
+      <li><strong>MySQL</strong> (InnoDB/NDB engine support) — table partitioning on a single server setup.</li>
+    </ul>
+    <h3 class="blk">Distributed servers (true sharding / distributed SQL)</h3>
+    <ul>
+      <li><strong>MySQL NDB Cluster</strong> — automatically partitions/shards tables across multiple nodes.</li>
+      <li><strong>PostgreSQL + Citus</strong> — distributed tables sharded across many PostgreSQL nodes.</li>
+      <li><strong>CockroachDB</strong> — distributed SQL database that splits data into ranges/shards across cluster nodes.</li>
+    </ul>
+    <h3 class="blk">Best mental model</h3>
+<pre>One server  -> partitioning
+Many servers -> sharding</pre>
+    <p>Also, in practice, when people say “sharding in one server”, they usually really mean partitioning.</p>
+    <p>In one server partitioning, replicas are usually not between partitions inside that same server. Think like this:</p>
+<pre>One server
+  |
+  +--> Partition A
+  +--> Partition B
+  +--> Partition C</pre>
+    <p>All partitions live on the same DB server. If you want replicas, normally they are made at the database/server level, not “partition A has its own separate replica inside same server”.</p>
+<pre>Primary server
+  |
+  +--> all partitions
+
+Replica server
+  |
+  +--> copy of all partitions</pre>
+    <h3 class="blk">Very short meaning</h3>
+    <ul>
+      <li><strong>Partitioning</strong> = split data for manageability/performance</li>
+      <li><strong>Replication</strong> = copy data to another server for HA/read scale</li>
+    </ul>
+    <div class="note">So in one-server partitioning, partitions share the same server, and replica is usually of the whole database/server, not each partition separately.</div>
+  </div>
+</section>
+
+<footer>Architects Lab · SQS-like Queue · 72 questions</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

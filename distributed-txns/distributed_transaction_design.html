@@ -151,6 +151,16 @@
 
   footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;font-family:'IBM Plex Mono',monospace;}
   @media(max-width:600px){header h1{font-size:1.7rem;} .roadmap ol{columns:1;}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -223,6 +233,7 @@
         <div class="turn b"><div class="who">B</div><p>The gap is this: the moment a business operation crosses a network boundary, there is no longer any mechanism, by default, that guarantees all its steps happen or none of them do. That guarantee has to be built — it doesn't come free the way it does inside one database engine.</p></div>
         <div class="insight"><b>Where this leaves us:</b> a distributed transaction system isn't a fancier database — it's the machinery that has to be built from scratch to restore a guarantee that a single database gave away for free. Every stage from here is an argument about how much of that guarantee is actually recoverable, and at what price.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Before you design a distributed transaction, check if you actually need one. True atomicity across services is expensive. Sometimes the right answer is to accept eventual consistency and build compensation.</p></div>
   </section>
 
   <!-- STAGE 1 -->
@@ -348,6 +359,7 @@ The gap between crash and recovery was pure blocked time.</pre></div>
         <div class="turn b"><div class="who">B</div><p>They're genuinely different problems. Amnesia is "does the coordinator remember what it decided." Blocking is "how long do participants wait to find out." A durable log fixes the first completely. It does nothing for the second — recovery time is still whatever it takes to restart the coordinator process and reconnect to every participant.</p></div>
         <div class="insight"><b>Where this leaves us:</b> even a perfectly engineered 2PC coordinator, one that never loses its own memory, still leaves participants blocked for the coordinator's full recovery window. That's the real, final verdict on 2PC for this use case — the fix isn't a better coordinator, it's not requiring unanimous agreement before acting at all.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Two-phase commit can block forever if the coordinator crashes at the wrong moment. This isn't a bug you can fix — it's mathematically unavoidable. Any system using 2PC has accepted this risk.</p></div>
   </section>
 
   <!-- STAGE 6 -->
@@ -372,6 +384,7 @@ The gap between crash and recovery was pure blocked time.</pre></div>
         <div class="turn b"><div class="who">B</div><p>Isolation, and true rollback. Between step 1 committing and the compensation running, the lien is real and visible — anyone checking that customer's units during that window sees a locked state that will, shortly, be reversed. A saga trades "never visibly inconsistent" for "never permanently stuck."</p></div>
         <div class="insight"><b>Where this leaves us:</b> the saga isn't a free upgrade over 2PC — it's the opposite trade. 2PC hides inconsistency behind blocking; sagas expose brief, real inconsistency in exchange for never blocking at all. Whether that trade is acceptable depends entirely on whether "compensation" is actually the same as "undo" — which is the next stage's problem.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>A saga trades atomicity for availability. Each step must be designed to be undoable, even if the undo isn't perfect. That's a product decision before it's an engineering one.</p></div>
   </section>
 
   <!-- STAGE 7 -->
@@ -400,6 +413,7 @@ The gap between crash and recovery was pure blocked time.</pre></div>
         <div class="turn b"><div class="who">B</div><p>Then it retries, because failing to send is recoverable — the failure mode we can't compensate for is the message actually arriving and then needing to un-arrive. A failed send is just a send that hasn't succeeded yet.</p></div>
         <div class="insight"><b>Where this leaves us:</b> "compensation" quietly assumed every action was reversible, and that assumption is false for a whole class of real steps. Ordering irreversible actions last isn't a nice-to-have — it's the only way the compensation model in stage 6 stays honest at all.</div>
       </div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Compensation is not the same as rollback. A database write can be undone. A sent email or a completed payment cannot. Design your compensation steps before you design the happy path.</p></div>
   </section>
 
   <!-- STAGE 8 -->

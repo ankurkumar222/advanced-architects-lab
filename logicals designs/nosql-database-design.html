@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab — Designing a NoSQL Database</title>
+<style>
+  :root{
+    --bg:#0b0f14;
+    --panel:#111823;
+    --panel-2:#0e141d;
+    --line:#1e2a38;
+    --ink:#dbe6f2;
+    --ink-dim:#8fa3b8;
+    --accent:#4fd1c5;
+    --accent-2:#f6ad55;
+    --q:#7f9cf5;
+    --ok:#68d391;
+    --mono:"JetBrains Mono","Fira Code","SF Mono",Consolas,monospace;
+    --sans:"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 100px}
+
+  header{padding:56px 0 28px;border-bottom:1px solid var(--line);margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+  }
+  h1{font-size:38px;line-height:1.15;margin:0 0 12px;font-weight:700;letter-spacing:-.02em}
+  .sub{color:var(--ink-dim);font-size:15px;max-width:660px;margin:0}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+  .btn{
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
+    background:var(--panel);color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:6px;
+    padding:8px 14px;cursor:pointer;transition:.18s;
+  }
+  .btn:hover{color:var(--accent);border-color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .toc{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:28px 0 40px;
+  }
+  .toc h3{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--ink-dim);margin:0 0 14px;font-weight:500;
+  }
+  .toc ol{margin:0;padding-left:0;list-style:none;columns:2;column-gap:32px}
+  .toc li{margin-bottom:7px;break-inside:avoid}
+  .toc a{color:var(--ink-dim);text-decoration:none;font-size:13.5px;display:flex;gap:10px}
+  .toc a:hover{color:var(--accent)}
+  .toc .num{font-family:var(--mono);color:var(--line);font-size:12px;min-width:22px}
+  .toc a:hover .num{color:var(--accent)}
+
+  section{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    margin-bottom:16px;overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:16px;
+    padding:18px 24px;cursor:pointer;user-select:none;
+    background:var(--panel);transition:.18s;
+  }
+  .sec-head:hover{background:#141d2a}
+  .sec-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .tag{
+    font-family:var(--mono);font-size:11px;color:var(--accent);
+    border:1px solid var(--line);border-radius:4px;padding:3px 8px;
+    white-space:nowrap;letter-spacing:.06em;
+  }
+  .sec-head h2{font-size:17px;margin:0;font-weight:600;flex:1;letter-spacing:-.01em}
+  .chev{color:var(--ink-dim);font-family:var(--mono);font-size:13px;transition:transform .22s}
+  section.open .chev{transform:rotate(90deg)}
+  .sec-body{display:none;padding:4px 24px 26px;border-top:1px solid var(--line)}
+  section.open .sec-body{display:block}
+
+  h3.blk{
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--accent-2);
+    margin:26px 0 10px;font-weight:500;
+  }
+  p{margin:10px 0}
+  ul{margin:10px 0;padding-left:20px}
+  li{margin:4px 0}
+  .lede{color:var(--ink-dim)}
+  strong{color:#fff;font-weight:600}
+
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.55;
+    background:var(--panel-2);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:6px;padding:16px 18px;margin:14px 0;
+    overflow-x:auto;color:#a8c5dd;white-space:pre;
+  }
+  pre.flow{border-left-color:var(--accent-2)}
+  pre.state{border-left-color:var(--ok)}
+  pre.bad{border-left-color:#fc8181}
+
+  .note{
+    border-left:3px solid var(--accent-2);background:#1a1508;
+    padding:12px 16px;border-radius:0 6px 6px 0;margin:14px 0;
+    color:#f0d9b5;font-size:14px;
+  }
+
+  /* good/bad pair */
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+  .pair .cell{border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--panel-2)}
+  .pair .cell .k{
+    font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .pair .good .k{color:var(--ok)}
+  .pair .bad .k{color:#fc8181}
+  .pair .cell p{margin:0;font-size:14px;color:var(--ink-dim)}
+  @media (max-width:640px){.pair{grid-template-columns:1fr}}
+
+  .q{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);margin:24px 0 0;overflow:hidden}
+  .q-head{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;cursor:pointer;user-select:none;transition:.15s}
+  .q-head:hover{background:#131c28}
+  .q-head:focus-visible{outline:2px solid var(--q);outline-offset:-2px}
+  .qid{font-family:var(--mono);font-size:11px;color:var(--q);letter-spacing:.18em;text-transform:uppercase;padding-top:2px}
+  .q-text{flex:1;font-size:14.5px}
+  .q-body{display:none;padding:0 16px 16px;font-size:14px;color:var(--ink-dim)}
+  .q.open .q-body{display:block}
+  .q.open .qid{color:var(--ok)}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--line);padding-top:2px}
+  .q.open .hint{color:var(--ok)}
+
+  footer{
+    margin-top:48px;padding-top:22px;border-top:1px solid var(--line);
+    color:var(--line);font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  @media (max-width:720px){
+    h1{font-size:28px}
+    .toc ol{columns:1}
+    .sec-head{padding:16px}
+    .sec-body{padding:4px 16px 22px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:var(--mono);font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Architects Lab · Distributed Systems</div>
+  <h1>Designing a NoSQL Database</h1>
+  <p class="sub">From outside it is just put and get. Inside it is partitioning, replication, durability, consistency tradeoffs, and a storage engine — eighteen problems deep.</p>
+  <div class="toolbar">
+    <button class="btn" onclick="allSections(true)">Expand all sections</button>
+    <button class="btn" onclick="allSections(false)">Collapse all sections</button>
+    <button class="btn" onclick="allQ(false)">Hide all recaps</button>
+  </div>
+</header>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#f1"><span class="num">F1</span>What are we really building?</a></li>
+    <li><a href="#s1"><span class="num">01</span>What kind of NoSQL are we designing?</a></li>
+    <li><a href="#s2"><span class="num">02</span>The real heart is partitioning</a></li>
+    <li><a href="#s3"><span class="num">03</span>Replication is non-negotiable</a></li>
+    <li><a href="#s4"><span class="num">04</span>Write path defines durability</a></li>
+    <li><a href="#s5"><span class="num">05</span>Read path defines latency</a></li>
+    <li><a href="#s6"><span class="num">06</span>Consistency model</a></li>
+    <li><a href="#s7"><span class="num">07</span>NoSQL ≠ no schema thinking</a></li>
+    <li><a href="#s8"><span class="num">08</span>Indexing is harder than it looks</a></li>
+    <li><a href="#s9"><span class="num">09</span>Storage engine choice</a></li>
+    <li><a href="#s10"><span class="num">10</span>Membership and routing</a></li>
+    <li><a href="#s11"><span class="num">11</span>Rebalancing</a></li>
+    <li><a href="#s12"><span class="num">12</span>Failure handling is the real test</a></li>
+    <li><a href="#s13"><span class="num">13</span>Repair and anti-entropy</a></li>
+    <li><a href="#s14"><span class="num">14</span>Transactions in NoSQL</a></li>
+    <li><a href="#s15"><span class="num">15</span>Query model</a></li>
+    <li><a href="#s16"><span class="num">16</span>TTL, compaction, archival</a></li>
+    <li><a href="#s17"><span class="num">17</span>Multi-region</a></li>
+    <li><a href="#s18"><span class="num">18</span>Example: document NoSQL DB</a></li>
+    <li><a href="#s19"><span class="num">19</span>Minimal strong architecture</a></li>
+    <li><a href="#s20"><span class="num">20</span>Reduced to the hardest core</a></li>
+  </ol>
+</div>
+
+<!-- ============ F1 ============ -->
+<section id="f1" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">FOUNDATION</span><h2>First rough sketch — what are we really building?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A NoSQL database looks simple from outside:</p>
+<pre>App --> put/get data</pre>
+    <p>But the real questions are:</p>
+    <ul>
+      <li>How is data partitioned?</li>
+      <li>How is it replicated?</li>
+      <li>How do reads find the right node?</li>
+      <li>How do writes stay durable?</li>
+      <li>How do we balance consistency vs availability?</li>
+      <li>How do indexes work at scale?</li>
+      <li>How do we recover from failures?</li>
+    </ul>
+    <p>That is the real system design.</p>
+
+    <h3 class="blk">Summary</h3>
+<pre class="state">partitioned storage
++ replicated state
++ distributed read/write coordination
++ consistency tradeoffs
++ storage-engine design</pre>
+
+<pre class="flow">                    +------------------+
+                    |      Clients     |
+                    +---------+--------+
+                              |
+                              v
+                    +------------------+
+                    | Coordinator /    |
+                    | Routing Layer    |
+                    +---------+--------+
+                              |
+              +---------------+----------------+
+              |               |                |
+              v               v                v
+        +-----------+   +-----------+    +-----------+
+        | Node N1   |   | Node N2   |    | Node N3   |
+        | shard A   |   | shard B   |    | shard C   |
+        +-----+-----+   +-----+-----+    +-----+-----+
+              |               |                |
+              v               v                v
+        replica sets    replica sets     replica sets</pre>
+
+    <div class="note">Core job: store huge data across many machines while still answering reads/writes reliably.</div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Before you pick a database type, write down your three most important read patterns. The database shape should follow the query shape, not the other way around.</p></div>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 01</span><h2>What kind of NoSQL database are we designing?</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Before design, first define the model. Because “NoSQL” is not one thing.</p>
+
+    <h3 class="blk">Main families</h3>
+<pre>1. Key-Value
+   key -> value
+
+2. Document
+   key -> semi-structured document
+
+3. Wide-Column
+   partition key + clustering/order
+
+4. Graph
+   nodes + edges + traversals</pre>
+
+    <h3 class="blk">Rough sketch</h3>
+<pre>Key-value
+user:1001 -> {blob}
+cart:77   -> {blob}</pre>
+<pre>Document
+user:1001 -> {
+  name: "Ankur",
+  city: "Chennai",
+  orders: [...]
+}</pre>
+<pre>Wide-column
+Partition: user=1001
+Rows:
+2026-04-01 -> login
+2026-04-02 -> payment
+2026-04-03 -> logout</pre>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 02</span><h2>The real heart is partitioning</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">The first deep distributed problem is: <strong>where does a record live?</strong></p>
+    <p>Because one machine cannot hold everything. So we shard/partition data.</p>
+
+<pre class="flow">key = user:1001
+      |
+      v
+ hash(key)
+      |
+      v
+ partition 17
+      |
+      v
+ node N2</pre>
+
+    <h3 class="blk">Partitioning view</h3>
+<pre>All data
+  |
+  +--> Partition P1 -> Node A
+  +--> Partition P2 -> Node B
+  +--> Partition P3 -> Node C</pre>
+
+    <h3 class="blk">Two common strategies</h3>
+<pre>1. Range partitioning
+user_id 1-10000     -> shard 1
+user_id 10001-20000 -> shard 2</pre>
+    <div class="pair">
+      <div class="cell good"><div class="k">Good</div><p>range scans easier</p></div>
+      <div class="cell bad"><div class="k">Bad</div><p>hotspots possible</p></div>
+    </div>
+
+<pre>2. Hash partitioning
+hash(user_id) % N</pre>
+    <div class="pair">
+      <div class="cell good"><div class="k">Good</div><p>better spread</p></div>
+      <div class="cell bad"><div class="k">Bad</div><p>range queries harder</p></div>
+    </div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The partition key is the most important design decision in a distributed database. A bad key creates hot spots that no amount of hardware can fix.</p></div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 03</span><h2>Replication is non-negotiable</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Partitioning alone is not enough. If one node dies, data should not vanish. So each partition is replicated.</p>
+<pre>Partition P17
+
+Primary / Leader -> Node A
+Replica          -> Node B
+Replica          -> Node C</pre>
+    <p>Or leaderless/quorum style:</p>
+<pre>Partition P17 copies on A, B, C
+all can participate in quorum logic</pre>
+
+    <div class="note">Strong mental model — partitioning decides <strong>where</strong> data is split. Replication decides <strong>how</strong> each split survives failure.</div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 04</span><h2>Write path defines durability</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is one of the deepest parts. What happens when client says:</p>
+<pre>PUT key=K value=V</pre>
+    <p>Internally, many things may happen.</p>
+
+    <h3 class="blk">Leader-based write path</h3>
+<pre class="flow">Client
+  |
+  v
+Coordinator
+  |
+  v
+Leader for partition P
+  |
+  +--> append to commit log / WAL
+  +--> update memtable / in-memory state
+  +--> replicate to followers
+  |
+  v
+ack client</pre>
+<pre class="state">write request
+   |
+   v
+WAL append
+   |
+   v
+memory update
+   |
+   v
+replicate
+   |
+   v
+ack</pre>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 05</span><h2>Read path defines latency and consistency</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">When client asks:</p>
+<pre>GET key=K</pre>
+    <p>system must route to right partition and decide which replica to read from.</p>
+<pre class="flow">Client
+  |
+  v
+Coordinator
+  |
+  v
+find partition P for key K
+  |
+  +--> read leader
+  or
+  +--> read replica</pre>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 06</span><h2>Consistency model is one of the defining differences</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">This is where NoSQL systems differ a lot. Possible models:</p>
+<pre>strong consistency
+eventual consistency
+read-your-writes
+quorum consistency
+leader-based consistency
+causal-ish/session guarantees</pre>
+
+    <h3 class="blk">Strong consistency sketch</h3>
+<pre class="state">Write acknowledged
+then future reads must see it</pre>
+
+    <h3 class="blk">Eventual consistency sketch</h3>
+<pre>Write acknowledged
+some replicas may still be old briefly
+reads may differ temporarily
+eventually converge</pre>
+
+    <h3 class="blk">Quorum sketch</h3>
+<pre>Replication factor = 3
+
+Write quorum W = 2
+Read quorum  R = 2
+
+If R + W > 3,
+freshness can be stronger</pre>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Consistency is not free. Every write that needs a strong guarantee pays a coordination cost. Decide how much consistency you actually need before you pay for it.</p></div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 07</span><h2>NoSQL does not mean “no schema thinking”</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A big misconception. Even if schema is flexible, query patterns still dominate design.</p>
+<pre class="flow">Access pattern
+   +
+Partition key
+   +
+Data model
+   +
+Index strategy
+   =
+Real system performance</pre>
+
+    <h3 class="blk">Example</h3>
+<pre>Need:
+find all orders of customer 1001 sorted by newest
+
+Strong model:
+partition by customer_id
+cluster/sort by created_at desc</pre>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 08</span><h2>Indexing is much harder than it looks</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Primary key lookup is easiest. Secondary indexes are harder because data is partitioned elsewhere.</p>
+<pre>Main record:
+user_id -> document
+
+Need query:
+find by email</pre>
+    <p>Now where does email index live?</p>
+<pre>email -> user_id</pre>
+    <p>This itself becomes distributed.</p>
+
+    <h3 class="blk">Index write path</h3>
+<pre class="flow">write document
+   |
+   +--> update primary storage
+   +--> update secondary index</pre>
+    <div class="note">Now consistency issue appears.</div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="s9">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 09</span><h2>Storage engine choice changes the whole design</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">A NoSQL DB often uses one of two internal styles.</p>
+
+    <h3 class="blk">A. B-tree style thinking</h3>
+    <ul>
+      <li>data updated in place-ish / page-oriented</li>
+      <li>good for point lookups and range access</li>
+    </ul>
+
+    <h3 class="blk">B. LSM / log-structured style thinking</h3>
+    <ul>
+      <li>writes append fast</li>
+      <li>flush immutable files</li>
+      <li>compact later</li>
+    </ul>
+    <p>This is very common in modern NoSQL stores.</p>
+
+    <h3 class="blk">LSM rough sketch</h3>
+<pre class="state">write
+  |
+  v
+WAL
+  |
+  v
+memtable
+  |
+ flush
+  v
+SSTable files
+  |
+ compaction
+  v
+merged files</pre>
+
+    <div class="note">Why LSM is popular: fast writes, good for write-heavy distributed systems. But read path and compaction become more complex.</div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The storage engine isn't just an implementation detail — it sets your write/read trade-offs for the life of the system. Choose it as deliberately as you choose your data model.</p></div>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 10</span><h2>Membership and routing matter a lot</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Clients must know where partition lives. Possible models:</p>
+<pre>1. coordinator/router knows partition map
+2. client has partition map
+3. consistent hashing ring
+4. metadata service</pre>
+<pre class="flow">Client
+  |
+  +--> asks metadata / partition map
+  |
+  v
+routes request to right node</pre>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 11</span><h2>Rebalancing is a major distributed systems problem</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">As data grows, nodes are added/removed. Then partitions may move.</p>
+<pre>Before:
+P1 -> Node A
+P2 -> Node B
+P3 -> Node C
+
+Add Node D
+
+After:
+some partitions/splits move to D</pre>
+
+    <h3 class="blk">Why this is hard</h3>
+    <ul>
+      <li>moving data takes time</li>
+      <li>traffic continues</li>
+      <li>writes may still arrive</li>
+      <li>ownership must switch safely</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 12</span><h2>Failure handling is the real test</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Failures define whether the design is mature.</p>
+
+    <h3 class="blk">Failure map</h3>
+<pre class="flow">Client -> Router -> Leader -> Replicas -> Disk</pre>
+    <p>Failure can happen anywhere.</p>
+
+    <h3 class="blk">Key cases</h3>
+<pre>Case 1 — Node crash
+leader dies
+new leader must take over
+
+Case 2 — Network partition
+some replicas can't talk
+who is authoritative?
+
+Case 3 — Disk crash / corruption
+need log replay / replica recovery</pre>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="s13">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 13</span><h2>Repair and anti-entropy matter</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Replicas can drift. Need repair mechanisms.</p>
+<pre>Replica A has latest key version
+Replica B missed some update
+Replica C is old</pre>
+<pre class="flow">Repair process:
+compare state / logs / Merkle-like summaries
+sync missing data</pre>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="s14">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 14</span><h2>Transactions in NoSQL are different</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Many NoSQL systems started with:</p>
+<pre>single-key / single-document atomicity</pre>
+    <p>Multi-key distributed transactions are much harder.</p>
+<pre>single document update  -> easy atomic unit
+
+multi-partition update  -> much harder</pre>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section id="s15">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 15</span><h2>Query model defines practical usefulness</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">NoSQL power is often not rich SQL joins. So query design must be explicit.</p>
+    <div class="pair">
+      <div class="cell good">
+        <div class="k">Good fit</div>
+        <p>point lookup<br>partition-local scans<br>time-ordered reads<br>document fetches</p>
+      </div>
+      <div class="cell bad">
+        <div class="k">Harder fit</div>
+        <p>ad hoc joins<br>global aggregations<br>cross-partition sort-heavy queries</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 16 ============ -->
+<section id="s16">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 16</span><h2>TTL, compaction, and archival are often first-class</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Many NoSQL use cases are logs, sessions, events, time-series, cache-like data. So these become very important:</p>
+    <ul>
+      <li>TTL</li>
+      <li>expiration</li>
+      <li>tombstones</li>
+      <li>compaction</li>
+      <li>cold archival</li>
+    </ul>
+<pre>session:123
+created at 10:00
+TTL = 24h
+
+After expiry:
+data may become logically deleted
+physical cleanup may happen later</pre>
+  </div>
+</section>
+
+<!-- ============ 17 ============ -->
+<section id="s17">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 17</span><h2>Multi-region adds another level of difficulty</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Now replication is not only within one data center.</p>
+<pre class="flow">Region A &lt;------&gt; Region B &lt;------&gt; Region C</pre>
+    <p>Choices:</p>
+    <ul>
+      <li>single-writer multi-region replicas</li>
+      <li>multi-writer replication</li>
+      <li>leader per region</li>
+      <li>global tables style</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 18 ============ -->
+<section id="s18">
+  <div class="sec-head" tabindex="0"><span class="tag">PROBLEM 18</span><h2>A practical example: document NoSQL database</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <p class="lede">Let us imagine a document DB.</p>
+
+    <h3 class="blk">Write path</h3>
+<pre class="flow">PUT /users/1001
+document = {...}
+   |
+   v
+partition by user_id
+   |
+   v
+leader node
+   |
+   v
+WAL + memtable + replicas
+   |
+   v
+ack</pre>
+
+    <h3 class="blk">Read path</h3>
+<pre class="flow">GET /users/1001
+   |
+   v
+find partition owner
+   |
+   v
+read document from leader/replica</pre>
+
+    <h3 class="blk">Secondary query</h3>
+<pre>find users where city = Chennai
+
+Need index:
+city -> user_ids</pre>
+    <div class="note">Now indexing and consistency become central again.</div>
+  </div>
+</section>
+
+<!-- ============ 19 ============ -->
+<section id="s19">
+  <div class="sec-head" tabindex="0"><span class="tag">ARCHITECTURE</span><h2>Minimal strong architecture for a distributed NoSQL database</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+<pre class="flow">                     +----------------------+
+                     | Clients / Apps       |
+                     +----------+-----------+
+                                |
+                                v
+                     +----------------------+
+                     | Router / Coordinator |
+                     | partition metadata   |
+                     +----------+-----------+
+                                |
+          +---------------------+----------------------+
+          |                     |                      |
+          v                     v                      v
+   +--------------+      +--------------+      +--------------+
+   | Partition P1 |      | Partition P2 |      | Partition P3 |
+   | Leader Node  |      | Leader Node  |      | Leader Node  |
+   +------+-------+      +------+-------+      +------+-------+
+          |                     |                      |
+          v                     v                      v
+   +--------------+      +--------------+      +--------------+
+   | Replicas     |      | Replicas     |      | Replicas     |
+   +--------------+      +--------------+      +--------------+
+
+                                |
+                                v
+                     +----------------------+
+                     | Storage Engine       |
+                     | WAL / memtable / SST |
+                     +----------------------+</pre>
+
+    <h3 class="blk">Optional extra layers</h3>
+    <ul>
+      <li>metadata / cluster membership service</li>
+      <li>background compaction</li>
+      <li>repair / anti-entropy</li>
+      <li>secondary index service</li>
+      <li>backup / archive</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 20 ============ -->
+<section id="s20" class="open">
+  <div class="sec-head" tabindex="0"><span class="tag">CORE</span><h2>If I reduce everything to only the hardest core</h2><span class="chev">▶</span></div>
+  <div class="sec-body">
+    <div class="q">
+      <div class="q-head" tabindex="0"><span class="qid">Recall</span><span class="q-text">Compress the whole system into one chain — then open.</span><span class="hint">＋</span></div>
+      <div class="q-body">
+        <p>A NoSQL database is really this:</p>
+<pre class="state">take data
+-> choose partition
+-> replicate it safely
+-> write durably
+-> read from correct replica
+-> balance consistency and latency
+-> maintain indexes and repairs
+-> survive node and network failures</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>Architects Lab · NoSQL Database · 18 problems</footer>
+</div>
+
+<script>
+document.querySelectorAll('.sec-head').forEach(function(h){
+  function t(){ h.parentElement.classList.toggle('open'); }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+document.querySelectorAll('.q-head').forEach(function(h){
+  function t(){
+    var q = h.parentElement;
+    q.classList.toggle('open');
+    q.querySelector('.hint').textContent = q.classList.contains('open') ? '−' : '＋';
+  }
+  h.addEventListener('click', t);
+  h.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); t(); }});
+});
+function allSections(open){
+  document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('open', open); });
+}
+function allQ(open){
+  document.querySelectorAll('.q').forEach(function(q){
+    q.classList.toggle('open', open);
+    q.querySelector('.hint').textContent = open ? '−' : '＋';
+  });
+}
+document.querySelectorAll('.toc a').forEach(function(a){
+  a.addEventListener('click', function(){
+    var s = document.querySelector(a.getAttribute('href'));
+    if(s) s.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

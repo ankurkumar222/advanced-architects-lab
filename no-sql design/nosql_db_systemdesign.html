@@ -229,6 +229,17 @@
     .q-answer-inner{padding-left:18px;}
     section.segment{padding-left:14px;}
   }
+
+  .eng-philosophy{
+    margin-top:20px;padding:13px 17px;border-radius:6px;
+    background:rgba(194,24,91,0.1);border:1px solid rgba(194,24,91,0.28);
+    border-left:3px solid #C2185B;font-size:.86rem;
+  }
+  .eng-philosophy .ep-label{
+    display:block;font-family:'IBM Plex Mono',monospace;font-size:.67rem;font-weight:600;
+    letter-spacing:.9px;text-transform:uppercase;color:#D94580;opacity:.9;margin-bottom:7px;
+  }
+  .eng-philosophy p{margin:0;font-style:italic;line-height:1.65;color:#F0A8C8;}
 </style>
 <link rel="stylesheet" href="../audio-sync.css">
 </head>
@@ -294,6 +305,7 @@ A NoSQL cluster is a promise about physics — where bytes sit and how they surv
       <div class="q-answer"><div class="q-answer-inner">Because it's defined by what it <b>isn't</b> (not the relational/ACID-by-default model) rather than what it is. Key-value, document, wide-column, and graph stores solve genuinely different problems and make different tradeoffs — lumping them together is like saying "not a car" covers bicycles, planes, and boats equally well.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q4</span><span class="q-text">If someone asks "should we move this table to NoSQL," what's the first thing you should ask back?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>"What are the actual read and write access patterns — and at what scale?"</b> NoSQL is a consequence of an access-pattern and scale decision, not a starting point. Asking about the model before asking about the query is designing backwards.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>NoSQL isn't inherently faster than SQL. It makes different tradeoffs. The reason to choose it is a specific access pattern or scale requirement — not speed folklore or "everyone's doing it."</p></div>
   </section>
 
   <!-- SEGMENT 2 : TEAL -->
@@ -335,6 +347,7 @@ user_id 10001-20000-> shard 2
       <div class="q-answer"><div class="q-answer-inner">A <b>composite partition key</b>: hash the high-cardinality part (e.g. customer_id) to choose the partition, then range-sort the low-cardinality part (e.g. transaction date) within that partition. You get even spread across customers and cheap ordered scans within one customer's data — this is the wide-column pattern from segment 2.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q12</span><span class="q-text">If partitioning decides where data is split, what's the one thing it does NOT solve?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>Survival.</b> Partitioning tells you which single node owns a record — which means that node is also a single point of failure for that record, until replication is layered on top. Partitioning and replication answer two completely different questions.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>The partition key is the most consequential decision in a NoSQL design — more than the consistency model, more than the storage engine. Get it wrong and every query fights the data layout. Get it right and everything else is tuning.</p></div>
   </section>
 
   <!-- SEGMENT 4 : VIOLET -->
@@ -425,6 +438,7 @@ Example: N=3, W=1, R=1  ->  1+1=2 <= 3 -> overlap NOT guaranteed, fastest, weake
       <div class="q-answer"><div class="q-answer-inner">Because "eventual" without a bound is not a guarantee an SLA can be built on. Mature systems replace "eventually" with a measured <b>replication lag distribution</b> (p50/p99 convergence time) so teams can reason about the actual staleness window instead of an open-ended promise.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q28</span><span class="q-text">Is strong consistency ever "free" in a distributed NoSQL system?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner"><b>No.</b> It always costs something — latency (waiting for quorum acks or leader round-trips), availability (rejecting writes/reads during partitions rather than serving stale data), or both. The CAP-style tradeoff doesn't disappear because a vendor markets "strongly consistent" — it just moves to wherever the vendor chose to pay the cost.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>Consistency is not free. Strong consistency costs latency or availability. Eventual consistency costs time before the data is reliable. Choose based on what your users actually need — not on a default you inherited.</p></div>
   </section>
 
   <!-- SEGMENT 8 : OLIVE -->
@@ -444,6 +458,7 @@ Weak model:    partition by order_id, hope a secondary index saves you later</pr
       <div class="q-answer"><div class="q-answer-inner">Every query that used to be a <b>join</b> becomes either a scatter-gather across partitions or a chain of sequential lookups from the application — both slow, both fragile under load. The fix is designing the partition and clustering keys around the actual query shapes, sometimes duplicating data deliberately (denormalization) to avoid the join entirely.</div></div></div>
     <div class="q-card"><div class="q-head" onclick="toggle(this)"><span class="q-tag">Q31</span><span class="q-text">Why is "list every access pattern before writing a single line of schema" the single highest-leverage step in NoSQL design?</span><span class="q-toggle">reveal</span></div>
       <div class="q-answer"><div class="q-answer-inner">Because the partition key decision is expensive to reverse, and it can only be made correctly if every query the data must serve is known upfront. Skipping this step doesn't remove the schema decision — it just defers it to production, where it's discovered as a performance incident instead of a design review comment.</div></div></div>
+  <div class="eng-philosophy"><span class="ep-label">Engineering Philosophy</span><p>"Schemaless" doesn't mean no schema — it means the schema moved into your code and your access patterns. If you don't design it deliberately, you'll discover it accidentally as a performance problem in production.</p></div>
   </section>
 
   <!-- SEGMENT 9 : CYAN -->
