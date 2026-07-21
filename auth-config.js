@@ -6,5 +6,5 @@
  */
 window.ALAB_ALLOWED_EMAILS = [
   'ankur.cse.bvcoe@gmail.com',
-  // 'collaborator@gmail.com',
+  'dattatray.v.r.ashtekar@gmail.com',
 ];
