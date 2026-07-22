@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Architects Lab</title>
 <meta name="description" content="A collection of system design explorations — hand-drawn in HTML.">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="auth-config.js"></script>
 <style>
   /* ── Tokens ── */
   :root {
@@ -437,37 +435,6 @@
     transform: translateX(3px);
   }
 
-  /* ── Locked state ── */
-  .locked-state {
-    margin-top: 48px;
-    padding: 40px 36px;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    text-align: center;
-  }
-
-  .locked-icon {
-    font-size: 28px;
-    margin-bottom: 16px;
-    opacity: 0.5;
-  }
-
-  .locked-title {
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 16px;
-    font-weight: normal;
-    color: var(--ink);
-    margin-bottom: 8px;
-  }
-
-  .locked-desc {
-    font-size: 12.5px;
-    color: var(--ink-muted);
-    line-height: 1.65;
-    max-width: 320px;
-    margin: 0 auto;
-  }
-
   /* ── Adding a Note section ── */
   .adding-note-section {
     margin-top: 64px;
@@ -562,96 +529,6 @@
     margin-right: 6px;
   }
 
-  /* ── Auth ── */
-  .auth-section {
-    margin-bottom: 20px;
-  }
-
-  .auth-label {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    margin-bottom: 10px;
-    display: block;
-  }
-
-  #google-signin-container {
-    display: flex;
-    justify-content: center;
-  }
-
-  .user-chip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .user-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .user-avatar-fallback {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent-tint);
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--accent);
-    flex-shrink: 0;
-  }
-
-  .user-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .user-name {
-    font-size: 12px;
-    color: var(--ink);
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .user-email {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 9.5px;
-    color: var(--ink-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: 0.03em;
-  }
-
-  .sign-out-btn {
-    background: none;
-    border: none;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    cursor: pointer;
-    padding: 3px 0;
-    display: block;
-    margin-top: 6px;
-    transition: color 0.15s;
-  }
-
-  .sign-out-btn:hover { color: var(--accent); }
 
 </style>
 </head>
@@ -675,32 +552,6 @@
     </div>
 
     <div class="rail-footer">
-      <!-- Auth widget -->
-      <div class="auth-section" id="auth-section">
-        <span class="auth-label">Access</span>
-
-        <!-- Signed-out: Google button -->
-        <div id="auth-signed-out">
-          <div id="google-signin-container"></div>
-          <p id="auth-denied" style="display:none;font-family:'Courier New',monospace;font-size:11px;color:var(--accent);margin-top:10px;line-height:1.5;">
-            Access restricted.<br>This account is not on the allowed list.
-          </p>
-        </div>
-
-        <!-- Signed-in: user chip -->
-        <div id="auth-signed-in" style="display:none;">
-          <div class="user-chip">
-            <img id="user-avatar" class="user-avatar" src="" alt="" style="display:none;">
-            <div id="user-avatar-fallback" class="user-avatar-fallback" style="display:none;"></div>
-            <div class="user-info">
-              <div class="user-name" id="user-name"></div>
-              <div class="user-email" id="user-email"></div>
-            </div>
-          </div>
-          <button class="sign-out-btn" onclick="signOut()">Sign out</button>
-        </div>
-      </div>
-
       <button class="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
     </div>
   </aside>
@@ -710,17 +561,10 @@
 
     <div class="section-header">
       <h2 class="section-title">All Designs</h2>
-      <span class="section-count" id="design-count" style="display:none;">— topics</span>
+      <span class="section-count" id="design-count">— topics</span>
     </div>
 
-    <!-- Shown before sign-in -->
-    <div class="locked-state" id="locked-state">
-      <div class="locked-icon">◻</div>
-      <div class="locked-title">Sign in to explore</div>
-      <p class="locked-desc">This lab contains system design explorations across distributed systems, databases, and infrastructure. Sign in with Google to access all notes.</p>
-    </div>
-
-    <div class="topic-groups" id="topic-groups" style="display:none;">
+    <div class="topic-groups" id="topic-groups">
 
       <!-- ── Kafka ── -->
       <div class="topic-group topic-kafka">
@@ -1211,10 +1055,6 @@ window.ALAB_PAGE_CONFIG = {
 </div>
 
 <script>
-  // ── Google Client ID — replace with your own ──
-  const GOOGLE_CLIENT_ID = '586782835490-8bab6ubs872d1lv58375876ujirm8g24.apps.googleusercontent.com';
-
-  // ── Theme toggle ──
   function toggleTheme() {
     const root = document.documentElement;
     const current = root.getAttribute('data-theme');
@@ -1226,116 +1066,16 @@ window.ALAB_PAGE_CONFIG = {
     localStorage.setItem('theme', next);
   }
 
-  // Restore saved theme
   (function () {
     const saved = localStorage.getItem('theme');
     if (saved) document.documentElement.setAttribute('data-theme', saved);
   })();
 
-  // ── Count topics ──
   (function () {
     const groups = document.querySelectorAll('#topic-groups .topic-group');
     const counter = document.getElementById('design-count');
-    const label = groups.length === 1 ? '1 topic' : `${groups.length} topics`;
-    counter.textContent = label;
+    counter.textContent = groups.length === 1 ? '1 topic' : `${groups.length} topics`;
   })();
-
-  // ── Google Sign-In ──
-  function decodeJwt(token) {
-    try {
-      const payload = token.split('.')[1];
-      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    } catch {
-      return null;
-    }
-  }
-
-  function showSignedIn(user) {
-    document.getElementById('auth-signed-out').style.display = 'none';
-    document.getElementById('auth-signed-in').style.display = '';
-    document.getElementById('user-name').textContent = user.name || '';
-    document.getElementById('user-email').textContent = user.email || '';
-
-    const img = document.getElementById('user-avatar');
-    const fallback = document.getElementById('user-avatar-fallback');
-    if (user.picture) {
-      img.src = user.picture;
-      img.style.display = '';
-      fallback.style.display = 'none';
-    } else {
-      fallback.textContent = (user.name || '?')[0].toUpperCase();
-      fallback.style.display = '';
-      img.style.display = 'none';
-    }
-
-    // Reveal notes
-    document.getElementById('locked-state').style.display = 'none';
-    document.getElementById('topic-groups').style.display = '';
-    document.getElementById('design-count').style.display = '';
-  }
-
-  function showSignedOut() {
-    document.getElementById('auth-signed-out').style.display = '';
-    document.getElementById('auth-signed-in').style.display = 'none';
-
-    // Hide notes
-    document.getElementById('locked-state').style.display = '';
-    document.getElementById('topic-groups').style.display = 'none';
-    document.getElementById('design-count').style.display = 'none';
-  }
-
-  function signOut() {
-    google.accounts.id.disableAutoSelect();
-    localStorage.removeItem('gsi_user');
-    showSignedOut();
-  }
-
-  function onGoogleCredential(response) {
-    const user = decodeJwt(response.credential);
-    if (!user) return;
-    const allowed = window.ALAB_ALLOWED_EMAILS || [];
-    if (allowed.length > 0 && !allowed.includes(user.email)) {
-      document.getElementById('auth-denied').style.display = '';
-      return;
-    }
-    document.getElementById('auth-denied').style.display = 'none';
-    localStorage.setItem('gsi_user', JSON.stringify({
-      name: user.name,
-      email: user.email,
-      picture: user.picture,
-    }));
-    showSignedIn(user);
-  }
-
-  window.addEventListener('load', function () {
-    // Restore persisted session (re-validate against allowlist)
-    const stored = localStorage.getItem('gsi_user');
-    if (stored) {
-      try {
-        const u = JSON.parse(stored);
-        const allowed = window.ALAB_ALLOWED_EMAILS || [];
-        if (allowed.length > 0 && !allowed.includes(u.email)) {
-          localStorage.removeItem('gsi_user');
-        } else {
-          showSignedIn(u);
-        }
-      } catch { localStorage.removeItem('gsi_user'); }
-    }
-
-    if (typeof google === 'undefined' || !google.accounts) return;
-
-    google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: onGoogleCredential,
-      auto_select: false,
-      ux_mode: 'popup',
-    });
-
-    google.accounts.id.renderButton(
-      document.getElementById('google-signin-container'),
-      { theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular', width: 220 }
-    );
-  });
 </script>
 
 </body>
