@@ -196,6 +196,60 @@
   .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
   .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  /* ── Section action buttons (Collapse All / Expand All) ── */
+  .section-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .section-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .section-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .section-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── Collapsible topic groups ── */
+  .topic-group-header {
+    cursor: pointer;
+    user-select: none;
+    transition: margin-bottom 0.25s ease;
+  }
+  .topic-group-header:hover .topic-group-title { color: var(--topic-color, var(--accent)); }
+
+  .topic-group.is-collapsed .topic-group-header { margin-bottom: 0; }
+
+  .topic-group-chevron {
+    font-size: 9px;
+    color: var(--ink-muted);
+    transition: transform 0.22s ease;
+    margin-left: 6px;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+  .topic-group.is-collapsed .topic-group-chevron { transform: rotate(-90deg); }
+
+  .topic-notes {
+    max-height: 1600px;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.25s ease;
+    opacity: 1;
+  }
+  .topic-group.is-collapsed .topic-notes {
+    max-height: 0;
+    opacity: 0;
+  }
+
   /* ── Main Content ── */
   .main {
     padding: 48px 48px 80px;
@@ -226,7 +280,6 @@
     font-family: 'Courier New', Courier, monospace;
     font-size: 11px;
     color: var(--ink-muted);
-    margin-left: auto;
     letter-spacing: 0.06em;
   }
 
@@ -552,7 +605,7 @@
     </div>
 
     <div class="rail-footer">
-      <button class="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
+      <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()">Toggle theme</button>
     </div>
   </aside>
 
@@ -562,6 +615,10 @@
     <div class="section-header">
       <h2 class="section-title">All Designs</h2>
       <span class="section-count" id="design-count">— topics</span>
+      <div class="section-actions">
+        <button class="section-btn" onclick="collapseAll()">Collapse All</button>
+        <button class="section-btn" onclick="expandAll()">Expand All</button>
+      </div>
     </div>
 
     <div class="topic-groups" id="topic-groups">
@@ -1055,26 +1112,55 @@ window.ALAB_PAGE_CONFIG = {
 </div>
 
 <script>
-  function toggleTheme() {
-    const root = document.documentElement;
-    const current = root.getAttribute('data-theme');
+  function getActiveTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
     const stored = localStorage.getItem('theme');
     const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    const active = current || stored || sys;
-    const next = active === 'dark' ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
+    return current || stored || sys;
+  }
+
+  function updateThemeBtn() {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+    const active = getActiveTheme();
+    btn.textContent = active === 'dark' ? '☀ Light' : '☽ Dark';
+  }
+
+  function toggleTheme() {
+    const next = getActiveTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
+    updateThemeBtn();
+  }
+
+  function collapseAll() {
+    document.querySelectorAll('#topic-groups .topic-group').forEach(g => g.classList.add('is-collapsed'));
+  }
+
+  function expandAll() {
+    document.querySelectorAll('#topic-groups .topic-group').forEach(g => g.classList.remove('is-collapsed'));
   }
 
   (function () {
     const saved = localStorage.getItem('theme');
     if (saved) document.documentElement.setAttribute('data-theme', saved);
+    updateThemeBtn();
   })();
 
   (function () {
     const groups = document.querySelectorAll('#topic-groups .topic-group');
     const counter = document.getElementById('design-count');
     counter.textContent = groups.length === 1 ? '1 topic' : `${groups.length} topics`;
+
+    groups.forEach(group => {
+      group.classList.add('is-collapsed');
+      const header = group.querySelector('.topic-group-header');
+      const chevron = document.createElement('span');
+      chevron.className = 'topic-group-chevron';
+      chevron.textContent = '▼';
+      header.appendChild(chevron);
+      header.addEventListener('click', () => group.classList.toggle('is-collapsed'));
+    });
   })();
 </script>
 
