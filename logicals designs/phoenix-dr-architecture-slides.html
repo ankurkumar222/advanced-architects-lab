@@ -103,6 +103,7 @@
 <script>
 const SECTIONS=[
  {id:"intro",label:"START",c:"ink"},
+ {id:"found",label:"FOUNDATIONS: AZ+REGION+DMZ",c:"gold"},
  {id:"l01",label:"L0+L1 CHAOS+ACTIVE-ACTIVE",c:"teal"},
  {id:"l23",label:"L2+L3 REPLICATION+SELF-HEAL",c:"gold"},
  {id:"l4",label:"L4 GRADUAL RECOVERY",c:"violet"},
@@ -127,6 +128,101 @@ L5: Immutable Air-Gapped Vault
     -> three tiers, one an attacker can't reach
 L6: Continuous Verification & DR Drills
     -> a backup doesn't exist until you've restored it</div>`},
+
+/* FOUNDATIONS: AZ vs REGION vs DMZ */
+{sec:"found",c:"gold",eyebrow:"Foundations · AZ vs Region",t:"q",q:`Your app runs across 3 AZs in Mumbai. AZ-1 fails and the load balancer just stops sending it traffic — no DR failover needed. But if <b>all of Mumbai</b> fails, multiple AZs don't help anymore. Why not — and what's the only thing that saves you then?`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · AZ vs Region",t:"a",h:"AZ failure ≠ Region failure",body:`
+<div class="ascii">1. One Region, multiple AZs (Mumbai):
+       Mumbai Region
+            |
+   +--------+--------+
+   v        v        v
+  AZ-1     AZ-2     AZ-3
+  App      App      App
+
+AZ-1 fails:
+  AZ-1 [X]
+  AZ-2 [OK] <- traffic
+  AZ-3 [OK] <- traffic
+  LB just stops sending to AZ-1. No DR needed.
+  This is HIGH AVAILABILITY / fault tolerance, not DR.
+
+2. Entire Region fails:
+  Mumbai Region [X]  (AZ-1, AZ-2, AZ-3 all down)
+  Multiple AZs don't help -- they were all inside Mumbai.
+
+  For REGIONAL disaster recovery you need ANOTHER region:
+       Mumbai (PRIMARY)        Hyderabad (DR)
+       AZ1 AZ2 AZ3      -->    AZ1 AZ2 AZ3
+
+3. Data must replicate too, not just the app:
+  Mumbai AZ1/AZ2/AZ3 -> Database -> replication -> Hyderabad Database
+  (sync / async / backup-restore / CDC-event-stream — your choice
+   here directly sets your RPO and RTO)</div>
+<div class="note"><b>The hierarchy:</b> Region &rarr; contains multiple AZs &rarr; each AZ has its own infra &rarr; app runs across AZs (survives an AZ failure) &rarr; data is replicated &rarr; another Region provides regional DR (survives a Region failure). Multiple AZs protect you from a datacenter-level failure. Multiple Regions protect you from a complete regional disaster — two different problems, two different tools.</div>`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · RPO &amp; RTO",t:"q",q:`Every DR conversation with the business eventually comes down to two numbers: "how much data can we afford to lose" and "how fast must we be back". What are these called, and how does your choice of data-replication method decide both?`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · RPO &amp; RTO",t:"a",h:"RPO and RTO — the two numbers that drive the design",body:`
+<div class="ascii">RPO -- Recovery Point Objective
+  "How much data can we afford to lose?"
+  Example: RPO = 5 minutes
+  -> if Mumbai dies, you can lose up to 5 min of transactions
+
+RTO -- Recovery Time Objective
+  "How quickly must the system come back?"
+  Example: RTO = 15 minutes
+  -> the DR environment must be operational within 15 min
+
+Tighter RPO/RTO -> more expensive replication:
+  Backup & restore .......... cheapest,  loosest RPO/RTO
+  Async replication .......... cheaper,   RPO in seconds-minutes
+  CDC / event streaming ....... moderate, RPO near-real-time
+  Sync replication ........... most costly, RPO ~ 0, tightest RTO</div>
+<div class="note">RPO and RTO aren't engineering-only numbers — they're business decisions. A bank's core ledger might demand RPO near-zero (sync replication, expensive); an internal reporting dashboard might tolerate RPO of hours (nightly backup, cheap). Fix these two numbers first — everything else in the DR design (replication mode, region choice, failover automation) follows from them.</div>`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · DMZ + Full Stack",t:"q",q:`Trace a user's request end-to-end: DNS/GSLB → DMZ → AZs → application → database, mirrored in both the primary and DR region. Where exactly does the DMZ sit in this picture — and does Mumbai's DMZ ever hand off directly to Hyderabad's application?`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · DMZ + Full Stack",t:"a",h:"DMZ, AZ, Region — one complete picture",body:`
+<div class="ascii">                 INTERNET / USERS
+                        |
+                   DNS / GSLB
+                        |
+              +---------+---------+
+              |                   |
+        MUMBAI REGION       HYDERABAD REGION
+          (PRIMARY)               (DR)
+              |                   |
+           DMZ (WAF/LB/          DMZ (WAF/LB/
+           API Gateway)          API Gateway)
+              |                   |
+         AZ1 AZ2 AZ3         AZ1 AZ2 AZ3
+              |                   |
+          Application         Application
+              |                   |
+           Database --replication--> DR Database
+
+Failover path when Mumbai dies:
+  DNS/GSLB -> Hyderabad DMZ -> Hyderabad LB -> Hyderabad App -> Hyderabad DB
+  (Mumbai's DMZ never talks to Hyderabad's app — each region carries
+   its OWN equivalent DMZ/security layer; only DNS/GSLB redirects
+   users across regions)</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0;font-size:.86rem">
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px;color:var(--gold);font-family:var(--mono)">Component</td><td style="padding:6px 8px;color:var(--gold);font-family:var(--mono)">Protects against</td></tr>
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px">DMZ (WAF/LB)</td><td style="padding:6px 8px;color:#c9c7bf">Internet / security threats</td></tr>
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px">Multiple AZs</td><td style="padding:6px 8px;color:#c9c7bf">Datacenter / AZ failure</td></tr>
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px">Multiple Regions</td><td style="padding:6px 8px;color:#c9c7bf">Regional disaster</td></tr>
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px">Database replication</td><td style="padding:6px 8px;color:#c9c7bf">Data loss</td></tr>
+<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px 8px">DNS / GSLB</td><td style="padding:6px 8px;color:#c9c7bf">Redirecting users during regional failover</td></tr>
+<tr><td style="padding:6px 8px">RPO / RTO</td><td style="padding:6px 8px;color:#c9c7bf">How much data lost / how fast recovered</td></tr>
+</table>
+<div class="note">Four layers of protection, stacked: <b>DMZ</b> (security) &rarr; <b>AZs</b> (availability within a region) &rarr; <b>Region</b> (your primary site) &rarr; <b>Second Region</b> (your DR site). This is exactly the ladder the L3 Self-Healing Mesh climbs: pod fails &rarr; replace pod &middot; AZ fails &rarr; shift traffic to another AZ &middot; Region fails &rarr; failover to DR Region &middot; only after data + transactions + performance verify &rarr; declare HEALTHY.</div>`},
+
+{sec:"found",c:"gold",eyebrow:"Foundations · Recall",t:"r",h:"Quick recall: AZ, Region, RPO/RTO, DMZ",qs:[
+{q:`An AZ fails inside Mumbai vs. all of Mumbai fails — what's the difference in response, and why don't multiple AZs help in the second case?`,a:`AZ failure: the load balancer just stops routing to that AZ — traffic shifts to the healthy AZs, no DR needed (high availability). Region failure: all AZs are down because they were all inside the same region, so you must fail over to an entirely different Region (Mumbai → Hyderabad) — that's disaster recovery.`},
+{q:`Define RPO and RTO in one line each, and name one replication method that tightens each.`,a:`RPO = how much data you can afford to lose (tightened by moving from backup-restore toward async replication, CDC, or fully synchronous replication). RTO = how fast the system must be back up (tightened by automated failover/orchestration rather than manual recovery).`},
+{q:`During a full regional failover, does Mumbai's DMZ hand traffic to Hyderabad's application directly?`,a:`No. Each region runs its own equivalent DMZ/security layer (WAF, LB, API Gateway). DNS/GSLB is what redirects users to Hyderabad's DMZ, which then routes into Hyderabad's own AZs, application, and database.`}]},
 
 /* L0 + L1 */
 {sec:"l01",c:"teal",eyebrow:"L0 · Chaos Engineering &amp; Predictive Analytics",t:"q",q:`The system runs two background engines continuously: one predicts where failure is heading, the other manufactures failure on purpose. Why are <b>both</b> needed — and what does it mean that their output feeds the same downstream system?`},
