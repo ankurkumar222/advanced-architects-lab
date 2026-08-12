@@ -794,7 +794,7 @@
             </div>
           </a>
 
-          <a class="note-box" href="db design/sql_indexes_deep_dive.html">
+          <a class="note-box" href="db design/sql-indexes-deep-dive.html">
             <div class="note-box-accent"></div>
             <div class="note-box-body">
               <div class="note-box-title">SQL Indexes Deep Dive</div>
@@ -1029,7 +1029,6 @@
     counter.textContent = groups.length === 1 ? '1 topic' : `${groups.length} topics`;
 
     groups.forEach(group => {
-      group.classList.add('is-collapsed');
       const header = group.querySelector('.topic-group-header');
       const chevron = document.createElement('span');
       chevron.className = 'topic-group-chevron';
