@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · The Index Ledger — A Deep Dive Into SQL Indexes</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>The Index Ledger · A Deep Dive Into SQL Indexes</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"cluster",label:"CLUSTERED+BTREE",c:"teal"},
+ {id:"composite",label:"COMPOSITE+IGNORED",c:"gold"},
+ {id:"keys",label:"PK vs UK+COVERING",c:"violet"},
+ {id:"fk",label:"FOREIGN KEYS",c:"rose"},
+ {id:"nosql",label:"NOSQL INDEX LANDSCAPE",c:"amber"},
+ {id:"only",label:"SQL-ONLY vs NOSQL-ONLY",c:"ink"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"The Index Ledger",t:"a",h:"The Index Ledger — <em>A Deep Dive Into SQL Indexes</em>",body:`
+<p>Ten entries — seven on SQL, three on the fault line between SQL and NoSQL indexing. Same question asked every way: where does the data actually sit, and what does the engine have to do to find it. Expand each card — don't just read the answer, argue with it first.</p>
+<div class="ascii">10 topics · 40+ questions to expand · ~55 min first pass</div>
+<div class="note"><b>How to use:</b> "?" slides ask you to think first. Press Next to compare. Recall quizzes close each section.</div>`},
+
+/* ---------- CLUSTERED + BTREE ---------- */
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"q",q:`Why can a table have only <b>one</b> clustered index but unlimited non-clustered ones?`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"a",h:"One of these IS the table",body:`
+<p>A <strong>clustered index</strong> determines the physical order rows are stored on disk. The leaf level of the index <em>is</em> the actual row data — no separate table to fetch. A <strong>non-clustered index</strong> is a separate structure; its leaf nodes hold the indexed column(s) plus a pointer (the row's physical location, or the clustering key in InnoDB).</p>
+<div class="ascii">CLUSTERED (the shelf itself):
+  [Book A][Book B][Book C]   &lt;- only ONE physical order possible
+NON-CLUSTERED (card catalogs beside the shelf):
+  Catalog 1 (by author) --> points to shelf position
+  Catalog 2 (by title)  --> points to shelf position
+  (as many catalogs as you want - the shelf itself never changes)</div>
+<div class="ascii">CLUSTERED - index IS the table       NON-CLUSTERED - index POINTS
+B-Tree leaf -> full row data          index leaf: key + PK ptr
+1 seek -> data found. Done.           clustered table row
+                                       2 seeks: index, then table
+                                       ("bookmark lookup" cost)
+On insert: clustered may trigger a page split; non-clustered
+just adds an entry.</div>
+<div class="note">Because "clustered" isn't a property of the index — it's a property of the <b>table's physical layout</b>. Rows can only be sorted in one order at any given time; two clustered indexes would mean physically storing the same rows in two sequences simultaneously, a contradiction. Non-clustered indexes sidestep this entirely — self-contained B-Trees with no claim on physical order, so you can stack as many as you want.</div>
+<div class="note">In InnoDB (MySQL), every secondary index stores the <b>PRIMARY KEY</b> value as its pointer — not a disk address. That's why a wide, unstable primary key is expensive everywhere, not just at the clustered level.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"q",q:`What actually happens, physically, when you insert a row into a clustered index vs. a non-clustered one?`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"a",h:"The shelf must make room; the catalog just adds a card",body:`
+<div class="ascii">CLUSTERED insert (row must go in exact sorted disk position):
+  Shelf full? --> SPLIT the shelf into two, move half the books
+  (expensive - real data moves)
+NON-CLUSTERED insert (index entry only):
+  Just add one new card to the catalog, pointing at the row
+  (cheap - no real data moves)</div>
+<div class="note"><b>Clustered:</b> the engine finds the exact physical page where this row belongs, based on the clustering key's sort order, and slots it in. If the page is full, it triggers a <b>page split</b> — I/O-expensive, causes fragmentation, especially if the clustering key isn't sequential. <b>Non-clustered:</b> just finds the right leaf position in its own B-Tree and adds an entry — no row data shuffled. This is exactly why an ever-increasing key (auto-increment, or time-ordered) makes a great clustering key — new rows always land at the end, no mid-page splits.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"q",q:`If a table has no clustered index at all (a heap table), how does a non-clustered index find the row?`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"a",h:"No shelf order — the catalog stores the exact address",body:`
+<div class="ascii">HEAP TABLE (no sorted shelf, rows just wherever there's space):
+  Row lives at: file 2, page 14, slot 3
+Catalog card must store the EXACT physical address:
+  catalog entry --> "file 2, page 14, slot 3"
+Problem: if the row physically moves (rebuild/compaction),
+every catalog card pointing to it must be updated too.</div>
+<div class="note">The non-clustered index stores a direct physical address — a <b>Row ID (RID)</b> or <code>ctid</code> in Postgres terms. This is actually a slightly cheaper pointer than InnoDB's approach (storing the whole PK value), but comes with a catch: if the row ever physically moves, every non-clustered index pointing to it via RID has to be updated. InnoDB's PK-based approach avoids this because the PK value doesn't change even if the row's physical page does.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"q",q:`Your transactions table grows by lakhs of rows a day and uses a <b>random UUID</b> as primary key. What breaks?`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"a",h:"Random UUID = constant page splits, from day one",body:`
+<div class="ascii">Sequential ID (1,2,3,4...): new rows always at the END
+  [1][2][3][4][5] --> insert 6 --> [1][2][3][4][5][6] (no split)
+Random UUID: new rows land ANYWHERE
+  [..][..][new!][..][..][new!][..]  &lt;- constant splitting
+
+Fix: sequential surrogate key for clustering,
+     keep the UUID as a separate unique (non-clustered) column</div>
+<div class="note">If the PK (and clustered index) is a random UUID, every insert lands at a random point in the sorted structure — never at the end. Constant, unpredictable page splits, rapidly increasing fragmentation, worse cache locality. On top of that, since every InnoDB secondary index carries the full PK value as its pointer, a 16-byte random UUID makes <b>every</b> non-clustered index on that table wider and slower than it needs to be.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"q",q:`On your demat platform's <code>holdings</code> table — cluster on <code>holding_id</code>, or on <code>demat_account_id</code>?`},
+
+{sec:"cluster",c:"teal",eyebrow:"01 · Clustered vs Non-Clustered",t:"a",h:"Cluster on your dominant read pattern, not the &quot;natural&quot; key",body:`
+<div class="ascii">Cluster by holding_id:
+  [h1][h2][h3][h4]...   &lt;- one customer's holdings scattered
+Cluster by demat_account_id:
+  [acct A: h1,h5,h9][acct B: h2,h6]... &lt;- one customer's
+  holdings TOGETHER. "all holdings for this account" = ONE
+  fast read, not scattered reads
+Better: cluster on (demat_account_id, holding_id) together -
+keeps per-account grouping AND append-mostly inserts per account</div>
+<div class="note">If 90% of queries are "fetch all holdings for this demat account," clustering by <code>demat_account_id</code> puts one customer's holdings on the same or adjacent pages — one sequential read instead of scattered random reads. But clustering purely on <code>demat_account_id</code> can still cause mid-table splits for a growing account. The real-world compromise: composite <code>(demat_account_id, holding_id)</code> where <code>holding_id</code> is itself sequential — per-account locality AND append-mostly inserts within each range.</div>`,
+cto:[`A clustered index is not an optimization — it is a structural commitment about the physical ordering of your data. The most important architectural decisions are the ones that cannot be changed without a migration. Treat your clustering key with the gravity it deserves: it is not a default, it is a contract with the hardware.`]},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"q",q:`Why not just use a plain <b>Binary Search Tree</b> instead of a B-Tree for a database index?`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"a",h:"Not a binary tree with a typo",body:`
+<div class="ascii">Binary Search Tree (2 children/node): 1M rows -> ~20 levels
+  deep -> up to 20 disk trips
+B-Tree (hundreds of children/node): 1M rows -> only 3-4 levels
+  deep -> only 3-4 disk trips
+Disk trips are slow. Comparisons in memory are basically free.
+B-Tree trades "more keys to check per stop" for "far fewer stops."</div>
+<div class="ascii">Fig — traversal to find key=47
+[25|60]
+[10|20]  [35|47|55]  [75|90]
+        ...44,47,50...
+3 page reads total - root, internal, leaf.
+A million-row table often needs only 3-4 levels.</div>
+<div class="note">A BST is optimized for comparisons in memory — depth grows as log&#8322;(n), ~20 levels for a million rows. In pure RAM that's nothing. But an index lives on disk, and every level down is potentially a separate disk page fetch — orders of magnitude slower than a CPU comparison. A B-Tree makes each node hold hundreds of keys (matched to page size), giving massive fan-out that collapses depth from ~20 levels to 3-4. That trade — more keys examined per node (cheap, in memory) for far fewer pages fetched (expensive) — is the entire reason B-Trees exist for on-disk structures.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"q",q:`How does a B-Tree serve an <code>ORDER BY</code> without a separate sort step?`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"a",h:"Leaf pages are already sorted and chained",body:`
+<div class="ascii">Leaf level (already sorted, linked left-to-right):
+[10,15]&lt;--&gt;[20,25]&lt;--&gt;[30,35]&lt;--&gt;[40,45]&lt;--&gt;...
+Find the starting point once, then just WALK SIDEWAYS -
+results come out already in order, no extra sort needed</div>
+<div class="note">Leaf nodes are already sorted by key and linked together as a doubly-linked list. Once the engine has traversed down to the correct starting leaf, it doesn't need to jump around anymore — it just walks sideways. <code>ORDER BY indexed_column</code> can skip the sort step entirely, which is why you'll often see a query plan with no explicit "Sort" node when an index covers the ORDER BY clause.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"q",q:`Why does a B-Tree stay balanced automatically as rows are added and deleted?`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"a",h:"Splits ripple upward, uniformly",body:`
+<div class="ascii">Page fills up --> SPLIT into two pages
+     |
+     v
+middle key pushed UP to parent
+     |
+     v (if parent also fills up)
+split cascades upward, even to the root
+Because splits always start at a leaf and ripple UP evenly,
+every leaf ends up at exactly the same depth.</div>
+<div class="note">When a leaf page fills up, it <b>splits</b> — divides into two, and a copy of the middle key propagates up to the parent as a new separator. If that causes the parent to overflow too, the split cascades upward, potentially all the way to the root, growing the tree one level taller, uniformly, at the top. Deletes work in reverse — pages may merge with a sibling, shrinking a level. Because growth and shrinkage always happen at the root and propagate down uniformly, no branch can get lopsided the way an unbalanced BST can.</div>`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"q",q:`A query filters <code>WHERE created_at BETWEEN '2026-01-01' AND '2026-01-31'</code>. Walk through why a B-Tree handles this efficiently but a hash index <b>wouldn't</b>.`},
+
+{sec:"cluster",c:"teal",eyebrow:"02 · B-Tree Internals",t:"a",h:"Hashing deliberately destroys order",body:`
+<div class="ascii">B-TREE range scan:
+  find '2026-01-01' (one seek) --> walk sideways --> stop at
+  '2026-01-31'
+HASH INDEX:
+  hash('2026-01-01') = bucket 47
+  hash('2026-01-02') = bucket 12   &lt;- totally unrelated bucket!
+  no way to walk "in order" -- hashing destroys the order</div>
+<div class="note">The engine traverses the tree once to locate the leaf containing the lower bound — O(log n) — then simply walks forward along the linked leaf chain until it passes the upper bound, then stops. A hash index can't do this at all, because hashing deliberately destroys order — two dates one day apart could hash to completely unrelated buckets. A hash index can only answer "does this exact value exist," never "give me everything between these two values" — exactly why range queries dominate real-world OLTP workloads, and hash indexes simply can't serve them.</div>`,
+cto:[`The B-Tree is a lesson in matching the cost function to the medium. Its entire existence is a response to one insight: comparisons are cheap, disk seeks are expensive. The best engineering decisions always start from the same question — what is actually expensive here? Not what is logically complex, not what is academically interesting, but what costs the most in the real operating environment. Know your hardware's cost model before you design for it.`]},
+
+{sec:"cluster",c:"teal",eyebrow:"Clustered vs Non-Clustered &amp; B-Tree · Recall",t:"r",h:"Quick recall: clustering and B-Tree internals",qs:[
+{q:`Why can a table only have one clustered index?`,a:`"Clustered" is a property of the table's physical row order, not the index — rows can only be sorted one way at a time. Two clustered indexes would mean storing the same rows in two sequences simultaneously.`},
+{q:`Why do B-Trees beat plain BSTs for on-disk indexes?`,a:`BSTs optimize for memory comparisons (cheap); on disk, every tree level is a potential disk seek (expensive). B-Trees pack hundreds of keys per node for massive fan-out, collapsing depth from ~20 levels to 3-4.`},
+{q:`Why can a B-Tree serve ORDER BY without a separate sort, and why can't a hash index do range scans at all?`,a:`B-Tree leaves are already sorted and linked — walk sideways for free ordering. Hashing deliberately destroys order, so adjacent values land in unrelated buckets with no way to walk "in order."`}]},
+
+/* ---------- COMPOSITE + IGNORED ---------- */
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"q",q:`Why does column order in a composite index matter so much — isn't it "the same data" either way?`},
+
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"a",h:"Sorted like a phone book: surname, then first name",body:`
+<div class="ascii">INDEX(user_id, status): sorted by user_id first, then status
+  within each user
+  user1: [ACTIVE, CLOSED]   user2: [ACTIVE]
+  --> great for "everything for this user"
+INDEX(status, user_id): sorted by status first, then user
+  ACTIVE: [user1, user2, user5...]   CLOSED: [user1, user9...]
+  --> great for "everyone who is ACTIVE"
+Same columns, different sort = serves completely different queries.</div>
+<div class="note">Same data, completely different physical sort order — and sort order is the entire value of an index. Neither is a substitute for the other; picking the wrong order for your dominant query pattern means the index exists but doesn't actually help.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"q",q:`Given <code>INDEX(user_id, status, created_at)</code>, which of these queries use it — fully, partially, or not at all: (A) <code>user_id=5</code>, (B) <code>user_id=5 AND status='ACTIVE'</code>, (C) <code>user_id=5 AND created_at&gt;'2026-01-01'</code> (status skipped), (D) <code>status='ACTIVE'</code> alone, (E) all three with a range on the last column?`},
+
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"a",h:"The leftmost prefix rule, worked through",body:`
+<div class="ascii">INDEX(user_id, status, created_at) -- like a phone book sorted:
+   surname -> first name -> middle name
+Search by surname only?                 --> fast, direct jump
+Search by surname + first name?         --> fast, direct jump
+Search by first name only (no surname)? --> can't jump in, scan</div>
+<ul class="pts">
+<li><strong>A</strong> <code>user_id=5</code> — <b>full use</b>, leftmost column, direct seek.</li>
+<li><strong>B</strong> <code>user_id=5 AND status='ACTIVE'</code> — <b>full use</b>, both equality in leftmost order.</li>
+<li><strong>C</strong> <code>user_id=5 AND created_at&gt;'2026-01-01'</code> (status skipped) — <b>partial</b>: seeks on user_id, but within that user's rows created_at isn't sorted independently of status, so it scans and filters rather than seeking directly.</li>
+<li><strong>D</strong> <code>status='ACTIVE'</code> alone — <b>no use</b>, leftmost column missing, falls back to a full scan.</li>
+<li><strong>E</strong> equality + equality + range on the last column — <b>full use</b>, the ideal shape for this index.</li>
+</ul>`},
+
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"q",q:`Your codebase has two hot query patterns: (1) filter by <code>status</code> only for an ops dashboard, and (2) filter by <code>user_id + status</code> for the user's own view. <b>One index, or two?</b>`},
+
+{sec:"composite",c:"gold",eyebrow:"03 · Composite &amp; Leftmost Prefix",t:"a",h:"Two — leftmost prefix means one index can't serve both starting columns",body:`
+<div class="ascii">INDEX(user_id, status)  serves:  WHERE user_id=? AND status=?  OK
+                        does NOT serve: WHERE status=? alone   NOT OK
+Need TWO indexes:
+  INDEX(user_id, status)  &lt;- for the user-facing pattern
+  INDEX(status)           &lt;- for the ops dashboard pattern</div>
+<div class="note">You genuinely need <code>INDEX(user_id, status)</code> for the user-facing pattern, and a separate <code>INDEX(status)</code> (possibly a partial index) for the ops pattern. The mistake engineers make is assuming one "wide enough" composite index will magically serve every filter combination — it won't, unless the query's filters happen to align with the leftmost prefix.</div>`,
+cto:[`The leftmost prefix rule has a twin in leadership: context flows in one direction. A team that hasn't been given the organizational context it needs cannot simply skip to the conclusion — just as a query that skips the leftmost column cannot seek into the index. Leaders who wonder why their teams make poor decisions should first ask: did I establish the leading context? You cannot jump to a conclusion without the column it is sorted on.`]},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`You wrap the indexed column in a function: <code>WHERE YEAR(created_at) = 2026</code>. Does the index on <code>created_at</code> get used?`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"Gotcha 1: function-wrapped columns",body:`
+<div class="ascii">Index stores RAW values: [2025-11-02][2025-12-15][2026-01-03]...
+WHERE YEAR(created_at)=2026
+  --> must compute YEAR() for EVERY row first, then compare
+  --> that means touching every row anyway --> index useless
+Fix: WHERE created_at >= '2026-01-01' AND created_at < '2027-01-01'
+  --> compares the RAW value directly --> index seek works</div>
+<div class="note"><b>Not used.</b> The index stores raw <code>created_at</code> values in sorted order — no pre-computed entry for "the year part." Evaluating the function means applying it to every row first, defeating the purpose. Fix: rewrite as a sargable range on the raw column.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`A leading wildcard: <code>WHERE name LIKE '%esh'</code>. Usable?`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"Gotcha 2: leading wildcards",body:`
+<div class="ascii">Index sorted by FIRST letters: [Amit][Bhavesh][Chetan][Ganesh]...
+LIKE 'Rag%'  (starts with)  --> jump straight to "Rag..."   OK
+LIKE '%esh'  (ends with)    --> could be ANYWHERE            NOT OK</div>
+<div class="note"><b>Not used.</b> A B-Tree is sorted by leading characters. <code>LIKE 'Rag%'</code> seeks straight to matching entries; <code>LIKE '%esh'</code> asks "ends in esh" — no way to know where in sorted order that starts, since the sort key is the beginning of the string. Fix: a trigram index (Postgres <code>pg_trgm</code>) or full-text index, not a plain B-Tree.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`Implicit type conversion: column is <code>VARCHAR</code>, but you query <code>WHERE account_no = 12345</code> (an integer literal).`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"Gotcha 3: silent type conversion",body:`
+<div class="ascii">Engine silently converts:
+  CAST(account_no AS INT) = 12345  &lt;- conversion applied to COLUMN
+  --> must recompute for every row --> index unusable
+Fix: WHERE account_no = '12345'  &lt;- match types explicitly</div>
+<div class="note"><b>Not used.</b> Most engines silently cast one side to match the other — and that cast often gets applied to the <b>column</b>, not the literal. A very common, very silent perf killer in fintech systems where account numbers, PAN, or policy numbers get typed inconsistently across services.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`You index a boolean column <code>is_active</code>. Will the optimizer actually <b>use</b> it?`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"Gotcha 4: low cardinality",body:`
+<div class="ascii">is_active has only 2 values: true/false. 70% of rows are true.
+WHERE is_active = true
+  --> matches 70% of the table anyway
+  --> index-then-bounce-to-table costs MORE than scanning
+  --> optimizer skips the index, scans instead</div>
+<div class="note"><b>Usually not.</b> This comes down to cardinality/selectivity — a boolean has only two values, so filtering on the majority still returns most of the table. Low-cardinality columns become useful only in narrow circumstances: as the trailing column in a composite index, or as a <b>partial index</b> on just the rare value.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`You have an index, but the table only has 200 rows. Used?`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"Gotcha 5: tiny tables — the optimizer's call, not a bug",body:`
+<div class="ascii">200-row table = probably ONE disk page, already cached
+Full scan of 200 rows:          microseconds
+Index traversal + bounce back:  MORE overhead than that</div>
+<div class="note"><b>Often not, and that's correct.</b> A tiny table likely fits in one or two disk pages already in memory — scanning it takes microseconds, cheaper than traversing an index and bouncing back. This is a common interview trap: candidates assume "index exists &rarr; index used" is absolute. It isn't — it's a cost decision re-evaluated per query based on table size and statistics.</div>`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"q",q:`You add an index, run the query, and it's still slow. What's your actual <b>debugging sequence</b> — not the theory, the steps?`},
+
+{sec:"composite",c:"gold",eyebrow:"04 · When Indexes Get Ignored",t:"a",h:"The practical checklist, cheapest to check first",body:`
+<div class="ascii">1. EXPLAIN ANALYZE --> is the index even being considered?
+2. Check the 5 traps (function wrap, wildcard, type mismatch,
+   low selectivity, tiny table)
+3. Check if table stats are stale (recent bulk load, no ANALYZE)
+4. Check leftmost-prefix mismatch on composite indexes
+5. Only then, consider a DIFFERENT kind of index (covering/partial)</div>`,
+cto:[`Presence is not the same as use. An index that exists but is never chosen by the optimizer is storage overhead, write amplification, and false confidence — all at once. The same is true of processes, documentation, and architectural guidelines: the ones that exist but are never consulted in real decisions are not harmless. They are noise that crowds out the signal. Effective engineering cultures distinguish between what is present and what is actually working.`]},
+
+{sec:"composite",c:"gold",eyebrow:"Composite Index &amp; Ignored Indexes · Recall",t:"r",h:"Quick recall: composite indexes and when they get ignored",qs:[
+{q:`What's the leftmost prefix rule, and what breaks it?`,a:`A composite index can only be used efficiently starting from its leftmost column. Skip that column in your WHERE clause and the whole index becomes unusable for a seek — it falls back to a scan.`},
+{q:`Name three of the five "gotchas" that silently disable index use.`,a:`Wrapping the column in a function, a leading wildcard (<code>LIKE '%x'</code>), implicit type conversion, low cardinality (e.g. booleans), and tiny tables where a scan is cheaper than a seek.`},
+{q:`Give the debugging sequence when an indexed query is still slow.`,a:`EXPLAIN ANALYZE first (is it even considered?) &rarr; check the five traps &rarr; check statistics freshness &rarr; check leftmost-prefix mismatch &rarr; only then consider a different index type.`}]},
+
+/* ---------- PK vs UK + COVERING ---------- */
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"q",q:`Why is a Primary Key not allowed to be NULL, while a Unique Key can have one NULL row?`},
+
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"a",h:"Identity card vs. constraint",body:`
+<div class="ascii">Property              Primary Key    Unique Key
+Auto-creates index    Yes, always    Yes, always
+NULL allowed          Never          One NULL typically
+                                       allowed (engine-dependent)
+Count per table       Exactly one    Many allowed
+Default index type    Clustered      Non-clustered
+ (SQL Server/InnoDB)
+FK reference target   Conventional   Possible, less common</div>
+<div class="note">A primary key exists to <b>identify</b> a row — every row must be unambiguously locatable, including as the target of foreign key references. A NULL identity is a contradiction: NULL means "unknown/absent." A unique key is a weaker promise — "no two <em>known</em> values may be equal" — and since NULL is treated as "unknown" rather than a comparable value, two NULLs aren't considered equal to each other, so most engines allow one row with NULL in a unique column.</div>`},
+
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"q",q:`If you already have a Unique Key on a column, do you still get value from making it the <b>Primary Key</b> instead?`},
+
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"a",h:"A PK usually becomes the physical shelf order",body:`
+<div class="ascii">UNIQUE only:  just a side catalog card, doesn't touch shelf order
+PRIMARY KEY:  usually BECOMES the shelf order (clustered)
+  --> if you fetch full rows by this column often, making it PK
+      = single-seek lookups instead of catalog-then-bounce</div>
+<div class="note">Yes — the primary key typically becomes the <b>clustering</b> key by default (SQL Server, InnoDB), changing the physical storage of the whole table, not just adding a lookup index. If a column is both unique <em>and</em> the column you most often use to fetch full rows, making it the PK gets you clustered storage benefits.</div>`},
+
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"q",q:`A <code>users</code> table has a surrogate <code>user_id</code> as PK, and a <code>pan_number</code> column that must also be unique but is nullable during onboarding. How do you model it?`},
+
+{sec:"keys",c:"violet",eyebrow:"05 · Primary Key vs Unique Key",t:"a",h:"Keep identity and constraint separate",body:`
+<div class="ascii">user_id      --> PRIMARY KEY (always known, good sequential
+                  clustering key)
+pan_number   --> UNIQUE constraint only (can be NULL while
+                  onboarding, but no two COMPLETED users can
+                  share one)</div>
+<div class="note">Keep <code>user_id</code> as the primary key — stable, non-null by design, a good clustering key since it's typically sequential. Add a separate UNIQUE constraint on <code>pan_number</code>, which allows it to stay NULL for users mid-onboarding while still guaranteeing no two completed users share a PAN. Trying to make <code>pan_number</code> the PK would force it non-null from the start, breaking the onboarding-in-progress state entirely.</div>`,
+cto:[`The distinction between a primary key and a unique key is the distinction between identity and constraint. A primary key says: this is what this row IS. A unique key says: this property cannot be shared. Before naming a column a primary key, ask: is this truly the row's identity, or is it a business rule wearing a primary key's costume?`]},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"q",q:`If covering indexes are this good, why not just cover <b>every</b> query with one?`},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"a",h:"The index-only scan — and its price",body:`
+<div class="ascii">SELECT status FROM orders WHERE user_id=5
+Regular index(user_id):
+  idx leaf: user_id | table row | must bounce to table for "status"
+Covering index(user_id) INCLUDE(status):
+  idx leaf: user_id + status | answer already in the index.
+  Table never touched. This is an "index-only scan" in EXPLAIN.</div>
+<div class="note">Because "covering" everything means the index effectively becomes a second copy of large parts of your table — every extra column adds storage and write cost. Every INSERT/UPDATE/DELETE touching any covered column now has to update this index too. On a write-heavy table, a handful of overly wide covering indexes can quietly become your biggest write-latency bottleneck. Build them for specific, high-frequency, latency-sensitive reads — not as a blanket strategy.</div>`},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"q",q:`What's the actual difference between adding a column to the composite <b>key</b> vs. putting it in <code>INCLUDE</code>?`},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"a",h:"Sort order vs. leaf-level baggage",body:`
+<div class="ascii">KEY columns:      affect sort order, used for leftmost-prefix
+INCLUDE columns:  just extra baggage at the leaf, retrieval only
+Rule: only put columns you FILTER/SORT by in the key.
+      Put columns you only SELECT in INCLUDE.</div>
+<div class="note">Key columns determine how entries are arranged and what the leftmost-prefix rule applies to. INCLUDE columns ride along at the leaf level purely for retrieval — no effect on sort or search. Adding an unnecessary column to the key can silently break leftmost-prefix usability for other queries and bloats every internal node; INCLUDE only bloats the leaf level and never interferes with search behavior.</div>`},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"q",q:`A dashboard endpoint runs <code>SELECT policy_number, premium_amount, status FROM policies WHERE demat_account_id = ? AND status = 'ACTIVE'</code> thousands of times a minute. Design the index.`},
+
+{sec:"keys",c:"violet",eyebrow:"06 · Covering Index",t:"a",h:"Filter columns in the key, select-only columns in INCLUDE",body:`
+<div class="ascii">CREATE INDEX idx_policies_covering
+ON policies (demat_account_id, status)
+INCLUDE (policy_number, premium_amount);</div>
+<div class="note"><code>demat_account_id</code> and <code>status</code> go in the key — they're the filter columns matching this query's leftmost-prefix pattern. <code>policy_number</code> and <code>premium_amount</code> go in INCLUDE — only ever selected, never filtered or sorted on. Result: a pure index-only scan, no bookmark lookup to the base table at all.</div>`,
+cto:[`A covering index is a deliberate read/write trade-off made visible. Every extra column included is a declared belief about the future: that this query shape will be hot enough, for long enough, to justify carrying extra payload through every write. Naming the specific query each index was built for is not documentation — it is the engineering discipline that separates tuning from accumulation.`]},
+
+{sec:"keys",c:"violet",eyebrow:"PK vs UK &amp; Covering Index · Recall",t:"r",h:"Quick recall: keys and covering indexes",qs:[
+{q:`Why is a PK never NULL while a UK can allow one NULL row?`,a:`A PK is a row's identity — a NULL identity is a contradiction. A UK only forbids duplicate KNOWN values; NULL means "unknown," so two NULLs aren't compared as equal.`},
+{q:`What's the difference between putting a column in a composite index's KEY vs. its INCLUDE clause?`,a:`KEY columns affect sort order and leftmost-prefix search. INCLUDE columns are retrieval-only baggage at the leaf level with zero effect on how the tree is sorted or searched.`},
+{q:`Why not just cover every query with a wide index?`,a:`Every extra column is write amplification — wider storage and every INSERT/UPDATE/DELETE touching that column now must also update the index. It's a deliberate trade for specific hot queries, not a blanket strategy.`}]},
+
+/* ---------- FOREIGN KEYS ---------- */
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"q",q:`Why does a missing index on a foreign key column cause <b>locking</b> problems on the parent table, not just slow joins?`},
+
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"a",h:"The nuance interviewers love because it genuinely bites in production",body:`
+<div class="ascii">Engine          Auto-indexes FK column?  Practical implication
+MySQL(InnoDB)   Yes - automatic           Safety net whether you
+                                           ask for it or not
+PostgreSQL      No - explicit only        A very common silent
+                                           perf issue
+SQL Server      No - explicit only        Same story: FK
+                                           constraint != index</div>
+<div class="ascii">DELETE parent row --> must check: "does any child row reference this?"
+No index on child.parent_id:
+  --> FULL SCAN of child table, WHILE HOLDING LOCKS
+  --> blocks other writes to that table during the scan
+Millions of child rows + no index = production grinds to a halt</div>
+<div class="note">When you delete or update a parent row, the engine has to verify (or cascade) whether any child rows reference it. Without an index on the child's FK column, that check requires a full scan of the entire child table — and depending on isolation level and engine, that scan can <b>hold locks for its full duration</b>, blocking unrelated concurrent writes. A classic "looked fine in dev, then production ground to a halt" story that only shows up under real concurrent load.</div>`},
+
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"q",q:`Does creating an FK constraint automatically create an index? Why would a database designer choose <b>not</b> to auto-create one?`},
+
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"a",h:"It depends on the engine — and the philosophy behind it",body:`
+<div class="ascii">MySQL(InnoDB):     CREATE FK --> index auto-created (safety net)
+Postgres/SQLServer: CREATE FK --> NO index created automatically
+Common trap: engineers from MySQL assume Postgres behaves the
+same way -- forget the index -- pain shows up later</div>
+<div class="note">MySQL's InnoDB treats it as a correctness-adjacent safety measure. Postgres and SQL Server deliberately don't — an index is a storage and write-cost trade-off the schema designer should make explicitly, not one the engine should silently impose. A FK guarantees referential integrity via a check, not via a specific access structure. In practice this philosophical stance causes real pain: MySQL-background engineers assume Postgres behaves the same way, forget the index, and only discover the gap when a parent delete starts timing out under load.</div>`},
+
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"q",q:`Your <code>holdings</code> table (Postgres) has an FK to <code>demat_accounts</code>. An account closure flow deletes the parent and cascades. It's suddenly slow under load. <b>First thing you check?</b>`},
+
+{sec:"fk",c:"rose",eyebrow:"07 · Index on Foreign Keys",t:"a",h:"Check for the missing explicit index — almost always the culprit",body:`
+<div class="ascii">holdings.demat_account_id --> has an index? (check first!)
+If NO:
+  CREATE INDEX idx_holdings_demat_account_id
+  ON holdings (demat_account_id);
+Without it: every account deletion scans ALL of holdings,
+holding locks the whole time.</div>
+<div class="note">In Postgres it almost certainly doesn't have one unless someone added it deliberately, since Postgres never auto-creates one for a FK constraint. Without it, every account deletion forces a full scan of <code>holdings</code> to find cascade-delete rows, while holding locks that block concurrent reads/writes — exactly the kind of issue invisible in low-traffic testing that surfaces only under real concurrent load.</div>`,
+cto:[`The difference between MySQL auto-creating a foreign key index and Postgres requiring you to do it explicitly is a difference in philosophy — one treats safety as the engine's responsibility, the other treats it as the engineer's. Neither is wrong. But the production incident always comes from an engineer who assumed one engine would behave like another. Know your tools' defaults. Know the reason behind each one. And document the assumption whenever you cross an engine boundary in your platform.`]},
+
+{sec:"fk",c:"rose",eyebrow:"Foreign Keys · Recall",t:"r",h:"Quick recall: indexing foreign keys",qs:[
+{q:`Which engines auto-index a foreign key column, and which don't?`,a:`MySQL (InnoDB) auto-creates one, treating it as a safety measure. PostgreSQL and SQL Server do not — you must add it explicitly, treating indexing as a deliberate storage/write-cost decision.`},
+{q:`Why does a missing FK index cause LOCKING problems, not just slow joins?`,a:`Deleting a parent row requires checking (or cascading) whether child rows reference it. Without an index, that's a full scan of the child table done WHILE HOLDING LOCKS — blocking concurrent writes for the scan's duration.`}]},
+
+/* ---------- NOSQL INDEX LANDSCAPE ---------- */
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"q",q:`Why does MongoDB's multikey index — which indexes every element of an array — refuse to let you build a compound index across <b>two array fields</b>?`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"a",h:"Same word, different physics",body:`
+<div class="ascii">System         What "index" means there
+MongoDB        A B-Tree, same core structure as SQL, but built
+                for documents. Types: single-field, compound,
+                multikey (arrays), text, geospatial, hashed,
+                wildcard, TTL
+Cassandra      The partition key IS the primary index - it
+                decides which node owns the data
+DynamoDB       You declare access patterns up front as named
+                indexes, not add them later
+Elasticsearch  Every document is indexed by default
+Redis          No native secondary index - you build one
+                yourself out of other data structures</div>
+<div class="ascii">tags:[a,b,c]  -->  multikey index makes 3 entries (one per element)
+tags:[a,b,c] AND colors:[x,y,z] combined?
+  --> would need 3x3 = 9 entries (every combination)
+  --> meaningless: "tag=a" and "color=x" were never actually
+      paired --> MongoDB just disallows this combination</div>
+<div class="note">A multikey index creates one entry per array element, not per document. Two array fields on the same document would require a compound index to generate an entry for <b>every combination</b> — a Cartesian product growing combinatorially with array size, and producing an ambiguous, exploding index that doesn't mean anything coherent (the tag and color were never actually paired in the source data). MongoDB simply disallows it because the concept doesn't have a sane definition once two arrays are involved.</div>`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"q",q:`Why is a secondary index in Cassandra a fundamentally <b>different (and much weaker)</b> thing than a secondary index in SQL?`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"a",h:"Scatter-gather across every node",body:`
+<div class="ascii">SQL: everything in one place --> index points directly to the
+     row (1 seek)
+Cassandra: rows scattered across nodes by partition key
+  secondary index on a NON-partition column:
+    Node A: local index  Node B: local index  Node C: local index
+    query --> ask ALL nodes --> merge results ("scatter-gather")
+    slow, defeats the whole point of partitioning</div>
+<div class="note">In SQL, all data lives in one coherent structure, so a secondary index points directly to exactly where a row lives — one seek. In Cassandra, the partition key decides which physical node owns a row — the whole point of the architecture, spreading write load by hashing the partition key. A secondary index on a non-partition-key column has no way to know which node holds any given value, so Cassandra builds a local index <b>on every node</b> and, at query time, asks <b>every node</b> — a scatter-gather that defeats the entire reason you chose Cassandra. Materialized views (a second, denormalized copy pre-organized by the new access pattern) are the idiomatic fix instead.</div>`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"q",q:`Why does DynamoDB force you to declare a Global Secondary Index with its own partition key, rather than letting you query any attribute like SQL's <code>WHERE</code>?`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"a",h:"A GSI is literally a second table",body:`
+<div class="ascii">DynamoDB promise: every read = direct lookup, NEVER a scan
+GSI = literally a SECOND table
+  kept in sync automatically
+  organized around a DIFFERENT partition key
+  so a different access pattern can also get a direct lookup
+This is why DynamoDB design starts with "what will I query by"
+BEFORE you write a single row.</div>
+<div class="note">DynamoDB's entire performance promise (single-digit millisecond latency at any scale) comes from never having to scan — every read must resolve to a direct partition lookup. A GSI is structurally a second table DynamoDB automatically keeps in sync, reorganized around a different partition key. You're not adding a query capability after the fact the way <code>CREATE INDEX</code> does in SQL — you're pre-declaring a second physical copy of the data, accepting write amplification and (by default) eventual consistency.</div>`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"q",q:`You're logging every KYC verification event in DynamoDB, partitioned by <code>user_id</code>. Ops wants "show me all FAILED verifications across all users, today." <b>LSI or GSI — or neither?</b>`},
+
+{sec:"nosql",c:"amber",eyebrow:"08 · The NoSQL Index Landscape",t:"a",h:"GSI — and watch the hot-partition trap",body:`
+<div class="ascii">Base table: partitioned by user_id
+LSI: same partition key (user_id), different SORT key
+     --> still scoped PER USER, can't search "all users"  NOT OK
+GSI: NEW partition key (e.g. status), own sort key (timestamp)
+     --> can search across ALL users                       OK
+Watch out: if 95% SUCCESS / 5% FAILED, partitioning purely by
+status makes one huge partition and one tiny one -- hot-key
+problem. Better: composite like status#date.</div>
+<div class="note">An LSI shares the base table's partition key and only gives an alternate <b>sort</b> key within that same partition — can't answer "across all users" since it's still scoped per-user. You need a GSI with a new partition key — likely <code>status</code> (or better, <code>status#date</code> to avoid one enormous "FAILED" partition becoming a hot key) — with <code>event_timestamp</code> as the sort key.</div>
+<div class="note"><b>One rule to remember:</b> Looking within one user's data (same PK, new sort)? &rarr; LSI. Want a new way to group or search the whole table? &rarr; GSI.</div>`,
+cto:[`In SQL, an index is something you add to data. In most NoSQL systems, the index IS the data placement strategy — you do not add what is fundamental, you design around it from the start. This is not a limitation; it is a forcing function for rigor. Teams that switch to NoSQL and struggle are usually the ones who kept the SQL mental model: trying to bolt on access patterns after the data already exists, instead of defining access patterns before writing the first row.`]},
+
+{sec:"nosql",c:"amber",eyebrow:"NoSQL Index Landscape · Recall",t:"r",h:"Quick recall: the NoSQL index landscape",qs:[
+{q:`Why can't a multikey index be compound across two array fields?`,a:`It would need one entry per combination (a Cartesian product) — combinatorially exploding and meaningless, since the two array elements were never actually paired in the source document.`},
+{q:`Why is a Cassandra secondary index on a non-partition column fundamentally weaker than a SQL index?`,a:`Rows are scattered by partition key across nodes, so a secondary index has no way to know which node holds a value — it must ask every node (scatter-gather), defeating the point of partitioning.`},
+{q:`LSI vs GSI in one rule?`,a:`Looking within one user's data (same partition key, new sort)? LSI. Need a new way to group/search the whole table (new partition key)? GSI.`}]},
+
+/* ---------- SQL-ONLY vs NOSQL-ONLY ---------- */
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"q",q:`Why can a SQL <code>UNIQUE</code> index guarantee "this value will never be duplicated, ever, even for an instant" — while a DynamoDB GSI <b>cannot</b> make that same promise?`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"a",h:"Not &quot;SQL is better&quot; — a specific trade",body:`
+<p>Not "SQL is better." SQL made a specific trade: give up easy horizontal partitioning, in exchange for indexes that can be added freely, joined across, and trusted absolutely.</p>
+<div class="ascii">SQL UNIQUE: check + write = ONE atomic step, same transaction
+  no gap --> no duplicate possible, ever
+DynamoDB GSI: base table write --> [async delay] --> GSI updated
+  later. ^-- window where a duplicate can slip through</div>
+<div class="note">SQL's guarantee comes from the index living in the same transactional boundary as the write itself — the engine checks the B-Tree for a conflict and commits atomically, as one indivisible operation. A DynamoDB GSI is asynchronously propagated from the base table — by default eventually consistent. Two concurrent writes with the same GSI key could both succeed on the base table before either GSI entry is created — a genuinely possible transient duplicate. Not a bug — the direct cost of DynamoDB's horizontal scalability model. If you truly need global uniqueness there, you have to engineer it yourself.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"q",q:`Why is "just add an index for this new query" a five-minute operation in SQL, but effectively a <b>data-model redesign</b> in Cassandra?`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"a",h:"You model tables around queries, not entities",body:`
+<div class="ascii">SQL: data lives in ONE place + indexes are separate, disposable
+  ADD INDEX --> nothing moves --> 5 minutes
+Cassandra: physical placement = your query pattern (partition
+  key chosen for it)
+  NEW query shape (different filter column)?
+  --> existing table structurally can't serve it
+  --> need a whole NEW table, re-partitioned, re-written to</div>
+<div class="note">In SQL, the table's physical layout doesn't encode your query patterns — data sits in one place, indexes are separate, disposable structures layered on top. In Cassandra, the table's physical layout <b>is</b> your query pattern — a genuinely new query shape usually means the existing table simply cannot serve it efficiently. This is the single biggest mental shift moving from SQL to wide-column NoSQL: you model tables around queries, not around entities.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"q",q:`Why can SQL efficiently JOIN two indexed tables at query time, while Cassandra/DynamoDB push you toward <b>denormalizing at write time</b> instead?`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"a",h:"Pay the join cost once, at write, or every read, per node",body:`
+<div class="ascii">SQL JOIN (same storage layer, low latency):
+  orders.user_id --> seek --> users.id --> seek  (fast, many times)
+Cassandra/DynamoDB JOIN attempt (different nodes):
+  for EVERY row: network call to a different machine
+  --> not slow, ARCHITECTURALLY UNTENABLE at scale
+Fix: denormalize at WRITE time instead</div>
+<div class="note">An index nested loop join works because both tables' indexes live in the same coordinated storage layer with predictable, low latency. In a horizontally partitioned NoSQL system, "the other table" might live on a different node — a join means per-row cross-node network calls, architecturally untenable at scale. So instead of joining at query time, these systems ask you to join at <b>write</b> time: embed related data directly (MongoDB embedding), or write it redundantly into a second, pre-joined table (Cassandra denormalization). Pay the cost once at write, in exchange for every read being a single-partition lookup forever after — the same trade as a covering index, pushed to an extreme.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"q",q:`Someone on your team proposes moving the <code>holdings</code> ledger — where every debit/credit must be exactly consistent, joined against accounts and instruments, and audited — to DynamoDB "for scale." What's your <b>pushback</b>?`},
+
+{sec:"only",c:"ink",eyebrow:"09 · Only SQL Can Do This",t:"a",h:"The real question isn't SQL vs NoSQL",body:`
+<div class="ascii">Ledger's real requirement:
+  balance must NEVER be transiently wrong or double-counted
+  must JOIN against accounts/instruments for reporting
+DynamoDB trade:
+  eventual consistency (unacceptable for money)
+  OR build your own transaction layer on top (= rebuilding
+  SQL, worse)
+Real question isn't "SQL vs NoSQL" -- it's "does this table
+need horizontal partitioning at all, or just read replicas /
+sharding within a SQL system that keeps ACID intact?"</div>
+<div class="note">The ledger's defining requirement isn't throughput — it's that a balance can never be transiently wrong, and must be joinable against accounts/instruments for reporting without pre-computing every possible report shape. Precisely SQL's profile. Moving it to DynamoDB means either accepting eventual consistency on financial state (unacceptable) or engineering your own transactional layer on top — at which point you've rebuilt a worse, custom version of what you already had. Save NoSQL's real strengths for parts of the platform that are genuinely append-heavy, denormalized-by-nature, and don't need cross-entity consistency.</div>`,
+cto:[`SQL's greatest feature is the one most engineers take for granted: the ability to ask a question you didn't anticipate at schema-design time and still get a correct answer. Ad-hoc indexing, late-added columns, arbitrary joins — these are only possible because SQL separates data from access strategy. When you give that up for horizontal scale, you are not upgrading. You are making an explicit trade. Know exactly what you are trading before you make the call — and make it per table, not per platform.`]},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"q",q:`Why can MongoDB index every element of an array natively, while SQL needs a whole separate <b>child table</b> to represent the same one-to-many relationship?`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"a",h:"The trade runs both ways",body:`
+<p>Give up joins and instant global consistency, and NoSQL hands you index capabilities a single coherent SQL structure structurally cannot offer — not "hasn't implemented yet," <em>cannot</em>.</p>
+<div class="ascii">SQL: a column holds exactly ONE value
+  order has many items? --> need a SEPARATE child table
+  order_items: [order_id, item] &lt;- one row per item, joined back
+MongoDB: a field can hold an ARRAY directly
+  order: {items:[item1,item2,item3]} &lt;- all in ONE document
+  multikey index: one leaf entry PER array element, same doc</div>
+<div class="note">A SQL column holds exactly one scalar value per row — first normal form. An array inside a cell violates that outright, so the relational answer to "one order, many items" was never "put them in one cell" — it was a separate table, indexed normally. The B-Tree never needed to understand arrays because the model never allowed them in a column. MongoDB's document model has no such restriction — the multikey mechanism was built specifically to handle it. It's not that MongoDB found a clever trick SQL missed — SQL's normalization rules made this indexing problem not exist in the first place, at the cost of needing an extra join.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"q",q:`A wildcard index can index fields that don't exist yet. Why does that concept have <b>literally no SQL equivalent</b>?`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"a",h:"SQL's schema is a contract signed before the index",body:`
+<div class="ascii">SQL: CREATE INDEX requires a column that ALREADY EXISTS
+  --> schema must be declared FIRST, index comes after
+MongoDB: documents can have ANY fields, even undeclared ones
+  doc 1: {metadata:{riskScore:5}}
+  doc 2: {metadata:{sourceChannel:"web"}}  &lt;- different field!
+  Wildcard index {"metadata.$**":1}:
+    "index whatever keys show up under metadata, automatically"</div>
+<div class="note"><code>CREATE INDEX</code> in SQL requires naming an existing column — schema before index. SQL has no concept of "a field that might show up later with any name" because every column must be declared via <code>ALTER TABLE</code> first. MongoDB documents can carry arbitrary, dynamic fields per document — a wildcard index says "index whatever keys actually show up, automatically." This only makes sense in a schema-flexible model — solving a problem SQL doesn't have, because in SQL every field name is known and fixed by definition.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"q",q:`Why would anyone deliberately choose an <b>eventually-consistent</b> index over a strongly consistent one — what do you actually gain?`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"a",h:"A tunable knob SQL doesn't expose",body:`
+<div class="ascii">STRONG consistency index:
+  write --> WAIT for index update too --> THEN done
+  (safe, but the wait becomes the bottleneck at huge volume)
+EVENTUAL consistency index:
+  write --> done immediately --> index catches up shortly after
+  (fast, but a query right after might miss it briefly)
+Use eventual consistency where a few ms of staleness is fine
+(recent-orders feed, search index) -- NEVER where money or
+uniqueness is on the line.</div>
+<div class="note">Strong consistency means every write waits for that index to be updated (and often coordinated across replicas) before the write is considered done — at massive volume, that coordination cost becomes the bottleneck. Accepting eventual consistency lets the base write return immediately, index catches up asynchronously, usually within milliseconds but with no hard guarantee — dramatically higher sustained throughput and lower latency. This becomes dangerous exactly where SQL's guarantees matter most: money movement, uniqueness enforcement, anything that can't tolerate acting on stale state.</div>`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"q",q:`Why does a <b>TTL index</b> remove the need for a scheduled cleanup job — isn't "delete rows older than X" trivial to schedule in SQL anyway?`},
+
+{sec:"only",c:"ink",eyebrow:"10 · Only NoSQL Can Do This",t:"a",h:"Baking lifecycle policy into the storage engine",body:`
+<div class="ascii">SQL approach:
+  cron job --> DELETE WHERE created_at < NOW() - INTERVAL
+  (you build it, deploy it, monitor it, handle its failures)
+MongoDB TTL index:
+  index on a timestamp field, set an expiry
+  background process built into the ENGINE removes expired docs
+  no external job, no separate monitoring, nothing of yours to own</div>
+<div class="note">It's trivial to write in SQL, but it's an external process you have to build, deploy, monitor, and handle failure for — and a poorly-tuned bulk delete can itself lock rows and hurt concurrent traffic. A MongoDB TTL index makes expiry a property of the index itself, baked into the engine's index maintenance loop — genuinely a capability difference. A SQL index describes "how to find data faster," never "when this data should cease to exist."</div>`},
+
+{sec:"only",c:"ink",eyebrow:"Scenario",t:"q",q:`Your PolicyBazaar integration needs to log every raw webhook payload for 90 days for debugging, at high volume, with wildly inconsistent JSON shapes per insurer. <b>Where does this live, and what index?</b>`},
+
+{sec:"only",c:"ink",eyebrow:"Scenario",t:"a",h:"The textbook case for NoSQL's actual strengths",body:`
+<div class="ascii">Problem: payload shape varies per insurer, high volume, 90-day log
+Document store (MongoDB) --> each payload keeps its native shape
+Index design:
+  compound (insurer_id, received_at)  --> for debugging lookups
+  TTL index on received_at, 90 days   --> auto-cleanup, no cron job
+  wildcard index on metadata path     --> covers unknown per-insurer
+                                          fields</div>
+<div class="note">The payload shape varies per insurer and changes without your control — forcing it into a rigid SQL schema means a huge sparse table or a JSON blob column you can't meaningfully index anyway. A document store lets each payload keep its native shape. Contrast this with the <b>holdings</b> ledger from the previous topic — same platform, opposite answer, because the actual requirements (consistency vs. schema flexibility) are opposite. <b>That contrast is the skill:</b> not "SQL or NoSQL" as a platform-wide choice, but per-table, per-access-pattern reasoning.</div>`,
+cto:[`NoSQL's strengths are real — TTL indexes, wildcard fields, tunable consistency, unbounded horizontal scale — but they are answers to specific problems, not general improvements. The most expensive database migrations I have seen were teams applying NoSQL thinking to data that needed SQL guarantees, or assuming SQL semantics in a system built around eventual consistency. The skill is not "use both." It is developing the judgment to recognize, at every boundary, which set of trade-offs applies to the data in front of you right now. Every index is a bet on a query pattern. Know the pattern before you place the bet.`]},
+
+{sec:"only",c:"ink",eyebrow:"Final Recall",t:"r",h:"Final recall: SQL-only vs. NoSQL-only capabilities",qs:[
+{q:`Why can SQL's UNIQUE index guarantee zero duplicates, ever, while a DynamoDB GSI can't?`,a:`SQL checks and writes as one atomic step in the same transaction — no gap for a duplicate to slip through. A GSI syncs asynchronously from the base table, leaving a real window where two concurrent writes could both succeed before either GSI entry exists.`},
+{q:`Why does adding an index take 5 minutes in SQL but potentially a full redesign in Cassandra?`,a:`In SQL, data sits in one place and indexes are separate, disposable structures. In Cassandra, physical placement IS the query pattern — a new query shape often needs a whole new, re-partitioned table.`},
+{q:`Why can MongoDB index array elements natively while SQL needs a child table for the same relationship?`,a:`SQL's first-normal-form rule means a column holds exactly one value, so one-to-many needs a separate table. MongoDB fields can hold arrays directly, so the multikey index mechanism was built to handle exactly that.`},
+{q:`What's the single governing skill across all ten topics?`,a:`Not "SQL or NoSQL" as a platform-wide choice — per-table, per-access-pattern reasoning. Every index is a bet on a query pattern; know the pattern before you place the bet.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>
