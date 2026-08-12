@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Distributed Job Scheduler</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Distributed Job Scheduler · When Is the Easy Part</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"found",label:"FOUNDATIONS",c:"teal"},
+ {id:"time",label:"TIMING+CLAIMING",c:"gold"},
+ {id:"exec",label:"EXECUTION+RETRY",c:"violet"},
+ {id:"scale",label:"DEDUP+SCALE+FAILURE",c:"rose"},
+ {id:"final",label:"SYNTHESIS",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Distributed Job Scheduler",t:"a",h:"<em>When</em> is the easy part. <em>Exactly once</em> is the real problem.",body:`
+<p>A distributed job scheduler looks like a cron job with a UI. Underneath it is one of the hardest coordination problems in distributed systems: claiming ownership atomically, surviving crashes, preventing duplicates, and recovering with no information except logs and leases.</p>
+<div class="ascii">Normal scheduler:         Distributed scheduler:
+one machine               many machines
+  |                           |
+  +--> runs jobs              +--> share jobs
+                              +--> balance load
+                              +--> survive machine failure</div>
+<div class="note"><b>The real problem is not:</b> "how to run background jobs?" <b>The real problem is:</b> how to run the right job, at the right time, on exactly one owner, with safe recovery, under failure, without dangerous duplicates?</div>`},
+
+/* FOUNDATIONS */
+{sec:"found",c:"teal",eyebrow:"Foundation · The Heart",t:"q",q:`A colleague says "the heart of a scheduler is timing — making sure jobs run on schedule." What is actually the hardest problem, and why does naming it correctly change the architecture?`},
+
+{sec:"found",c:"teal",eyebrow:"Foundation · The Heart",t:"a",h:"Not timing — ownership",body:`
+<div class="ascii">(1) Know WHICH job is due
+(2) Ensure ONLY ONE scheduler claims it
+(3) Ensure SOME worker executes it
+(4) Recover if something dies in between</div>
+<div class="note">The heart of a scheduler isn't timing — it's making sure the same job doesn't run twice. Design the ownership guarantee first, then worry about when to run. Timing is a solved problem (poll + index). Exactly-once ownership under failure is not.</div>`,
+cto:[`A distributed lock can lie. If the machine holding the lock crashes before releasing it, the lock is held by a ghost. Always design for what happens when the lock holder disappears.`]},
+
+{sec:"found",c:"teal",eyebrow:"Foundation · State Machine",t:"q",q:`Sketch the complete state machine for a job execution. What transitions can fail — and which failure mode is <b>most dangerous</b>?`},
+
+{sec:"found",c:"teal",eyebrow:"Foundation · State Machine",t:"a",h:"Every arrow is a crash site",body:`
+<div class="ascii">SCHEDULED -> CLAIMED -> DISPATCHED -> RUNNING
+                                           |         |
+                                     success|         |fail
+                                           v         v
+                                       SUCCESS   RETRY_WAIT
+                                                       |
+                                                       v
+                                                      DLQ</div>
+<div class="note">The most dangerous crash sites: (1) CLAIMED but never DISPATCHED — lease holds the job hostage until it expires. (2) RUNNING with a completed side effect but DB not yet updated — retry will call the downstream API twice. These are not bugs; they are the physics of distributed systems without distributed transactions.</div>`},
+
+{sec:"found",c:"teal",eyebrow:"Foundation · Job Definition vs Execution",t:"q",q:`If you store both "when to run" and "what happened" in the same row, what goes wrong at scale?`},
+
+{sec:"found",c:"teal",eyebrow:"Foundation · Job Definition vs Execution",t:"a",h:"Separate the rule from each attempt",body:`
+<div class="ascii">JOB_DEFINITION
+job_id=101  name=hourly_report  schedule=every 1h
+next_run_time=12:00  status=ACTIVE  payload=config_A
+
+JOB_EXECUTION
+exec_id=9001  job_id=101  slot=10:00  attempt=1  SUCCESS
+exec_id=9002  job_id=101  slot=11:00  attempt=1  FAILED
+exec_id=9003  job_id=101  slot=11:00  attempt=2  SUCCESS
+exec_id=9004  job_id=101  slot=12:00  attempt=1  RUNNING</div>
+<p>Scheduler reads only JOB_DEFINITION to find due jobs. Creates a JOB_EXECUTION row per slot. Dispatches to worker. Worker updates only JOB_EXECUTION. After dispatch, scheduler bumps next_run_time.</p>
+<div class="note">If you mix both in one row, that row keeps changing for every attempt, retry, failure, and history entry. Definition table answers: what job is this, when should it run next? Execution table answers: what happened at 10:00, how many failures so far?</div>`},
+
+{sec:"found",c:"teal",eyebrow:"Foundations · Recall",t:"r",h:"Quick recall: foundations",qs:[
+{q:`What is the real heart of a distributed scheduler — timing, or something else?`,a:`Ownership guarantee — ensuring exactly one scheduler claims a job and exactly one worker executes it. Timing (scan + index) is trivial by comparison.`},
+{q:`Name the two most dangerous crash points in the job state machine.`,a:`(1) Claimed but never dispatched — job stuck until lease expires. (2) Worker completes side effect but fails to update DB — retry causes duplicate execution of the business action.`},
+{q:`Why must JOB_DEFINITION and JOB_EXECUTION be separate tables?`,a:`Mixing them means one row must track both the rule ("run every hour") and every attempt, retry, failure — creating a mutable, ever-changing record that's impossible to reason about at scale.`}]},
+
+/* TIMING + CLAIMING */
+{sec:"time",c:"gold",eyebrow:"01 · Knowing Which Jobs Are Due",t:"q",q:`You have 500 million jobs indexed by <code>next_run_time</code>. All 10 million scheduled for 09:00 arrive at once. What are the three distinct problems this creates?`},
+
+{sec:"time",c:"gold",eyebrow:"01 · Knowing Which Jobs Are Due",t:"a",h:"The time bucket explosion",body:`
+<div class="ascii">Store next_run_time:
+  SELECT jobs WHERE next_run_time <= now AND status='scheduled'
+  
+  09:00 bucket explodes:
+  A A A A A A A A A A A A (10M jobs)
+  
+  Do you: dispatch all at once?
+           batch them?
+           rate limit them?
+           prioritize them?</div>
+<div class="note"><b>Problem 1: scan efficiency</b> — must be indexed on next_run_time or you scan 500M rows. <b>Problem 2: dispatch flood</b> — 10M jobs released simultaneously can overwhelm queue/workers. <b>Problem 3: tenant fairness</b> — if one tenant schedules 10M jobs for same minute, every other tenant's jobs starve. The index is the easy fix; rate limiting and tenant isolation are the hard ones.</div>`},
+
+{sec:"time",c:"gold",eyebrow:"01 · Knowing Which Jobs Are Due",t:"q",q:`For recurring jobs — should you compute the next run time <b>lazily</b> (after each run) or <b>eagerly</b> (materialize all future instances ahead of time)? Name one failure mode each approach has.`},
+
+{sec:"time",c:"gold",eyebrow:"01 · Knowing Which Jobs Are Due",t:"a",h:"Lazy vs eager schedule materialization",body:`
+<div class="ascii">Option A (lazy): store cron only, compute next_run_time after every run
+  + simple  + no pre-generated rows
+  - if scheduler crashes after job finishes but before updating
+    next_run_time, the job may run twice (same slot) or be lost
+
+Option B (eager): pre-generate all future execution slots
+  + job slot exists before it's due -- crash recovery is cleaner
+  - storage explosion for jobs far in the future
+  - changing the cron schedule means backfilling/deleting rows</div>`},
+
+{sec:"time",c:"gold",eyebrow:"02 · Stopping Two Schedulers from Claiming the Same Job",t:"q",q:`Two schedulers see the same row at the same time. What happens, and what are the two fundamentally different solutions?`},
+
+{sec:"time",c:"gold",eyebrow:"02 · Stopping Two Schedulers from Claiming the Same Job",t:"a",h:"Claim with lease vs. shard ownership",body:`
+<div class="ascii">Option A — Claim with lease (optimistic locking):
+  S1 does atomic CAS:
+    claimed_by=S1, lease_until=now+30s
+    WHERE claimed_by IS NULL  -- only one wins
+  S2 loses the CAS -> skips this job
+
+Option B — Shard ownership:
+  hash(job_id) or hash(tenant_id) -> shard_number -> owned by one node
+  Only the shard owner even looks at those jobs
+  No CAS needed; no contention</div>
+<ul class="pts">
+<li>Option A: anyone can see the job, only one can claim it. Single lease table is a hot-spot.</li>
+<li>Option B: structural isolation. Simpler per-shard. Problem: shard re-assignment when a node dies.</li>
+</ul>
+<div class="note">If shard ownership is used and a scheduler node dies — who takes shard 2? How fast? How safely? The ownership transfer protocol is as hard as the original claiming problem, just rarer. If lease duration is too long, a crashed node holds jobs hostage. Too short, and slow processing causes duplicate dispatch.</div>`},
+
+{sec:"time",c:"gold",eyebrow:"02 · Stopping Two Schedulers from Claiming the Same Job",t:"q",q:`What is worse: a temporary delay, a duplicate run, or a missed run — and why does your answer determine the architecture?`},
+
+{sec:"time",c:"gold",eyebrow:"02 · Stopping Two Schedulers from Claiming the Same Job",t:"a",h:"Your failure tolerance is your architecture",body:`
+<p>The answer depends entirely on the job. A duplicate email send: annoying. A duplicate fund transfer: catastrophic. A missed fraud-block action: severe. Delayed report generation: acceptable.</p>
+<div class="note">If duplicate is most dangerous → prefer long leases, idempotency keys, dedup at the downstream. If delay is most dangerous → prefer short leases, aggressive retry. If missed is most dangerous → prefer at-least-once with dedup rather than at-most-once. <b>Naming which failure your business domain tolerates least is the first design decision, not the last.</b></div>`,
+cto:[`The source of truth for claim ownership must be a single authoritative system: a DB row with a CAS, a distributed lock service, consensus layer, or partition ownership in a queue. Ambiguity about who owns the claim is how you get duplicates.`]},
+
+{sec:"time",c:"gold",eyebrow:"03 · Scheduler vs. Executor",t:"q",q:`The scheduler is already complex — why must it <b>not</b> also be the job executor?`},
+
+{sec:"time",c:"gold",eyebrow:"03 · Scheduler vs. Executor",t:"a",h:"The scheduler's one job",body:`
+<div class="ascii">Bad model:  Scheduler --> executes job directly
+Too many roles: time checker + business executor + retry engine
+                + concurrency controller + failure handler
+
+Better:  Scheduler ---> Queue ---> Worker</div>
+<div class="note">If execution takes 40 minutes, should the scheduler care? No — it should have dispatched and moved on. If downstream services are slow, should time-scanning stop? No — dispatch and execution must be separated so one doesn't block the other. If the queue is down but DB is up — claim and wait? Don't claim? Mark as pending-dispatch? This split forces explicit decisions about each failure mode.</div>`},
+
+{sec:"time",c:"gold",eyebrow:"Timing &amp; Claiming · Recall",t:"r",h:"Quick recall: timing and claiming",qs:[
+{q:`A 09:00 time bucket has 10M jobs. What three problems does this create?`,a:`(1) Scan efficiency — needs an index, not a full table scan. (2) Dispatch flood — overwhelming the queue. (3) Tenant fairness — one tenant's burst starves others.`},
+{q:`Claim-with-lease vs. shard-ownership — what is the key risk in each?`,a:`Lease: hot-spot CAS on the lease table; also a crashed node holds the lease until expiry. Shard ownership: need a re-assignment protocol when the shard owner dies.`},
+{q:`Why must the scheduler not be the executor?`,a:`Too many roles in one process. Slow execution blocks time-scanning; downstream slowness stops dispatch. Separation allows each concern to scale and fail independently.`}]},
+
+/* EXECUTION + RETRY */
+{sec:"exec",c:"violet",eyebrow:"04 · Safe Worker Execution",t:"q",q:`A worker crashes after calling the payment API (success) but before updating the DB. The scheduler retries. What exactly happens, and what is the correct design response?`},
+
+{sec:"exec",c:"violet",eyebrow:"04 · Safe Worker Execution",t:"a",h:"The side-effect-before-status-update problem",body:`
+<div class="ascii">Worker ----> Payment API success
+Worker crashes
+DB still says: not completed
+Retry fires -> Payment API called AGAIN
+
+This is one of the deepest questions in job scheduling.
+Two defenses required:
+1. Idempotency at the downstream: payment API must be
+   idempotent on a job_id+attempt dedup key
+2. Execution lease: mark RUNNING when worker STARTS (not
+   when scheduler dispatches) -- at least you know execution began</div>
+<div class="note">When should a job become RUNNING? When scheduler dispatches? When queue accepts? When worker actually starts? These are very different meanings — each changes when the execution lease starts and what "recovery" means on timeout. Usually: RUNNING when the worker actually picks up and begins work.</div>`},
+
+{sec:"exec",c:"violet",eyebrow:"05 · Retry Is Not Just Retry",t:"q",q:`Not every failure deserves a retry. A network timeout, a 5xx, a validation error, a duplicate conflict — what is the question you must answer before designing the retry policy?`},
+
+{sec:"exec",c:"violet",eyebrow:"05 · Retry Is Not Just Retry",t:"a",h:"Retry is business correctness design",body:`
+<div class="ascii">Attempt 1 -> fail -> wait 10s
+Attempt 2 -> fail -> wait 1m
+Attempt 3 -> fail -> wait 5m
+Attempt 4 -> fail -> DLQ
+
+But:
+network timeout      -> retry maybe yes
+5xx from downstream  -> retry yes
+validation error     -> retry NO (will fail every time)
+duplicate conflict   -> depends on idempotency design</div>
+<div class="note">If a retry happens 3 hours later: sending a reminder email? Probably fine. Executing a stock order? Maybe dangerous — price changed. Blocking a fraud transaction? Probably no — window has passed. <b>Retry and idempotency are different things. Retry is what the caller does. Idempotency is what the system guarantees. Build the system to be idempotent, and retries become harmless.</b></div>`},
+
+{sec:"exec",c:"violet",eyebrow:"06 · Duplicate Execution Prevention",t:"q",q:`Duplicates can enter from five different places in the pipeline. Name them — and why does "exactly-once execution" remain a dream at system boundaries?`},
+
+{sec:"exec",c:"violet",eyebrow:"06 · Duplicate Execution Prevention",t:"a",h:"At-least-once + idempotent execution",body:`
+<div class="ascii">Duplicate paths:
+1) two schedulers dispatch same job (claim race)
+2) queue redelivers (at-least-once queue semantics)
+3) worker lease expires too early (duplicate dispatch)
+4) worker crashes after side effect (retry)
+5) publish succeeded but ack lost (double-enqueue)
+
+Realistic goal:
+at-least-once processing + idempotent execution
+
+Idempotency sketch:
+execution_key = job_id + scheduled_slot
+same key comes again -> downstream detects duplicate -> ignores</div>
+<div class="note">If you dedup too aggressively: you might suppress a legitimate rerun (first run partially failed). If a daily job runs twice on the same day, should the second be blocked? Maybe yes — but what if the first run only got halfway through? <b>In a distributed system, "did this already run?" is not automatically yes or no. Duplicate prevention is something you build deliberately — it doesn't come for free.</b></div>`},
+
+{sec:"exec",c:"violet",eyebrow:"Execution &amp; Retry · Recall",t:"r",h:"Quick recall: execution and retry",qs:[
+{q:`A worker completes the side effect but crashes before updating the DB. What two defenses are required?`,a:`(1) Idempotency at the downstream system — it must handle a duplicate call with the same dedup key. (2) Execution lease tracking — so the recovery path knows execution at least began.`},
+{q:`Name three failure types that should NOT be retried.`,a:`Validation errors (will always fail), permanent business logic rejections, and cases where the time window has passed (e.g., executing a stock order hours later would be dangerous).`},
+{q:`What is the correct mental model for duplicates in a distributed scheduler?`,a:`At-least-once processing is the realistic guarantee. Combine it with idempotent execution (keyed on job_id + scheduled_slot) at every downstream. Exactly-once at system boundaries is a dream.`}]},
+
+/* DEDUP + SCALE + FAILURE */
+{sec:"scale",c:"rose",eyebrow:"08 · Scaling",t:"q",q:`"Can we add more machines?" is the wrong scaling question for a scheduler. What is the right question, and what does the answer reveal about shard key choice?`},
+
+{sec:"scale",c:"rose",eyebrow:"08 · Scaling",t:"a",h:"Adding machines without adding coordination cost",body:`
+<div class="ascii">The real question:
+Can we add more machines WITHOUT creating more duplicates,
+more coordination cost, and more hot partitions?
+
+Shard by tenant_id?  -> large tenants = giant hot shards
+Shard by job_id hash? -> cross-tenant fairness, but one big tenant
+                         pollutes the shard
+Shard by schedule bucket? -> all 09:00 jobs on one shard = disaster
+Shard by job_type? -> operational simplicity, unfair under skew
+
+The honest answer: there is no perfect shard key.
+You are choosing which failure mode to make less likely.</div>
+<div class="note">At what scale does DB scanning become the bottleneck? At what scale does coordination (claiming, leasing) become the bottleneck instead? These two bottlenecks need different solutions — scanning needs partitioned indexes; coordination needs local ownership (sharding removes the need for distributed CAS).</div>`},
+
+{sec:"scale",c:"rose",eyebrow:"09 · Failure Handling",t:"q",q:`Map every arrow in the pipeline — Claim → Publish → Receive → Execute → Save Result — to its specific failure mode. Which two failures are <b>hardest to detect</b> and <b>hardest to recover from</b>?`},
+
+{sec:"scale",c:"rose",eyebrow:"09 · Failure Handling",t:"a",h:"Failure at every arrow",body:`
+<div class="ascii">Case 1: Scheduler crashes AFTER claim, BEFORE publish
+  claim success, publish not done, scheduler dies
+  -> job never dispatched; lease eventually expires; re-claimed
+  -> recoverable (lease-based)
+
+Case 2: Publish succeeds, scheduler crashes BEFORE marking DISPATCHED
+  queue has message, DB may still show old state
+  -> source of truth disagreement: queue says yes, DB says no
+
+Case 3: Worker starts, crashes mid-way
+  RUNNING but unfinished
+  -> detect via heartbeat timeout; retry from CLAIMED
+
+Case 4 (HARDEST): Worker completes side effect, result update fails
+  side effect done, status not updated
+  -> retry will duplicate the side effect
+  -> only idempotency at the downstream saves you</div>
+<div class="note">The two hardest failures: Case 2 (publish-vs-DB state disagreement) and Case 4 (side effect done, status not recorded). Both require answers to: "Can your system reconstruct truth after a crash from logs alone?" and "What is the smallest atomic unit you really need?" — which drives whether you need an outbox-like design (write to DB and queue atomically).</div>`},
+
+{sec:"scale",c:"rose",eyebrow:"09 · Failure Handling",t:"q",q:`What state transitions are allowed in the state machine? Can a job go backwards — and under what circumstances would that even be correct?`},
+
+{sec:"scale",c:"rose",eyebrow:"09 · Failure Handling",t:"a",h:"State transition rules",body:`
+<div class="ascii">Forward-only:
+SCHEDULED -> CLAIMED -> DISPATCHED -> RUNNING -> SUCCESS
+                                               -> RETRY_WAIT -> DLQ
+
+Backward cases (legitimate):
+RUNNING -> CLAIMED  (lease expired, another node re-claims)
+DISPATCHED -> CLAIMED (publish succeeded, DB missed the update)
+
+Illegal:
+SUCCESS -> anything  (completed work must not re-run)
+DLQ -> SUCCESS directly (must go through RETRY_WAIT first)</div>
+<div class="note">The recovery choice: lease-based (wait for lease expiry, then re-claim — simple but slow), replay-based (reconstruct from WAL — fast but complex), or manual repair (human intervention — safe but not scalable). Most systems use lease-based with a DLQ for jobs that exhaust retries.</div>`},
+
+{sec:"scale",c:"rose",eyebrow:"Scale, Dedup &amp; Failure · Recall",t:"r",h:"Quick recall: scale and failure",qs:[
+{q:`Why is "can we add more machines?" the wrong scaling question?`,a:`Adding machines without addressing coordination cost creates more contention (CAS hot-spots), more duplicates (lease races), and new hot partitions. The real question is whether the coordination model scales, not just the compute.`},
+{q:`Which failure case requires an outbox-like design to solve safely?`,a:`Publish succeeds but scheduler crashes before marking DISPATCHED — queue and DB are now in disagreement. An outbox (write message into DB, replay to queue atomically) eliminates this gap.`},
+{q:`When is it legitimate for a job to go "backwards" in the state machine?`,a:`RUNNING → CLAIMED when a lease expires (worker died). DISPATCHED → CLAIMED when the dispatch was recorded in the queue but the DB state update was lost. Never backwards from SUCCESS.`}]},
+
+/* SYNTHESIS */
+{sec:"final",c:"amber",eyebrow:"Synthesis",t:"a",h:"The complete design compressed",body:`
+<div class="ascii">ARCHITECTURE SUMMARY
++--------------+    claim (CAS)     +-----------+
+| JOB_DEF      | <-- scheduler --> | JOB_EXEC  |
+| (what + when)|                   | (attempts)|
++--------------+                   +-----------+
+      |                                  |
+      v dispatch                         v update
+  [Queue]                           worker updates
+      |                             EXEC row only
+      v
+  [Worker]
+      |
+      +--> idempotent downstream call (dedup key = job_id+slot)
+      |
+      v
+  mark SUCCESS in JOB_EXEC
+
+FAILURE RECOVERY: lease-based timeout re-claims
+DEDUP: execution_key = job_id + scheduled_slot at downstream
+SCALE: shard by owner; scheduler only scans its own shard
+SAFETY: separate definition from execution; outbox if needed</div>`},
+
+{sec:"final",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: the 47-question compressed",qs:[
+{q:`One sentence: why is exactly-once execution "usually a dream at system boundary"?`,a:`Because the ack (confirming the downstream action succeeded) and the state update (marking it done in the DB) cannot be made atomic across a network boundary without distributed transactions — which most scheduler designs don't have.`},
+{q:`A job's retry happens 3 hours late. Name one case where this is fine, and one where it is dangerous.`,a:`Fine: sending a delayed notification (time doesn't change the correctness). Dangerous: executing a stock trade (market has moved, the price assumption is stale, the action may now be wrong).`},
+{q:`Which shard key choice would you use, and what failure mode does it accept?`,a:`Shard by tenant_id: accepts hot-shard risk for large tenants. Shard by job_id hash: accepts that one tenant can dominate a shard. Pick the one your largest customer makes less likely.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Designing a Social Network</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Designing a Social Network · Graph to Event Backbone</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"graph",label:"GRAPH MODELING",c:"teal"},
+ {id:"feed",label:"FEED DESIGN",c:"gold"},
+ {id:"react",label:"REACTIONS+COUNTS+NOTIFS",c:"violet"},
+ {id:"infra",label:"MEDIA+SEARCH+BLOCKING",c:"rose"},
+ {id:"event",label:"EVENT BACKBONE",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Designing a Social Network",t:"a",h:"Eighteen problems from the relation edge to the event backbone.",body:`
+<p>A social network is deceptively simple from the outside — users, posts, likes, followers. Inside it is a graph modeling problem, a feed fanout problem, a counting problem, a ranking problem, and an event-driven backbone holding all of it together.</p>
+<div class="note"><b>Core insight:</b> A social graph is read far more than it is written. Design the storage for how data is read, not how it was created.</div>`},
+
+/* GRAPH MODELING */
+{sec:"graph",c:"teal",eyebrow:"01 · Modeling Follow / Unfollow",t:"q",q:`A naive table is called <code>follows</code>. Why is naming it <code>relations</code> with a <code>relation_type</code> column a meaningfully stronger design — and what does it unlock that <code>follows</code> can't?`},
+
+{sec:"graph",c:"teal",eyebrow:"01 · Modeling Follow / Unfollow",t:"a",h:"Abstraction outlives the initial feature",body:`
+<div class="ascii">Table: follows           Table: relations
+follower_id    vs.       from_user_id
+followee_id              to_user_id
+                         relation_type  (FOLLOW, BLOCK, MUTE,
+                         state           CLOSE_FRIEND, SUBSCRIBE...)
+                         position       (for ordering)
+                         created_at
+
+Today:    follow
+Tomorrow: close friend, mute, block, subscribe, hidden connection
+
+"follows" encodes one product decision into the schema.
+"relations" is one level more abstract -- it outlives any single feature.</div>
+<div class="note">Weak abstraction: <code>follows</code>. Stronger abstraction: <code>relations</code>. The cost is a slightly wider row and a type column. The benefit is that blocking, muting, close friends, and private circles all use the same table — and query patterns, indexes, and access rules generalize across all of them.</div>`,
+cto:[`A social graph is read far more than it is written. Design the storage for how data is read, not how it was created.`]},
+
+{sec:"graph",c:"teal",eyebrow:"02 · Why Store Two Edges",t:"q",q:`When A follows B, you store one logical relationship. Why do many systems store <b>two physical rows</b> — and what exact query does each row make cheap?`},
+
+{sec:"graph",c:"teal",eyebrow:"02 · Why Store Two Edges",t:"a",h:"Bidirectional storage for bidirectional queries",body:`
+<div class="ascii">Single relationship: A follows B
+
+Two stored rows:
+Row 1: source=A, dest=B, type=FOLLOWING
+Row 2: source=B, dest=A, type=FOLLOWED_BY
+
+Now these queries become LOCAL and CHEAP:
+who do I follow?   -> source=A, type=FOLLOWING    (one shard)
+who follows me?    -> source=A, type=FOLLOWED_BY  (same shard)
+
+Without row 2:
+"who follows me?" requires finding all rows where dest=A
+-> cross-shard scatter-gather under shard-by-source design</div>`},
+
+{sec:"graph",c:"teal",eyebrow:"03 · Primary Key / Index Shape",t:"q",q:`The beginner index on <code>relations</code> is <code>PRIMARY KEY (source_id, destination_id)</code>. What dominant query pattern does this index fail to serve efficiently — and what does the better index look like?`},
+
+{sec:"graph",c:"teal",eyebrow:"03 · Primary Key / Index Shape",t:"a",h:"Index for the dominant query, not for uniqueness elegance",body:`
+<div class="ascii">Dominant query: "show followers of X, newest first, skip deleted, paginate"
+
+Primary key (source, dest): cannot efficiently walk newest-first
+without sorting everything.
+
+Better index:
+INDEX (source_id, relation_type, state, position DESC, destination_id)
+or simply:
+INDEX (source_id, state, position DESC, destination_id)
+
+WHERE source_id = A
+ AND state = 'ACTIVE'
+ORDER BY position DESC
+LIMIT 20;
+
+This index does: seek to A -> skip deleted early -> walk newest first
+-> stop after 20 rows. No post-sort needed.</div>
+<div class="note"><code>position</code> is a timestamp/snowflake/score — not just a label for "ordering," but the actual ordering key that enables cursor pagination. The index sorts by it so walking the page is a sequential scan, not a heap sort.</div>`},
+
+{sec:"graph",c:"teal",eyebrow:"04 · Cursor Pagination",t:"q",q:`Offset pagination is bad at deep pages. Why — and what exact WHERE clause replaces it?`},
+
+{sec:"graph",c:"teal",eyebrow:"04 · Cursor Pagination",t:"a",h:"Cursor-based pagination is the only scalable answer",body:`
+<div class="ascii">Bad (offset):
+SELECT ... FROM relations WHERE source=A ORDER BY position DESC
+LIMIT 20 OFFSET 100000;
+-> DB reads 100,020 rows, discards first 100,000, returns 20
+
+Good (cursor):
+WHERE source_id = A AND position < last_seen_position
+ORDER BY position DESC LIMIT 20;
+-> DB jumps directly to the cursor, reads 20 rows, done
+
+Page 1: positions 9005, 9004, 9003
+Client sends cursor: last_seen = 9003
+Page 2: WHERE position < 9003 -> 9002, 9001, 9000</div>`},
+
+{sec:"graph",c:"teal",eyebrow:"05 · Sharding the Graph",t:"q",q:`Shard by <code>source_user_id</code>. X is a celebrity with 200 million followers. What breaks — and what are the two fundamentally different approaches to handling this?`},
+
+{sec:"graph",c:"teal",eyebrow:"05 · Sharding the Graph",t:"a",h:"Celebrity creates a hot partition",body:`
+<div class="ascii">Shard by source_user_id:
+  source A -> shard 2 (all of A's edges together = cheap per-source queries)
+
+Problem:
+  Celebrity X: 200M followers -> shard for X = one giant hotspot
+  shard-by-source creates a hot partition you can't split
+
+Approach 1 (structural): shard by a different key
+  -> loses locality for source-based queries
+  -> forced to scatter-gather for "who follows me?"
+
+Approach 2 (application): treat celebrities differently
+  fanout-on-read for celebrities (pull their posts at read time)
+  fanout-on-write only for normal users (push to follower timelines)</div>
+<div class="note"><b>Shard a social graph for your worst-case user — the one with 10 million followers — not for the average one.</b> The celebrity problem permeates feed design, notification design, counting design, and cache strategy. It is not an edge case. It is the dominant use case for any system that achieves scale.</div>`,
+cto:[`Celebrities create hot partitions. Shard a social graph for your worst-case user — the one with 10 million followers — not for the average one.`]},
+
+{sec:"graph",c:"teal",eyebrow:"Graph Modeling · Recall",t:"r",h:"Quick recall: graph modeling",qs:[
+{q:`Why store two physical rows for one follow relationship?`,a:`Shard-by-source means "who follows me?" requires a cross-shard scatter if only one row exists (source=A, dest=B). The second row (source=B, dest=A, type=FOLLOWED_BY) makes both queries local to source=B's shard.`},
+{q:`Why is cursor pagination (WHERE position < cursor) better than offset (LIMIT N OFFSET K) for deep pages?`,a:`Offset requires the DB to read and discard K rows to find the page start. Cursor jumps directly to the position and reads N rows — O(N) instead of O(K+N). At page 5000, the difference is catastrophic.`},
+{q:`What breaks when you shard a social graph by source_user_id with a celebrity user?`,a:`The celebrity's shard receives all reads/writes for their 200M+ follow relationships — a structural hot partition that can't be split because all their adjacency must stay together for cheap local queries.`}]},
+
+/* FEED DESIGN */
+{sec:"feed",c:"gold",eyebrow:"07 · The Feed Is the Battlefield",t:"q",q:`Fanout-on-write vs. fanout-on-read — explain the core trade-off for each, and then explain why neither alone works at scale for a system with both normal users and celebrities.`},
+
+{sec:"feed",c:"gold",eyebrow:"07 · The Feed Is the Battlefield",t:"a",h:"The hybrid feed is the real answer",body:`
+<div class="ascii">1. Fanout-on-write (push):
+   Author posts -> find followers -> write feed entry into each
+   follower's timeline
+   + Fast reads (pre-populated)
+   - Expensive writes for celebrities (200M writes per post)
+
+2. Fanout-on-read (pull):
+   Reader opens feed -> find followees -> fetch recent posts from each
+   -> merge + sort + rank
+   + Cheap to write
+   - Slow reads (assemble at query time from many sources)
+
+Hybrid (practical answer):
+   Normal users:    fanout on write
+   Celebrities:     fanout on read  (inject at read time)
+   Threshold check: at write time, decide by follower count</div>
+<div class="note"><b>Push-on-write means fast reads but expensive writes for large followings. Pull-on-read is cheap to write but slow to serve. Most systems end up with a hybrid based on follower count.</b> The specific threshold (e.g. >1M followers = celebrity) is a product and infrastructure decision, tunable separately from the architecture.</div>`,
+cto:[`Push-on-write means fast reads but expensive writes for large followings. Pull-on-read is cheap to write but slow to serve. Most systems end up with a hybrid based on follower count.`]},
+
+{sec:"feed",c:"gold",eyebrow:"08 · What Is a Feed Item?",t:"q",q:`A feed item is NOT the full post. What is it — and why does this design decision make fanout dramatically cheaper?`},
+
+{sec:"feed",c:"gold",eyebrow:"08 · What Is a Feed Item?",t:"a",h:"Feed item is a reference, not a copy",body:`
+<div class="ascii">feed_item:
+  viewer_id    -> who will see this post
+  post_id      -> which post to show (reference, not content)
+  producer_id  -> who created the post
+  reason       -> why this post is shown (follow, trending, ad)
+  score        -> relevance / ranking score
+  created_at   -> when feed entry was created
+
+Feed table for user U1:
++----------------------------------------------+
+| viewer | post_id | producer | score           |
++----------------------------------------------+
+| U1     | P90     | A        | 0.92            |
+| U1     | P81     | B        | 0.88            |
+
+Full post content fetched separately on render.</div>
+<div class="note">We are not copying the whole post into every user's feed — we are storing a reference plus feed-related metadata. This makes the feed table smaller, faster to fan out to millions of users, and separable from the content store. Content is fetched on demand, often from a cache.</div>`},
+
+{sec:"feed",c:"gold",eyebrow:"09 · Ranking Is Not Sorting by Time",t:"q",q:`Simple feed = ORDER BY created_at DESC. Real feed = ? Name the signals that go into ranking, and explain why ranking is simultaneously a product and an infrastructure problem.`},
+
+{sec:"feed",c:"gold",eyebrow:"09 · Ranking Is Not Sorting by Time",t:"a",h:"Score, not timestamp",body:`
+<div class="ascii">score =
+    freshness            (newer content slightly preferred)
+  + affinity             (how close are you to this creator?)
+  + content quality      (engagement signals, media boost)
+  + interaction velocity (going viral right now?)
+  + creator importance   (established account signals)
+  - spam signals         (low-quality engagement patterns)
+
+Post candidates for user U:
+  P1: new but weak affinity
+  P2: older but strong affinity
+  P3: viral from close friend
+  Score decides order, not time alone.</div>
+<div class="note"><b>Ranking is a product decision wrapped in an engineering problem.</b> "Most relevant" is not a database query — it requires signals, freshness decay functions, and a computation budget someone has to pay for. Where that computation happens (offline pre-scoring, online re-ranking, hybrid) determines the feed's freshness and cost at every scale point.</div>`,
+cto:[`Ranking is a product decision wrapped in an engineering problem. "Most relevant" is not a database query — it requires signals, freshness rules, and a computation budget someone has to pay for.`]},
+
+{sec:"feed",c:"gold",eyebrow:"Feed Design · Recall",t:"r",h:"Quick recall: feed design",qs:[
+{q:`Why does fanout-on-write break for celebrities, and what's the hybrid solution?`,a:`A celebrity with 200M followers means 200M timeline writes per post — prohibitively expensive. The hybrid: normal users get fanout-on-write, celebrities get fanout-on-read (their posts injected into feeds at query time, not at write time).`},
+{q:`Why is a feed item a reference to a post rather than a copy of it?`,a:`Copying the full post into every follower's feed multiplies storage and makes content updates (edits, deletes) require updating millions of rows. A reference (post_id + ranking metadata) is small, fast to fan out, and the post itself is fetched on demand.`}]},
+
+/* REACTIONS + COUNTS + NOTIFS */
+{sec:"react",c:"violet",eyebrow:"10 · Modeling Reactions",t:"q",q:`If you build a narrow <code>likes</code> table, what happens when the product adds LOVE, HAHA, WOW, SAD, ANGRY? Sketch the better abstraction and its uniqueness constraint.`},
+
+{sec:"react",c:"violet",eyebrow:"10 · Modeling Reactions",t:"a",h:"General reactions table",body:`
+<div class="ascii">reactions:
+  user_id
+  post_id
+  reaction_type  (LIKE, LOVE, HAHA, WOW, SAD, ANGRY)
+  state          (ACTIVE, REMOVED)
+  created_at
+
+One user = one active reaction per post:
+UNIQUE (user_id, post_id)  -> when user changes LIKE to LOVE,
+                               update that one row, not insert new
+
+(U, P, LIKE) -> changed to -> (U, P, LOVE)
+Same row, new reaction_type. No accumulation of old reactions.</div>`},
+
+{sec:"react",c:"violet",eyebrow:"11 · Counting Is Deceptively Hard",t:"q",q:`Follower count, like count, unread count — why is <code>SELECT COUNT(*)</code> on every profile render catastrophically wrong at scale, and what is the correct model?`},
+
+{sec:"react",c:"violet",eyebrow:"11 · Counting Is Deceptively Hard",t:"a",h:"Materialized counters, async updates",body:`
+<div class="ascii">Bad:
+SELECT COUNT(*) FROM relations
+WHERE source=X AND type=FOLLOWED_BY AND state=ACTIVE
+-> on every profile render -> full index scan -> slow
+
+Better: materialized counters
+user.follower_count maintained as a separate counter
+
+Update flow:
+User follows A
+  -> write relation edge
+  -> emit event
+  -> counter updater: A.follower_count += 1
+
+Allow slight lag (counter may be off by 1 for a few seconds)
+vs. perfect precision on every read.</div>
+<div class="note">Why allow slight lag? Because a distributed counter requires either a single-writer bottleneck (precise but slow) or distributed increments (fast but eventually consistent). At celebrity scale (200M followers), even a globally distributed increment is challenging. The product decision: is a follower count accurate to the second worth the infrastructure cost? Usually, no.</div>`},
+
+{sec:"react",c:"violet",eyebrow:"12–13 · Notifications vs. Feed vs. Unread Badge",t:"q",q:`Three distinct systems: feed, notification, unread badge. Why are these separate pipelines rather than one — and what specific technology makes the unread badge work in near-real-time?`},
+
+{sec:"react",c:"violet",eyebrow:"12–13 · Notifications vs. Feed vs. Unread Badge",t:"a",h:"Three pipelines, one action",body:`
+<div class="ascii">Action happens:
+  +--> feed candidate       (celebrity posts -> feed yes, notif maybe no)
+  +--> notification          (DM received -> notif yes, feed no)
+  +--> unread badge update   (instant, near-real-time)
+
+These are different pipelines because:
+  feed:     relevance + ranking + fanout
+  notif:    targeted, personal, high-priority
+  badge:    in-memory, real-time, reset on open
+
+Unread badge pattern:
+A sends msg to B
+  -> save message durable (DB)
+  -> update unread state in Redis sorted set
+     [senders: i, j, k] for user B
+  -> if B online -> push badge via WebSocket
+  -> on inbox-open -> clear Redis entry</div>`},
+
+{sec:"react",c:"violet",eyebrow:"Reactions, Counts &amp; Notifications · Recall",t:"r",h:"Quick recall: reactions, counts, notifications",qs:[
+{q:`Why model reactions as a general table with reaction_type rather than a narrow likes table?`,a:`Products evolve — LOVE, HAHA, WOW follow LIKE. A general reactions table with UNIQUE(user_id, post_id) handles all types in one row per user-post pair, and changing reactions is an UPDATE not an INSERT + DELETE.`},
+{q:`Why is SELECT COUNT(*) on every render wrong at scale, and what replaces it?`,a:`Full index scan on every profile render becomes O(followers) per page view. Materialized counters (incremented asynchronously on every follow event) make the read O(1) at the cost of slight lag.`},
+{q:`Why are feed, notification, and unread badge three separate pipelines?`,a:`They have fundamentally different requirements: feed needs ranking and fanout; notifications need targeting and priority; unread badges need near-real-time updates and instant reset on open. One pipeline can't serve all three efficiently.`}]},
+
+/* MEDIA + SEARCH + BLOCKING */
+{sec:"infra",c:"rose",eyebrow:"14 · Post and Media Storage",t:"q",q:`Client uploads a photo. Where does the photo go — and where does the metadata go? Sketch the relationship between object storage, CDN, and the metadata DB.`},
+
+{sec:"infra",c:"rose",eyebrow:"14 · Post and Media Storage",t:"a",h:"Object store + CDN + metadata DB",body:`
+<div class="ascii">Client uploads media
+  -> Object Storage (S3 / GCS / blob store)
+  -> CDN (cached at edge for fast delivery worldwide)
+  
+Client submits post
+  -> Metadata DB: post_id, owner, media_url (reference), caption
+
+Client            Object Storage    CDN
+  |---upload------>     |
+  |                     |----serve--->  (browser/app gets URL)
+  |
+  |---post metadata---> Metadata DB
+                        post_id, owner, media_url, etc.</div>
+<div class="note">Media never goes in the primary relational DB. It's too large, has different access patterns (binary blob vs. structured query), and needs edge delivery. The metadata DB stores references (URLs) — never the binary data itself. CDN handles delivery; object storage handles durability.</div>`},
+
+{sec:"infra",c:"rose",eyebrow:"15 · Photo Tags: Relative Coordinates",t:"q",q:`A tagged friend appears at pixel position (400px, 210px) in the original image. The app generates a 200×200 thumbnail. The tag is now wrong. What's the correct data model?`},
+
+{sec:"infra",c:"rose",eyebrow:"15 · Photo Tags: Relative Coordinates",t:"a",h:"Normalized ratios, not pixel offsets",body:`
+<div class="ascii">Absolute pixels (WRONG):
+  tag_x = 400, tag_y = 210
+  -> thumbnail resize -> image is now 400px wide instead of 800px
+  -> tag appears at wrong position
+
+Normalized ratios (CORRECT):
+  Image W=800, H=600
+  Tag box: x1/W, y1/H, x2/W, y2/H
+  -> store 0.50, 0.35, 0.62, 0.45
+  -> same ratio works at ANY image dimension
+  -> thumbnail: multiply by 200 -> correct position every time
+
+Store relative position (% of width, % of height), not absolute pixels.</div>`},
+
+{sec:"infra",c:"rose",eyebrow:"16–17 · Search, Discovery, Blocking",t:"q",q:`Why must search and discovery be a <b>separate</b> system from the source-of-truth DB — and why does blocking require changes to at least 5 downstream systems?`},
+
+{sec:"infra",c:"rose",eyebrow:"16–17 · Search, Discovery, Blocking",t:"a",h:"Search index and block propagation",body:`
+<div class="ascii">Source-of-truth DB: creates users, writes posts, writes relations
+                    reads exact objects by ID
+
+Search / discovery system: hashtag search, people search,
+  keyword query, trending content, suggestions
+  -> different query shape (full-text, fuzzy, real-time indexing)
+  -> separate index (Elasticsearch, etc.) fed by event stream
+
+source-of-truth write -> event stream -> search index / recommendation
+
+Block propagation (A blocks B):
+  +--> relation updated (BLOCKED state)
+  +--> feed visibility changes (B's content disappears from A's feed)
+  +--> messaging permissions change (B can't DM A)
+  +--> search visibility changes (B may not find A)
+  +--> recommendation suppression (stop suggesting them to each other)</div>
+<div class="note">Block is not one edge — it changes many read paths. This is why it must be event-driven: the block event flows through the event backbone and each downstream system (feed, messaging, search, recommendations) applies the rule in its own context. Without this, a block might prevent messages but still show posts in the feed.</div>`},
+
+{sec:"infra",c:"rose",eyebrow:"Infrastructure · Recall",t:"r",h:"Quick recall: media, search, blocking",qs:[
+{q:`Why store photo tag positions as ratios (0.50, 0.35) rather than pixel offsets (400, 210)?`,a:`Absolute pixels are dimension-specific. When the same image is served at different sizes (thumbnail, preview, full-screen), ratio-based positions automatically map correctly regardless of the rendered size.`},
+{q:`Why must search/discovery be a separate system from the source-of-truth DB?`,a:`Different query shapes (full-text, fuzzy, ranking) vs. exact lookups. The OLTP DB would be overloaded serving ad-hoc search queries. A separate index (fed by the event stream) handles discovery without disrupting transactional writes.`}]},
+
+/* EVENT BACKBONE */
+{sec:"event",c:"amber",eyebrow:"18 · The Event-Driven Backbone",t:"q",q:`Every user action (post, follow, reaction, message, block) generates an event. What are the <b>six downstream systems</b> that consume those events — and why does this architecture make the social network extensible rather than brittle?`},
+
+{sec:"event",c:"amber",eyebrow:"18 · The Event-Driven Backbone",t:"a",h:"Actions generate events, events feed everything",body:`
+<div class="ascii">Events: post_created, relation_changed, reaction_added,
+        comment_added, message_sent, block_created
+
+User action
+  -> source DB write
+     -> event stream (Kafka / event bus)
+         |      |      |      |
+         v      v      v      v
+      counters feed  notif  search  (+ recommendations, analytics)
+
+Six downstream consumers:
+1. Counters (follower count, like count)
+2. Feed generation (fanout, ranking pipeline)
+3. Notifications (targeted alerts)
+4. Search indexing (post content, user profiles)
+5. Recommendation features (people you may know, suggested content)
+6. Analytics (DAU, engagement metrics)</div>
+<div class="note">Event-driven means: adding a 7th consumer (compliance audit log, ad targeting signal) requires no change to the source system — just a new consumer reading the same event stream. Without this, every new feature requires modifying the source DB write path and risking the core. <b>The event backbone is the difference between a system that's extensible and one that's brittle.</b></div>`},
+
+{sec:"event",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: social network design compressed",qs:[
+{q:`Why is the event-driven backbone the architectural difference between extensible and brittle?`,a:`New downstream features (audit, targeting, analytics) attach as new event consumers without modifying the source DB write path. Without events, every new feature couples directly to the core, making changes risky and deployments dangerous.`},
+{q:`Feed hybrid model: at what threshold do you switch from fanout-on-write to fanout-on-read?`,a:`The threshold is a configurable follower-count cutoff (e.g. >1M). Above it, the author's posts are injected into feeds at read time rather than pushed at write time. This is a tunable infrastructure parameter, not a fixed architectural boundary.`},
+{q:`A user blocks another. Name three systems that must change their behavior beyond just updating the relation edge.`,a:`Feed visibility (blocked user's content disappears), messaging (blocked user can't send DMs), search (blocked user may not appear in results), and recommendation suppression (stop cross-suggesting). Any of these missing = incomplete block.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

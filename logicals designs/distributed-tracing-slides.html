@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Designing a Distributed Tracing System</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Distributed Tracing · Produce Without Hurting, Query Without Losing</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"span",label:"TRACE+PROPAGATION",c:"teal"},
+ {id:"clock",label:"CLOCKS+SAMPLING",c:"gold"},
+ {id:"ingest",label:"INGEST+STORAGE",c:"violet"},
+ {id:"query",label:"ASSEMBLY+QUERY+CARDINALITY",c:"rose"},
+ {id:"ops",label:"RETENTION+SAFETY+SIGNALS",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Designing a Distributed Tracing System",t:"a",h:"Stage 1: produce a trace without hurting anyone. Stage 2: store, reassemble, and query it.",body:`
+<div class="ascii">Stage 1 — produce path:
+Request -> Root Span -> Context Propagation -> Child Spans
+        -> Sampler -> Buffer -> Agent -> Collector
+
+Stage 2 — consume path:
+Collector -> Queue -> Span Store + Index -> Assembly
+          -> Search / Waterfall / Dependency Map
+               |
+               v
+          Retention / Tiering</div>
+<div class="note"><b>Core job:</b> reconstruct one request's causal tree from thousands of independently emitted, partially sampled, clock-skewed fragments. One service dropping a propagation header silently cuts every trace in half.</div>`},
+
+/* TRACE + PROPAGATION */
+{sec:"span",c:"teal",eyebrow:"01 · What Is a Trace Really?",t:"q",q:`A trace is not a log line. Sketch the span data model and explain why you need both the tree view (causality) and the waterfall view (blame) from the same data.`},
+
+{sec:"span",c:"teal",eyebrow:"01 · What Is a Trace Really?",t:"a",h:"A tree of timed intervals",body:`
+<div class="ascii">Span: trace_id, span_id, parent_span_id, service_name,
+      operation_name, start_time, duration, status,
+      attributes (key-value tags), events, links
+
+Trace as a tree (causality):
+  [api-gateway /checkout]           span A (root)
+       +--> [order-svc createOrder] span B  parent=A
+       |         +--> [db INSERT]   span D  parent=B
+       +--> [payment-svc charge]    span C  parent=A
+                 +--> [psp POST]    span E  parent=C
+
+Waterfall view (blame):
+  time ----------------------------------------->
+  A  |=========================================|  420ms
+  B    |==============|                            150ms
+  D      |=========|                                90ms
+  C                  |========================|    260ms
+  E                    |====================|      210ms
+
+Tree gives causality. Waterfall gives blame.
+You need both from the same data.</div>
+<div class="note">Is a trace strictly a tree, or a DAG? Fan-in (one consumer triggered by many producers) has multiple causes — that's why <code>links</code> exist separately from <code>parent_span_id</code>. Should <code>operation_name</code> be free text? GET /users/1001 vs GET /users/1002 = three operations or one? This single decision determines whether your aggregation is useful or useless.</div>`},
+
+{sec:"span",c:"teal",eyebrow:"02 · Context Propagation Is the Spine",t:"q",q:`One un-instrumented hop in the middle silently cuts every trace in half. Why — and what is the specific mechanism that allows context to survive an async boundary or a queue hop?`},
+
+{sec:"span",c:"teal",eyebrow:"02 · Context Propagation Is the Spine",t:"a",h:"One dropped header, two unrelated traces",body:`
+<div class="ascii">Cross-process propagation:
+Service A
+  | HTTP headers:
+  |   traceparent: 00-{trace_id}-{span_id}-{flags}
+  v
+Service B
+  reads header -> trace_id kept
+               -> incoming span_id becomes parent_span_id
+               -> new span_id generated
+  v
+Service C
+
+The break:
+A --header--> B --(header dropped)--> C --header--> D
+Result:
+  trace T1 = {A, B}
+  trace T2 = {C, D}   <- new root, no link to A
+  One request, two unrelated traces.
+
+Async boundary (thread pool, queue):
+  thread-local     -> breaks on handoff
+  explicit param   -> correct but invasive
+  async-local      -> usual answer in modern runtimes
+
+Queue hop:
+  Producer writes context into message headers
+  Consumer reads it back
+  Producer span ends at publish; consumer span starts at receive
+  Is consumer a child, or a linked span in a new trace?
+  (Wait time in queue is not the consumer's fault)</div>`},
+
+{sec:"span",c:"teal",eyebrow:"03 · Who Creates Spans?",t:"q",q:`Three sources of spans: auto-instrumentation, manual instrumentation, and infrastructure (mesh/gateway). What is the overhead of one span — and why should spans exist at <b>boundaries</b>, not at every function?`},
+
+{sec:"span",c:"teal",eyebrow:"03 · Who Creates Spans?",t:"a",h:"Instrumentation overhead and coverage trade-off",body:`
+<div class="ascii">Span sources:
+1. Auto-instrumentation: framework hooks (HTTP, DB driver, queue)
+   + free coverage, generic naming
+2. Manual: developer wraps a business step
+   + best signal, requires discipline
+3. Infrastructure: mesh proxy, load balancer
+   + no code change, only edge-level view
+
+Overhead of one span:
+  allocation + timestamp read + attribute map + serialization
+  + buffer append + network export
+
+At 50k requests/sec × 20 spans each = 1M spans/sec from one service.
+Do the arithmetic before deciding instrumentation depth.
+
+Boundaries = where time actually goes (network, disk, lock, external call).
+Function-level spans = noise, not insight.
+
+Who owns naming consistency across 80 microservices?
+  order-svc calls it "createOrder"
+  order-service calls it "POST /orders"
+  -> no aggregation across the fleet is possible
+  -> platform governance problem disguised as technical one</div>`},
+
+{sec:"span",c:"teal",eyebrow:"Trace &amp; Propagation · Recall",t:"r",h:"Quick recall: trace model and propagation",qs:[
+{q:`Why do you need both the tree view and the waterfall view from the same span data?`,a:`The tree gives you causality (which span caused which). The waterfall gives you blame (which span consumed how much wall-clock time, and where gaps exist). Neither alone is sufficient for debugging.`},
+{q:`One un-instrumented hop cuts every trace in half. How?`,a:`The downstream service has no incoming traceparent header to read, so it generates a new trace_id and creates a new root span. The trace split happens silently — no error, just two unrelated traces where one request should appear as one.`},
+{q:`Why should spans exist at boundaries, not at every function?`,a:`Boundaries (network calls, disk I/O, locks, external APIs) are where time actually goes. Function-level spans produce noise without insight, and at 50k req/sec × 20 spans each, the overhead becomes a real operational concern.`}]},
+
+/* CLOCKS + SAMPLING */
+{sec:"clock",c:"gold",eyebrow:"04 · Clocks Lie",t:"q",q:`Spans come from different machines. Machine B's clock is 40ms behind Machine A's. The waterfall renders child starting before parent, and duration appears negative. What can you trust — and what can't you?`},
+
+{sec:"clock",c:"gold",eyebrow:"04 · Clocks Lie",t:"a",h:"Trust duration, distrust absolute timestamps",body:`
+<div class="ascii">Reality:     A calls B, so B must start after A
+Recorded:    A.start = 10:00:00.500  (host 1)
+             B.start = 10:00:00.480  (host 2, clock 40ms behind)
+             Waterfall: child starts before parent. Duration: negative.
+
+What you CAN trust:
+  duration within one process   (monotonic clock, reliable)
+  causal order                  (parent/child relationship, reliable)
+
+What you CANNOT trust:
+  absolute timestamps across hosts
+  cross-host subtraction (network latency estimates)
+
+Fix: record BOTH
+  Wall clock: for ordering and search
+  Monotonic duration: for the span itself (never goes negative)
+
+Correct skew at READ time (not write time):
+  Raw data preserved. Renderer clamps child inside parent.
+  You can change the correction later.
+  Write-time correction "cleans" stored data but lies about what was observed.
+
+Anchor waterfall to root span's clock, express children as offsets.</div>`},
+
+{sec:"clock",c:"gold",eyebrow:"05 · Sampling: The Real Economics",t:"q",q:`Head-based vs. tail-based sampling — walk the fundamental difference, and explain why head sampling creates an impossible trade-off and tail sampling creates a stateful infrastructure problem.`},
+
+{sec:"clock",c:"gold",eyebrow:"05 · Sampling: The Real Economics",t:"a",h:"You cannot store every trace",body:`
+<div class="ascii">Head-based sampling (decide at the root):
+  Root span rolls dice: keep 1% -> flag propagated in traceparent
+  -> every service honors flag -> stateless, consistent, CHEAP
+  -> decides BEFORE knowing if request was interesting
+  -> at 1% sample, how do you catch the rare error?
+     You mostly don't. That is the central argument for tail sampling.
+
+Tail-based sampling (decide when trace is complete):
+  all spans -> collector buffer (keyed by trace_id)
+                   |
+             wait for trace to settle
+                   |
+         +----------+-----------+
+         |                      |
+      had error?            was slow?
+      keep 100%             keep 100%
+                   |
+             otherwise keep 1%
+
+  + Keep exactly the traces you needed
+  - Collector must hold ALL spans of ALL in-flight traces in memory
+  - ALL spans of one trace must land on the SAME collector instance
+    -> hash(trace_id) -> collector shard -> collectors are NOW STATEFUL
+    -> rebalancing collectors splits in-flight traces</div>
+<div class="note">How long do you buffer before declaring a trace complete? Too short → long traces get truncated. Too long → memory grows, decision latency grows. This is the same shape as visibility timeout in a queue. Head and tail can coexist: generous head sample to bound volume at source, then selective tail sample to decide what is stored.</div>`},
+
+{sec:"clock",c:"gold",eyebrow:"Clocks &amp; Sampling · Recall",t:"r",h:"Quick recall: clock skew and sampling",qs:[
+{q:`What should you record: wall-clock time, monotonic duration, or both — and why?`,a:`Both. Wall clock for search and ordering (knowing when something happened). Monotonic duration for the span itself — monotonic clocks never go backwards within a process, so duration is always non-negative even if NTP steps the wall clock mid-span.`},
+{q:`Head-based sampling's fundamental limitation — in one sentence.`,a:`You decide at the root before knowing if the request was interesting — so rare errors (low-frequency, high-value) are sampled away at the same rate as normal traffic, precisely when you most need to keep them.`},
+{q:`Why does tail sampling make collectors stateful — and what does that mean for scaling?`,a:`All spans of one trace must land on the same collector instance (to make the keep/drop decision with full trace context). This requires routing by hash(trace_id). Rebalancing that hash ring splits in-flight traces across instances.`}]},
+
+/* INGEST + STORAGE */
+{sec:"ingest",c:"violet",eyebrow:"06 · The Ingest Pipeline",t:"q",q:`Between the application and the database there are four buffers, and every one of them can drop your data. Name them — and for the SDK buffer specifically, what are the only three acceptable behaviors when it is full?`},
+
+{sec:"ingest",c:"violet",eyebrow:"06 · The Ingest Pipeline",t:"a",h:"Fire-and-forget, with four lossy hops",body:`
+<div class="ascii">App process
+   | in-process SDK buffer    (bounded queue)
+   v
+Agent / sidecar
+   | batching + compression   (per-node buffer)
+   v
+Collector
+   | normalize, enrich, tail-sample  (stateful)
+   v
+Durable queue
+   | decouple ingest from storage
+   v
+Span store + index writers
+
+SDK buffer full -- three options:
+  block the request thread   -> tracing caused an outage
+  grow unbounded             -> OOM, tracing caused an outage
+  drop spans + count drops   -> CORRECT ANSWER
+  (drop oldest or newest? open question -- oldest preserves recency)
+
+Where does PII get stripped?
+  SDK-side: safest (never leaves process)
+  Collector-side: easier to update centrally
+  Best: both
+
+Durability boundary: when is a span "safe"?
+  Nobody ACKs a span back to the application.
+  Tracing is fire-and-forget by design.
+  Every buffer before the durable queue = lossy hop, accepted on purpose.</div>`},
+
+{sec:"ingest",c:"violet",eyebrow:"07 · How Should Spans Be Stored?",t:"q",q:`Two completely different access patterns require two different storage shapes. What are they — and what is the fundamental trade-off in choosing the span store partition key?`},
+
+{sec:"ingest",c:"violet",eyebrow:"07 · How Should Spans Be Stored?",t:"a",h:"Span store + index store",body:`
+<div class="ascii">Access pattern 1: "show me trace T1"
+  exact key lookup, return 40 spans
+
+Access pattern 2: "slow checkout traces, last hour"
+  search by service + operation + time + tags, return trace_ids
+
+Two-store model:
+  span batch
+    +--> SPAN STORE   key=trace_id   value=raw span blob
+    |                 write-once, read-by-key
+    +--> INDEX STORE  key=service+operation+time_bucket
+                      value=trace_id, duration, status, indexed tags
+
+SPAN STORE partitioned by hash(trace_id):
+  good: all spans of a trace land together -> assembly is one shard read
+  bad:  no time locality, retention deletes are scattered
+
+INDEX STORE partitioned by time + service:
+  good: searches bounded, old partitions dropped whole
+  bad:  hot partition on busiest service in current minute
+
+If index write succeeds but span write fails:
+  search result opens into an empty trace (a dead link)
+  Which write should happen first? And should reader tolerate the gap?</div>`},
+
+{sec:"ingest",c:"violet",eyebrow:"Ingest &amp; Storage · Recall",t:"r",h:"Quick recall: ingest pipeline and storage",qs:[
+{q:`SDK buffer is full. What are the three options and which is correct?`,a:`Block the request thread (tracing causes an outage), grow unbounded (OOM, tracing causes an outage), or drop spans and count drops (correct — tracing must never affect production). Drop oldest or newest is a secondary open question.`},
+{q:`Why do most tracing systems run both a span store (by trace_id) and an index store (by time+service)?`,a:`They optimize opposite queries. Span store by trace_id: all spans of a trace on one shard — fast assembly, no time locality. Index store by time+service: bounded searches, old partitions deleted whole, but no trace co-location. Neither alone serves both query types.`}]},
+
+/* ASSEMBLY + QUERY + CARDINALITY */
+{sec:"query",c:"rose",eyebrow:"08 · Trace Assembly Is the Hard Read",t:"q",q:`The root span — the thing you need to build the tree — arrives LAST. How do you display a trace whose root is missing — and when is a trace ever "complete"?`},
+
+{sec:"query",c:"rose",eyebrow:"08 · Trace Assembly Is the Hard Read",t:"a",h:"Completeness is always a timeout, never a fact",body:`
+<div class="ascii">Emission order: D ends first (90ms db call), then B, E, C,
+  A ends last (root always finishes last).
+
+Arrival at storage:
+  t+0.1s   D
+  t+0.2s   B
+  t+0.4s   E
+  t+0.5s   C
+  t+2.0s   A   <- retried export, agent restart, slow host
+  t+45s    F   <- straggler from a lagging service
+
+Query at t+1.0s renders a BROKEN FOREST.
+
+Missing root display:
+  -> synthetic root spanning min(start) to max(end)
+  -> explicit "incomplete trace" marker
+  Silently drawing partial tree as complete = how people misdiagnose incidents
+
+When is a trace "complete"?
+  NEVER KNOWN. Nobody knows how many spans a trace should have.
+  Completeness is always a timeout, never a fact.
+  The root does not know how many children will be created
+  deep in services it never sees.
+
+Two assembly strategies:
+  Read time: always reflects latest data, cost per query
+  Write time: fast reads, but stragglers arrive after tree is sealed</div>`},
+
+{sec:"query",c:"rose",eyebrow:"09 · What Do People Actually Query?",t:"q",q:`Query types 1–3 come from the index store. Query types 5–6 (service dependency graph, latency comparison across deploys) must NOT come from scanning stored traces. Why?`},
+
+{sec:"query",c:"rose",eyebrow:"09 · What Do People Actually Query?",t:"a",h:"Derived signals must be precomputed from the unsampled stream",body:`
+<div class="ascii">Q-type 1: "open trace abc123"               -> span store, one shard
+Q-type 2: "slow checkouts, last 1h, p99"     -> index, range scan
+Q-type 3: "traces with error in payment-svc" -> index, status filter
+Q-type 4: "traces for order_id=88213"        -> tag index (cardinality risk)
+Q-type 5: "what does order-svc depend on?"   -> PRECOMPUTED dependency graph
+Q-type 6: "did latency change after deploy?"  -> PRECOMPUTED aggregates
+
+Types 5 and 6 from scanning stored traces:
+  -> must scan millions of spans
+  -> sampled spans -> biased results (sampling skews toward errors)
+  -> far too slow for a dashboard
+
+Correct: compute both from the UNSAMPLED span stream
+  -> before the sampler makes any keep/drop decision
+  -> derive RED metrics (rate, errors, duration per operation)
+  -> derive service graph edges (parent.service -> child.service)
+  -> derive SLO / alerting thresholds</div>`},
+
+{sec:"query",c:"rose",eyebrow:"10 · Cardinality Is the Silent Killer",t:"q",q:`The attributes most useful for debugging are exactly the ones that destroy your index. Sketch the cardinality spectrum — and what is the governance question that determines whether to use an allow-list or deny-list?`},
+
+{sec:"query",c:"rose",eyebrow:"10 · Cardinality Is the Silent Killer",t:"a",h:"Index every attribute and your index approaches data size",body:`
+<div class="ascii">Low cardinality -> safe to index:
+  service_name ~80 values, http.status_code ~40, region ~5
+
+High cardinality -> precious but dangerous:
+  user_id (millions), order_id (billions), sql.query_text (unbounded)
+
+Index every attribute:
+  -> index size approaches data size
+  -> write amplification per span explodes
+  -> one badly-named tag can bring down ingest
+
+Compromise:
+  allow-list of indexed attributes   -> cheap, predictable
+  everything else stored but not indexed
+  + separate inverted index for a few chosen high-cardinality keys
+    with SHORTER retention (order_id: urgent query within hours)
+
+Allow-list vs deny-list:
+  Deny-list: an app team adds one tag -> breaks the platform
+  Allow-list: they must ask you first
+
+Which failure do you prefer?
+  Allow-list is safer at platform scale; deny-list is more developer-friendly.
+  The governance question: who is accountable when one service's
+  tags blow up the index?</div>`},
+
+{sec:"query",c:"rose",eyebrow:"Assembly, Query &amp; Cardinality · Recall",t:"r",h:"Quick recall: assembly, query types, cardinality",qs:[
+{q:`When is a distributed trace "complete" — and what does this mean for how you render it?`,a:`Never definitively known — nobody knows how many spans a trace should have. Completeness is always a timeout. A missing root is rendered with a synthetic root (min to max child time) plus an explicit "incomplete trace" marker. Never silently show partial as complete.`},
+{q:`Why must service dependency graph and latency percentile queries be precomputed from the unsampled stream?`,a:`Scanning millions of stored spans is too slow for a dashboard. Sampled spans are biased (sampling skews toward errors), so percentiles computed from sampled data don't represent actual latency. Both must be derived before the sampler.`},
+{q:`Allow-list vs. deny-list for indexed span attributes — why does the choice matter more than it looks?`,a:`Deny-list: any team adds one tag → can bring down the index. Allow-list: teams must request indexing explicitly → safer at platform scale, at the cost of some developer friction. The real question is who owns the platform blast radius.`}]},
+
+/* RETENTION + SAFETY + SIGNALS */
+{sec:"ops",c:"amber",eyebrow:"11 · Retention Tiering",t:"q",q:`Trace data is enormous and its value decays faster than almost any other data you store. Sketch the four retention tiers — and what is the fundamental rule about how retention interacts with sampling decisions?`},
+
+{sec:"ops",c:"amber",eyebrow:"11 · Retention Tiering",t:"a",h:"Value curve drives tiering",body:`
+<div class="ascii">Value curve:
+0-2 hours:    incident debugging        very high  -> HOT tier
+2-48 hours:   post-incident review      high       -> HOT tier
+2-30 days:    regression comparison     medium     -> WARM tier
+30 days+:     compliance/audit only     low        -> COLD tier
+
+Tier 1 hot:    0-2 days    fast store, fully indexed
+Tier 2 warm:   2-14 days   cheaper store, reduced index
+Tier 3 cold:   14-90 days  object storage, error traces only
+Tier 4 gone:   beyond that  aggregates survive, traces do not
+
+Deletion: per-span deletion at this volume is unaffordable.
+Time-partitioned segments dropped whole = the only scalable design.
+This constrains partitioning back in problem 7 (why time+service matters).
+
+Sampling + retention interaction:
+  If a trace is 1% sampled, you paid CPU in the app, bytes on the wire,
+  and collector memory for the 99% you then discarded.
+  Error traces should live longer than successful ones.
+  This argues for recording the sampling decision ON the span,
+  so retention policy can act on it later.</div>`},
+
+{sec:"ops",c:"amber",eyebrow:"12 · Tracing Must Never Hurt the App",t:"q",q:`The single non-negotiable rule of observability: a system that can take down production is worse than no observability. Map the four failure cases — and what is the "kill switch" that every tracing system must have?`},
+
+{sec:"ops",c:"amber",eyebrow:"12 · Tracing Must Never Hurt the App",t:"a",h:"Observability that causes outages is anti-observability",body:`
+<div class="ascii">Case 1 — Collector unreachable:
+  agent retries -> buffer fills -> MUST DROP, never block
+
+Case 2 — Collector slow (5s instead of 50ms):
+  if export is synchronous -> every request pays 5s
+  -> export MUST always be off the request path (async SDK)
+
+Case 3 — One service emits 100x normal spans:
+  bad deploy adds a span in a tight loop
+  -> saturates the entire pipeline
+  -> need per-source rate limits at the AGENT, not just collector
+
+Case 4 — Storage down:
+  durable queue absorbs it
+  -> how deep? what happens when the queue also fills?
+
+The kill switch:
+  remotely-settable sample rate that can go to ZERO
+  takes effect without a redeploy
+  = difference between a bad hour and a bad day
+
+Tracing failures should be VISIBLE:
+  emit dropped-span counter as a metric
+  tracing needs its own observability</div>`},
+
+{sec:"ops",c:"amber",eyebrow:"14 · Derived Signals from Traces",t:"q",q:`An exemplar links a metric spike to a stored trace — but the trace was sampled away. What breaks — and what does this reveal about the coupling between tracing and metrics pipelines?`},
+
+{sec:"ops",c:"amber",eyebrow:"14 · Derived Signals from Traces",t:"a",h:"The highest value outputs are usually not traces",body:`
+<div class="ascii">Derived signals from the UNSAMPLED span stream:
+  span stream
+    +--> RED metrics (rate, errors, duration per operation)
+    +--> service graph (parent.service -> child.service edges)
+    +--> SLO / alerting (error ratio per endpoint)
+    +--> exemplars (link a p99 metric point to one real trace)
+
+Exemplar + missing trace problem:
+  Exemplar says: "p99 spike at 14:23 -> see trace abc123"
+  trace abc123 was sampled away -> dead link
+
+Fix: either the exemplar FORCES that trace to be retained
+  (sampling decision made by the metrics pipeline)
+  or your exemplar is a dead link every time it matters most.
+  This couples two systems that look independent.
+
+From spans vs. independent metrics:
+  From spans: one instrumentation, guaranteed consistency
+  Independent: survives tracing outage, cheaper, no sampling bias
+  Mature setups: both, reconciled -- which one is authoritative
+  during an incident is the governance question.</div>`},
+
+{sec:"ops",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: distributed tracing compressed",qs:[
+{q:`The span lifecycle has six points where data can silently disappear. Name three.`,a:`SDK buffer full (drop), export fails (drop at agent), collector drops under load, sampler discards (head or tail), index write succeeds but span write fails (dead link), and retention expires the segment.`},
+{q:`Why must RED metrics (rate/errors/duration) be computed from the unsampled span stream, not from stored traces?`,a:`Sampled spans are biased toward errors (tail sampling) or random (head sampling). Percentiles computed from sampled data don't represent actual traffic. Metrics must be computed before the sampler to be accurate.`},
+{q:`The single non-negotiable rule of a tracing system — and its operational implication.`,a:`A tracing system that can take down production is worse than no tracing system. Operational implication: SDK buffer must drop (never block), export must be async (never on request path), and a kill switch (remote sample rate → 0, no redeploy) must exist.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

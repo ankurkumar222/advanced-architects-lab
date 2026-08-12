@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Designing an SQS-like Queue</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Designing an SQS-like Queue · Enter Safely, Leave Safely</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"write",label:"WRITE PATH+STORAGE",c:"teal"},
+ {id:"vis",label:"VISIBILITY+ACK+GUARANTEES",c:"gold"},
+ {id:"fail",label:"FAILURE+SCALING+ORDERING",c:"violet"},
+ {id:"ops",label:"DLQ+FAIRNESS+STATE",c:"rose"},
+ {id:"final",label:"TRUTH+ARCHITECTURE",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Designing an SQS-like Queue",t:"a",h:"Stage 1: how a message enters safely. Stage 2: how it leaves safely.",body:`
+<div class="ascii">Stage 1 — write path + storage path:
+Producer -> API -> Router -> Partition Leader -> Replicas
+                                                   -> Available Index
+
+Stage 2 — read path + visibility timeout + delete/retry:
+Consumer -> Receive -> Inflight/Visibility Timeout -> Process -> Delete
+                                |
+                                v
+                          Timeout / Retry / DLQ</div>
+<div class="note">A message is not just payload — it is a state machine object with an ID, visibility timeout, delivery count, and status. The envelope is what makes retry, dedup, and failure routing possible.</div>`},
+
+/* WRITE PATH + STORAGE */
+{sec:"write",c:"teal",eyebrow:"01 · What Is a Message Really?",t:"q",q:`A message has more than a payload. Name every field that is required for correctness — and explain why <code>receive_count</code> and <code>visibility_deadline</code> specifically cannot be omitted.`},
+
+{sec:"write",c:"teal",eyebrow:"01 · What Is a Message Really?",t:"a",h:"Message = unit of work, not just data",body:`
+<div class="ascii">Message:
+  message_id          (globally unique, not just queue-unique)
+  queue_id            (which queue)
+  payload             (the actual work)
+  attributes          (metadata key-value)
+  enqueue_time        (when producer sent it)
+  visibility_deadline (when current lease expires)
+  receive_count       (how many delivery attempts)
+  status              (AVAILABLE, INFLIGHT, DELETED, DELAYED)
+  optional: ordering_key, dedup_key, delay_until</div>
+<div class="note"><code>receive_count</code> drives DLQ routing — without it, a poison message retries forever. <code>visibility_deadline</code> is the lease expiry — without it, the queue cannot safely redeliver after a consumer crash. Should visibility timeout mutate the message row, or live separately as a lease record? A separate LEASE table (msg_id, consumer_id, lease_until) is cleaner: the message row is immutable; leases are ephemeral and can be managed independently.</div>`},
+
+{sec:"write",c:"teal",eyebrow:"02 · How Do Producers Write Messages?",t:"q",q:`The producer calls <code>SendMessage(payload)</code> and the queue returns success. What does "success" mean — and what are the <b>four possible points</b> at which success could be acknowledged?`},
+
+{sec:"write",c:"teal",eyebrow:"02 · How Do Producers Write Messages?",t:"a",h:"Durability is when you ack",body:`
+<div class="ascii">Producer -> Frontend -> Partition Leader -> Replicas -> Ack
+
+Four ack points:
+A) after leader memory write         -> fastest, lost on leader crash
+B) after leader disk write           -> survives leader crash, not node loss
+C) after replication quorum (W=2)    -> survives node loss, standard
+D) after all replicas persist         -> slowest, highest durability
+
+Producer timeout -> retries -> did first write succeed or not?
+-> This leads directly to dedup requirements.
+-> Queue should assign message_id; producer should supply
+   idempotency_key to prevent duplicate storage on retry.</div>`},
+
+{sec:"write",c:"teal",eyebrow:"03 · How Should Messages Be Stored?",t:"q",q:`One logical queue = many physical partitions. What is the correct partitioning key — and what is the precise trade-off between ordering key and random hash?`},
+
+{sec:"write",c:"teal",eyebrow:"03 · How Should Messages Be Stored?",t:"a",h:"Partition key determines ordering guarantee",body:`
+<div class="ascii">Queue Q1:
+  +--> Partition 0: M1, M2, M3...
+  +--> Partition 1: M4, M5, M6...
+  +--> Partition 2: M7, M8, M9...
+
+Partitioning options:
+  random hash   -> even spread, no ordering guarantee,
+                   multiple consumers can work in parallel
+  ordering_key  -> same-group messages on same partition
+                   -> ordering preserved, but hot keys possible
+  queue_id      -> simplest, but one large queue becomes one hot partition
+  message_group -> SQS FIFO model: group ordering within partitions,
+                   cross-partition parallelism preserved
+
+Can storage remain append-only while visibility/deletes are
+handled via metadata index?
+  YES. This is the strongest architectural pattern:
+  immutable message log + mutable lease/status index.</div>`},
+
+{sec:"write",c:"teal",eyebrow:"Write Path &amp; Storage · Recall",t:"r",h:"Quick recall: write path and storage",qs:[
+{q:`Name the four points at which a queue can acknowledge a producer, ordered weakest to strongest durability.`,a:`(A) After leader memory write, (B) after leader disk write, (C) after quorum replication (standard), (D) after all replicas persist. Each step adds durability at the cost of latency.`},
+{q:`Why should receive_count and visibility_deadline be treated as first-class fields, not optional metadata?`,a:`receive_count drives DLQ routing (without it, poison messages retry forever). visibility_deadline is the lease expiry (without it, the queue can't safely redeliver after a crash).`}]},
+
+/* VISIBILITY + ACK + GUARANTEES */
+{sec:"vis",c:"gold",eyebrow:"05 · Visibility Timeout: The Real Heart",t:"q",q:`A consumer receives message M1. The queue marks it inflight but does NOT delete it. Why — and what happens at each extreme of the timeout duration?`},
+
+{sec:"vis",c:"gold",eyebrow:"05 · Visibility Timeout: The Real Heart",t:"a",h:"Temporary lease, not permanent assignment",body:`
+<div class="ascii">Time ----->
+M1: AVAILABLE -> delivered to C1 -> invisible for 30s
+t0         t1                       t2
+|----------|------------------------|
+
+If C1 acks before t2:  -> delete
+If C1 crashes, no ack by t2:  -> visible again -> C2 receives it
+
+State:
++------------------------+
+| Message M1             |
+| state = INFLIGHT       |
+| visible_at = 10:05     |
+| leased_to = C1         |
++------------------------+
+
+Too short: C1 still processing -> lease expires -> C2 receives M1
+           -> DUPLICATES RISE
+Too long: C1 crashes -> M1 stuck until timeout expires
+          -> STUCK MESSAGES RECOVER SLOWLY</div>
+<div class="note"><b>The visibility timeout is the queue's heartbeat. Tune it to your worst-case processing time, not your average.</b> Should each message have the same timeout, or should it be dynamic by job type? A message that triggers a 40-minute ML job needs a very different timeout than one that sends an SMS. SQS solves this with ChangeMessageVisibility — consumers can extend the lease while processing.</div>`,
+cto:[`The visibility timeout is the queue's heartbeat. Too short and you get duplicate processing. Too long and a crashed consumer holds work hostage. Tune it to your worst-case processing time, not your average.`]},
+
+{sec:"vis",c:"gold",eyebrow:"06 · Ack / Delete: Receipt Handle",t:"q",q:`Why is deleting a message by <code>message_id</code> alone dangerous — and what does the receipt handle actually prove?`},
+
+{sec:"vis",c:"gold",eyebrow:"06 · Ack / Delete: Receipt Handle",t:"a",h:"Receipt handle = proof of current ownership",body:`
+<div class="ascii">Step 1: C1 gets M1, receipt_handle = R123
+Step 2: C1 is slow, visibility timeout expires
+Step 3: Queue gives M1 to C2, receipt_handle = R999
+
+Now: M1 has been delivered twice.
+
+If C1 later calls DeleteMessage(message_id=M1):
+-> Should this succeed? NO -- C1 no longer owns this delivery.
+-> C1 should call DeleteMessage(receipt_handle=R123)
+-> Queue validates: does R123 still belong to an active lease?
+-> R123 expired -> delete rejected. C2's R999 is still valid.
+
+receipt_handle = (message_id, lease_id, delivery_attempt)
+              = proof THIS delivery attempt still owns the message</div>`},
+
+{sec:"vis",c:"gold",eyebrow:"07 · Delivery Guarantees",t:"q",q:`Can a queue guarantee exactly-once delivery across network, storage, and consumer crash boundaries? If not — what is the realistic model and what does it demand of the consumer?`},
+
+{sec:"vis",c:"gold",eyebrow:"07 · Delivery Guarantees",t:"a",h:"At-least-once is not a bug — it is a design choice",body:`
+<div class="ascii">At-most-once:  deliver once, never redeliver
+  -> risk: lost messages (consumer crashes before processing)
+  -> when acceptable: low-value, fire-and-forget events
+
+At-least-once: deliver until ACKed, may deliver multiple times
+  -> risk: duplicate processing
+  -> when acceptable: when consumers are idempotent
+
+Exactly-once at system boundaries: requires distributed transactions
+  (coordinating queue state + consumer state + downstream state)
+  -> practically impossible across independent systems
+
+Realistic model for SQS-like systems:
+  at-least-once delivery
+  + idempotent consumers
+  = operationally safe</div>
+<div class="note"><b>At-least-once is not a bug — it is a design choice that puts the responsibility for handling duplicates on the consumer.</b> Every service reading from this queue needs to be built with that in mind. For money transfer messages, at-least-once alone is not acceptable without strong idempotency — the downstream payment system must detect and reject duplicate transfer commands.</div>`,
+cto:[`At-least-once is not a bug — it is a design choice that puts the responsibility for handling duplicates on the consumer. Every service reading from this queue needs to be built with that in mind.`]},
+
+{sec:"vis",c:"gold",eyebrow:"Visibility, Ack &amp; Guarantees · Recall",t:"r",h:"Quick recall: visibility, ack, guarantees",qs:[
+{q:`Visibility timeout too short: what happens? Too long: what happens?`,a:`Too short: consumer is still processing when timeout expires, queue redelivers to another consumer — duplicate processing. Too long: if the consumer crashes, the message is held hostage until the timeout expires before anyone else can process it.`},
+{q:`Why is a receipt handle better than a plain message_id for deletes?`,a:`A message can be delivered multiple times (to different consumers after lease expiry). The receipt handle identifies a specific delivery attempt. Deleting by message_id alone could let a stale consumer delete a message that has already been re-leased to another consumer.`},
+{q:`Why is exactly-once delivery across system boundaries practically impossible?`,a:`It would require atomically coordinating queue state, consumer state, and downstream system state — a distributed transaction across independent systems. At-least-once + idempotent consumers is the realistic alternative.`}]},
+
+/* FAILURE + SCALING + ORDERING */
+{sec:"fail",c:"violet",eyebrow:"08 · Failure Scenarios",t:"q",q:`Map the four distinct failure cases in the queue pipeline. Which is the hardest to reason about, and why?`},
+
+{sec:"fail",c:"violet",eyebrow:"08 · Failure Scenarios",t:"a",h:"Failure is the real design",body:`
+<div class="ascii">Case 1: Producer timeout after send
+  Leader stored message, network dropped before response
+  -> Producer retries -> DUPLICATE ENQUEUE
+  -> Needs: dedup key at ingest
+
+Case 2: Consumer gets message, crashes before delete
+  Visibility timeout expires -> message redelivered (normal model)
+  -> Needs: idempotent consumer
+
+Case 3: Leader crashes after acking producer
+  Followers may not have the message
+  -> Needs: replication quorum before acking (or accept loss)
+
+Case 4 (HARDEST): Delete succeeds on leader, crash before replication
+  Queue leader: message DELETED
+  Followers: message still exists
+  After failover: message RESURRECTED
+  Can you tolerate message resurrection after failover?</div>
+<div class="note"><b>Failure handling is the real design of a queue. A system that hasn't modeled dead letters, poison messages, and crashed consumers isn't ready for production.</b> The atomic durability boundary for delete is as important as for enqueue. Case 4 requires a decision: is strong delete consistency worth the latency cost, or can the consumer handle a resurrection as a duplicate?</div>`,
+cto:[`Failure handling is the real design of a queue. A system that hasn't modeled what happens with dead letters, poison messages, and crashed consumers isn't ready for production.`]},
+
+{sec:"fail",c:"violet",eyebrow:"09–10 · Scaling and Ordering",t:"q",q:`Scaling adds partitions, consumers, and replicas — but at what point does scaling make <b>ordering</b> fundamentally harder rather than just slower?`},
+
+{sec:"fail",c:"violet",eyebrow:"09–10 · Scaling and Ordering",t:"a",h:"Ordering and throughput are in tension",body:`
+<div class="ascii">Standard queue: fast, high throughput, duplicates possible
+  M1 M2 M3 M4 -> consumers may see M2, M1, M4, M3
+
+FIFO queue: preserve order, dedup support, lower parallelism
+  M1 -> M2 -> M3 -> M4 (in order, guaranteed)
+
+Message group idea (SQS FIFO approach):
+  group A: A1 -> A2 -> A3  (ordered within group)
+  group B: B1 -> B2 -> B3  (ordered within group)
+  A and B can be parallel (different partitions)
+
+What does FIFO really mean?
+  global FIFO:      nearly impossible at scale
+  per-partition:    achievable
+  per message-group: practical sweet spot
+
+Can you preserve global order at very high scale? Very hard.
+Does FIFO reduce throughput? YES -- one slow message in a
+group blocks all later messages in the same group.</div>`},
+
+{sec:"fail",c:"violet",eyebrow:"11 · Delay Queues",t:"q",q:`Enqueue now, deliver after 5 minutes. This adds a time dimension. What happens when millions of delayed messages become visible at the exact same second?`},
+
+{sec:"fail",c:"violet",eyebrow:"11 · Delay Queues",t:"a",h:"Scheduled delivery is a mini-scheduler",body:`
+<div class="ascii">DELAYED -> AVAILABLE -> INFLIGHT -> DELETED
+
+Producer sends M1 with delay=5min
+t0: stored as DELAYED
+t0+5: becomes AVAILABLE
+
+The "thundering herd" problem:
+  1M messages scheduled for exactly 09:00
+  all become AVAILABLE simultaneously
+  -> queue overwhelmed with visibility transitions
+  -> consumers flooded
+
+Mitigations:
+  stagger release (small random jitter on delay)
+  separate time-index store (scan only for due messages)
+  rate limit releases per second
+
+Does scheduled delivery turn the queue into a mini-scheduler?
+YES, partially. And the distributed-job-scheduler problems
+(lease racing, hot buckets) re-appear in this layer.</div>`},
+
+{sec:"fail",c:"violet",eyebrow:"Failure, Scaling &amp; Ordering · Recall",t:"r",h:"Quick recall: failure, scaling, ordering",qs:[
+{q:`Case 4 failure: delete succeeds on leader, crashes before replication. What happens after failover, and what are the options?`,a:`The message resurrects on the new leader (follower had it marked as available). Options: (A) accept the resurrection as a duplicate (tolerate at-least-once on delete), or (B) require quorum on delete (strong consistency but higher latency).`},
+{q:`What does "per message-group FIFO" mean, and why is it the practical sweet spot?`,a:`Messages within the same group (e.g. all messages for order_id=X) are ordered. Messages from different groups (order_id=Y) can be processed in parallel on different partitions. Ordering where it matters, parallelism everywhere else.`}]},
+
+/* DLQ + FAIRNESS + STATE */
+{sec:"ops",c:"rose",eyebrow:"12 · Dead-Letter Queues",t:"q",q:`A message fails 4 times and hits the DLQ. Is the DLQ just a visibility mechanism — or does it need active ownership and routing logic to be useful?`},
+
+{sec:"ops",c:"rose",eyebrow:"12 · Dead-Letter Queues",t:"a",h:"DLQ without ownership is a spreadsheet by another name",body:`
+<div class="ascii">M1 received -> fail
+M1 received -> fail
+M1 received -> fail (receive_count > max_receive_count)
+        |
+        v
+      DLQ
+
+Without classification:
+  "mismatch, please investigate" -> nobody knows whose problem it is
+
+Better: classify break type:
+  amount_mismatch   -> contact counterparty aggregator
+  validation_error  -> return to sender with error
+  downstream_5xx    -> infrastructure team
+  duplicate_detected -> engineering, check dedup logic
+
+Who re-drives DLQ messages back?
+  Manual? Automated? After what fix?
+  Should max_receive_count be per queue, per message type,
+  or per consumer group?</div>
+<div class="note">A DLQ without ownership assignment is exactly the "eyeball it at month end" failure mode — just inside a database instead of a spreadsheet. The DLQ becomes useful when every message has a typed break reason and an assigned owner. Without that, the queue fills silently and becomes invisible debt.</div>`},
+
+{sec:"ops",c:"rose",eyebrow:"13 · Multi-Tenant Fairness",t:"q",q:`Tenant A sends 10M messages/min, Tenant B sends 100 messages/min, both in the same shared queue service. What breaks without explicit controls?`},
+
+{sec:"ops",c:"rose",eyebrow:"13 · Multi-Tenant Fairness",t:"a",h:"Isolation prevents noisy neighbor",body:`
+<div class="ascii">Without controls:
+  Tenant A dominates partitions, storage, and consumer capacity
+  Tenant B's messages lag for minutes or hours
+
+Isolation mechanisms:
+  rate limits        -> throttle per-tenant ingest
+  partition quotas   -> dedicated partitions for large tenants
+  fair scheduling    -> consumer time-sharing across tenant queues
+  tenant-aware throttling -> slow A without affecting B
+
+Can one tenant fill storage and harm others? YES
+Should big tenants get dedicated partitions? Depends on SLA.
+Should fairness be on write path, read path, or both? Both.</div>`},
+
+{sec:"ops",c:"rose",eyebrow:"14 · Metadata vs. Payload Path",t:"q",q:`A message payload is 50 MB. What breaks if you store it inline in the queue — and what does the split-path architecture look like?`},
+
+{sec:"ops",c:"rose",eyebrow:"14 · Metadata vs. Payload Path",t:"a",h:"Large payloads belong in object storage",body:`
+<div class="ascii">Large payload inline: queue partition fills fast, replication
+expensive, consumer download blocks the partition
+
+Better: split path
+  Producer:
+    1. store payload in blob/object store
+    2. enqueue reference (payload_ref = blob URL)
+
+  Queue stores: message_id, payload_ref, attributes (small)
+  Consumer: fetch payload from blob store on receive
+
+Atomicity question:
+  What if payload upload fails but enqueue succeeds?
+    -> consumer receives message, tries to fetch payload -> 404
+  What if payload uploads but enqueue fails?
+    -> orphaned blob in object storage, no consumer ever sees it
+
+Both require saga-like coordination or cleanup jobs.</div>`},
+
+{sec:"ops",c:"rose",eyebrow:"DLQ, Fairness &amp; Edges · Recall",t:"r",h:"Quick recall: DLQ, fairness, large payloads",qs:[
+{q:`Why is a DLQ without typed break reasons and assigned owners just a spreadsheet inside a database?`,a:`Without classification, every failure looks the same and nobody knows who should fix it. With typed reasons (validation error vs. downstream 5xx vs. duplicate) and assigned owners, a DLQ becomes an actionable work queue, not a graveyard.`},
+{q:`Large payload split-path: producer uploads to blob store first, then enqueues a reference. Name both atomicity failure modes.`,a:`(1) Payload uploads, enqueue fails → orphaned blob, no consumer ever sees it. (2) Enqueue succeeds, payload upload failed → consumer receives message, fetches payload → 404. Both require cleanup jobs or saga coordination.`}]},
+
+/* TRUTH + ARCHITECTURE */
+{sec:"final",c:"amber",eyebrow:"16 · Source of Truth",t:"q",q:`Is the source of truth the leader memory, leader disk, replicated log, message index DB, or the lease table — and what does your answer imply about what is rebuilable vs. what must be persisted?`},
+
+{sec:"final",c:"amber",eyebrow:"16 · Source of Truth",t:"a",h:"Durable replicated log is the truth",body:`
+<div class="ascii">NOT source of truth:
+  leader memory     -> lost on crash
+  leader disk only  -> single copy, single point of failure
+  message index DB  -> mainly for fast lookup (derived)
+  lease table       -> temporary ownership (derived)
+
+SOURCE OF TRUTH:
+  durable replicated partition log / storage
+  durable -> survives crash
+  replicated -> exists on multiple machines
+  rebuilable -> index/lease info can be recreated from it
+
+Real truth = stored message
+Index      = helper (fast lookup, derived)
+Lease      = temporary ownership (derived, ephemeral)
+
+If storage log says message exists but lease index says DELETED:
+  -> storage log wins. Lease is derived state.
+  -> Consumer handles the re-delivery as a duplicate (idempotency).</div>`},
+
+{sec:"final",c:"amber",eyebrow:"17 · Frontend / Broker / Storage Separation",t:"a",h:"Clean three-layer architecture",body:`
+<div class="ascii">+----------------------+
+| Queue API Frontends  |  (stateless: auth, routing, rate limiting)
++----------+-----------+
+           |
+           v
++----------------------+
+| Partition Leaders    |  (write/read/lease management, stateful)
++----------+-----------+
+           |
+           v
++----------------------+
+| Replica Storage      |  (durable data, append-only log segments)
++----------------------+
+
+Frontend = stateless (scale horizontally, no state)
+Leader   = stateful (owns partition, manages leases)
+Storage  = durable replicated truth
+
+Consumer read: should it always go through the leader?
+  YES for lease acquisition -- followers cannot safely grant leases
+  Possible for read-only queries on low-staleness replicas</div>`},
+
+{sec:"final",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: SQS-like queue design compressed",qs:[
+{q:`One sentence: what is visibility timeout, and what are the two failure modes at each extreme?`,a:`A temporary lease that hides a message from other consumers while one consumer processes it. Too short: duplicates (lease expires while consumer is still working). Too long: stuck messages (crashed consumer holds work hostage).`},
+{q:`Why is the durable replicated log the source of truth — and what does that imply about the lease table and index?`,a:`Only the log survives crashes across multiple machines. Lease table and index are derived state — they can be rebuilt from the log. If they disagree with the log, the log wins.`},
+{q:`At-least-once delivery + idempotent consumers: what exactly does the consumer need to implement?`,a:`A dedup check using a stable idempotency key (e.g. message_id or business-level dedup key). On receiving a message, the consumer checks if it has already processed this ID and skips duplicate processing if so.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

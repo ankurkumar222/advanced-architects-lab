@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Build Your Own SQL Engine</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Build Your Own SQL Engine · Twenty Problems, One Tension</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"rel",label:"RELATIONAL+CONSTRAINTS",c:"teal"},
+ {id:"stor",label:"STORAGE+INDEXES",c:"gold"},
+ {id:"qe",label:"QUERY ENGINE",c:"violet"},
+ {id:"tx",label:"TRANSACTIONS+WAL",c:"rose"},
+ {id:"scale",label:"SCALING+SYNTHESIS",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"The Architecture of a SQL Database",t:"a",h:"A mental model. Twenty problems from the relational model down to the write-ahead log — and the one tension every layer is fighting.",body:`
+<div class="ascii">App --> SELECT / INSERT / UPDATE / DELETE
+   |
+   v  SQL Parser / Query Layer
+   |
+   v  Optimizer
+   |
+   v  Execution Engine
+   |
+   v  Storage Engine (tables / indexes / WAL / buffer mgr)</div>
+<p>The core problem every layer is solving: <strong>take a declarative request and execute it efficiently while preserving all guarantees.</strong></p>
+<div class="note">This architecture exists to solve one tension: <b>how to provide strong correctness guarantees while achieving acceptable performance</b>. Every layer presents a different face of that same trade-off.</div>`},
+
+/* RELATIONAL + CONSTRAINTS */
+{sec:"rel",c:"teal",eyebrow:"01 · The Relational Revolution",t:"q",q:`What makes a SQL database fundamentally different from a key-value store — not the syntax, but the actual commitment that forces every other layer into existence?`},
+
+{sec:"rel",c:"teal",eyebrow:"01 · The Relational Revolution",t:"a",h:"Arbitrary relational access decided at query time",body:`
+<div class="ascii">SQL DB built around:
+  Relations (tables) with structured schemas
+  Joins that connect entities naturally
+  Constraints that preserve data integrity
+  Transactions that guarantee correctness
+  Declarative querying: say WHAT, not HOW
+
+Customers                      Orders
++----+--------+               +----+-------------+--------+
+| id | name   |               | id | customer_id | total  |
++----+--------+               +----+-------------+--------+
+| 1  | Ankur  |               | 10 | 1           | 500    |
++----+--------+               +----+-------------+--------+
+
+SQL naturally asks: join, filter, aggregate, sort, group.
+A KV store never has to "decide how" to answer a query.
+A SQL DB must decide at query time -- which is why it needs
+an optimizer, cost model, and multiple index strategies.</div>`},
+
+{sec:"rel",c:"teal",eyebrow:"02 · Constraints: The Silent Guardians",t:"q",q:`Primary key, foreign key, unique, not null, check constraints — are these a convenience feature, or do they change what the database is <b>fundamentally responsible for</b>?`},
+
+{sec:"rel",c:"teal",eyebrow:"02 · Constraints: The Silent Guardians",t:"a",h:"The database becomes an active participant",body:`
+<p>They change the contract. Without constraints, the database is a passive store and correctness is entirely the application's job. With constraints, the database becomes an <strong>active participant that refuses to persist a state that violates a declared invariant</strong>.</p>
+<div class="note"><code>Orders.customer_id</code> MUST reference <code>Customers.id</code>. That sentence isn't a nicety — it means the DB will raise an error rather than store referential garbage. Constraint design is a decision about where in the stack correctness is enforced. Moving enforcement to the application means every bug in every app can corrupt the data; moving it to the DB means one enforcer covers all consumers.</div>`},
+
+{sec:"rel",c:"teal",eyebrow:"Relational &amp; Constraints · Recall",t:"r",h:"Quick recall: relational model and constraints",qs:[
+{q:`What single commitment forces a SQL DB to need an optimizer, cost model, and multiple index strategies?`,a:`Arbitrary relational access decided at query time (joins, ranges, aggregates, ad-hoc predicates). A KV store never has to "decide how" to answer a query. SQL must decide at query time, for any question, every time.`},
+{q:`Constraints: convenience feature or fundamental change to responsibility?`,a:`Fundamental change — the DB becomes an active participant that refuses to persist an invalid state. Without constraints, the DB is a passive store and correctness is entirely the application's problem.`}]},
+
+/* STORAGE + INDEXES */
+{sec:"stor",c:"gold",eyebrow:"03–04 · Storage Foundation",t:"q",q:`A SQL database stores data in fixed-size pages, not as a flat list of rows. What does page-oriented storage give you that row-by-row storage cannot — and what is the key difference between heap and clustered storage?`},
+
+{sec:"stor",c:"gold",eyebrow:"03–04 · Storage Foundation",t:"a",h:"Pages align the unit of I/O with the unit the hardware moves",body:`
+<div class="ascii">Disk
+  +--> Page 1: [row][row][row]
+  +--> Page 2: [row][row][row]
+
+Heap style:               Clustered / index-organized:
+Rows wherever free        Rows physically ordered by PK
+space exists.             or cluster key.
++ Fast inserts            + Fast range scans, ordered access
+- Scattered scans         - Expensive inserts (maintain order)
+
+Secondary indexes in heap: point to row location (RID)
+Secondary indexes in clustered (InnoDB): point to PK value
+-> wide/unstable PK = wide secondary indexes everywhere</div>
+<div class="note">Why fixed pages? Disk and OS I/O is block-oriented. A fixed page size lets the database align its unit of I/O, caching, and locking with what hardware actually moves efficiently. Row-by-row I/O would mean constant tiny reads/writes with no way to amortize disk-seek cost. The page is the unit of cache, the unit of lock, and the unit of I/O — all three collapse into one concept.</div>`},
+
+{sec:"stor",c:"gold",eyebrow:"05–07 · Indexes: The Performance Soul",t:"q",q:`Why is a B+ tree the dominant index structure for on-disk data — and how do composite and covering indexes each change the query execution model?`},
+
+{sec:"stor",c:"gold",eyebrow:"05–07 · Indexes: The Performance Soul",t:"a",h:"B+ tree, composite index, covering index",body:`
+<div class="ascii">B+ tree:
+  [50]              fan-out = hundreds of keys per node
+   /    \           depth = 3-4 levels for millions of rows
+  [20]  [80]        leaf nodes: linked list, sorted -> range scans free
+  
+Why not BST? BST depth ~20 levels for 1M rows = 20 disk seeks.
+B+ tree: 3-4 levels = 3-4 disk seeks. Disk seeks = expensive.
+
+Composite index (customer_id, created_at):
+  -> seek to customer_id, walk already-sorted created_at rows
+  -> ORDER BY created_at DESC: NO sort step needed
+
+Covering index (includes all SELECT columns):
+  -> query answered entirely from the index
+  -> table never touched ("index-only scan")
+  -> cost: wider index = more write amplification</div>
+<div class="note">Every index is a bet on the future — a tax on every write, paid forever, in exchange for a read you hope will dominate. The discipline of index design is knowing which questions will matter before you know that they matter.</div>`},
+
+{sec:"stor",c:"gold",eyebrow:"Storage &amp; Indexes · Recall",t:"r",h:"Quick recall: storage and indexes",qs:[
+{q:`Why is a B+ tree preferred over a BST for on-disk indexes?`,a:`Cost function is disk seeks, not comparisons. BST: ~20 levels for 1M rows = ~20 disk seeks. B+ tree: high fan-out keeps depth to 3-4 levels = 3-4 disk seeks. Leaf-level linked list also makes range scans sequential and cheap.`},
+{q:`What does a covering index buy, and what does it cost?`,a:`Buys: the query is answered entirely from the index (index-only scan), no table access needed. Costs: every extra included column is write amplification — every INSERT/UPDATE/DELETE touching that column must also update this wider index.`}]},
+
+/* QUERY ENGINE */
+{sec:"qe",c:"violet",eyebrow:"08–10 · The Query Engine",t:"q",q:`The query engine is the major differentiator of a SQL database. The user says WHAT; the database decides HOW. What does the optimizer actually choose — and why do the three join algorithms (nested loop, hash join, merge join) each have a different data-shape where they win?`},
+
+{sec:"qe",c:"violet",eyebrow:"08–10 · The Query Engine",t:"a",h:"Declarative power requires a smart planner",body:`
+<div class="ascii">SQL text -> Parser -> Logical plan -> Optimizer -> Physical plan -> Execution
+
+Query: Customers JOIN Orders
+Possible plans:
+  Scan customers -> probe orders index   (nested loop)
+  Scan orders -> hash join customers      (hash join)
+  Sort both -> merge join                 (merge join)
+
+Nested loop: wins when one side is tiny and indexed
+Hash join:   wins for large, unsorted, roughly equal-sized sets
+Merge join:  wins when both sides are already sorted
+
+Cost estimates come from: table statistics (row counts, value
+distributions, histograms) -- collected periodically, NOT live.
+
+When statistics drift (bulk load, sudden skew):
+  optimizer reasons about a world that no longer exists
+  -> picks a disastrous plan on unchanged SQL
+  -> Plans are a function of data state, not SQL text.</div>
+<div class="note">You do not control execution — you influence the conditions under which the optimizer makes its decision. The dangerous engineer assumes they know the outcome because they wrote the query. The dangerous leader assumes they know the outcome because they approved the plan. Build systems — and teams — that produce good decisions even when you are not in the room.</div>`,
+cto:[`You do not control execution — you influence the conditions under which a decision is made. Build systems — and teams — that produce good decisions even when you are not in the room.`]},
+
+{sec:"qe",c:"violet",eyebrow:"Query Engine · Recall",t:"r",h:"Quick recall: query engine and optimizer",qs:[
+{q:`What exactly does the optimizer choose, and what breaks when its statistics are stale?`,a:`It chooses among physical plans for the same logical query, based on cost estimates from table statistics. Stale statistics (post-bulk-load, skewed data) make it reason about a world that no longer exists — picking a full scan where an index would have been faster.`},
+{q:`Nested loop, hash join, merge join — each wins under what data shape?`,a:`Nested loop: one side tiny and indexed. Hash join: large, unsorted, roughly equal sets. Merge join: both sides already sorted. Using the wrong one for the data shape can be catastrophically slow.`}]},
+
+/* TRANSACTIONS + WAL */
+{sec:"tx",c:"rose",eyebrow:"11–14 · Transactions and the WAL",t:"q",q:`ACID: which of the four letters is entirely the database's job — and which one quietly depends on the application getting something right? Then explain why the WAL is written before the data page, not after.`},
+
+{sec:"tx",c:"rose",eyebrow:"11–14 · Transactions and the WAL",t:"a",h:"ACID and the write-ahead log",body:`
+<div class="ascii">BEGIN; debit A; credit B; COMMIT;
+
+A = Atomicity   -> WAL + rollback segments (DB's job)
+C = Consistency -> constraints + APPLICATION invariants (shared)
+I = Isolation   -> locking / MVCC (DB's job)
+D = Durability  -> WAL fsync before acknowledging commit (DB's job)
+
+Consistency is different: DB enforces only DECLARED invariants.
+Any business invariant you didn't declare = application's problem.
+
+WAL before data page:
+  update row
+    -> append change to WAL  (sequential, fast)
+    -> ack after WAL durable
+    -> data page flushed later (lazy, by buffer manager)
+
+Why sequential WAL before random data-page write?
+  Sequential append = cheap I/O
+  Random page overwrite = expensive I/O
+  WAL also provides the recovery story: redo committed work,
+  undo uncommitted work, after any crash.</div>
+<div class="note">ACID does not make your business logic correct — it makes your mechanics reliable. The gap between "the transaction committed" and "the right thing happened" is entirely owned by the people who designed the application. Whenever I review an incident, I separate two questions: did the database do what it promised, and did we ask it for the right promise? Most correctness bugs live in the second question.</div>`,
+cto:[`ACID does not make your business logic correct — it makes your mechanics reliable. The gap between "the transaction committed" and "the right thing happened" is entirely owned by the people who designed the application.`]},
+
+{sec:"tx",c:"rose",eyebrow:"12–13 · Concurrency: Locking vs. MVCC",t:"q",q:`Two families of concurrency control: locking and MVCC. What specific problem does MVCC solve that pure locking cannot — and what is the isolation-level trade-off that most teams inherit without deciding?`},
+
+{sec:"tx",c:"rose",eyebrow:"12–13 · Concurrency: Locking vs. MVCC",t:"a",h:"Readers and writers, isolation levels",body:`
+<div class="ascii">Locking:              MVCC:
+Tx1 locks row R       row has multiple versions
+Tx2 waits             Tx1 sees old version
+                       Tx2 sees new version after commit
+Readers block writers  Readers don't block writers
+Writers block writers  Writers still coordinate with each other
+
+MVCC solves: readers blocking writers.
+Does NOT solve: writer/writer conflict on the same row.
+-> Modern SQL = MVCC + locks where needed.
+
+Isolation levels:
+Level              Risk allowed               When to use
+Read Uncommitted   dirty reads               almost never
+Read Committed     non-repeatable reads      most OLTP (default)
+Repeatable Read    phantom rows              financial reads
+Serializable       none                      ledgers, critical paths
+
+Isolation level = most commonly undecided decision in production.
+Most teams inherit the default, ship under pressure, never revisit.</div>`,
+cto:[`Isolation level is the most commonly undecided decision in production SQL systems. "We used the default" is not a design decision — it is the absence of one. Every transaction boundary that touches money, compliance, or user trust must have an explicit isolation-level decision in the design doc.`]},
+
+{sec:"tx",c:"rose",eyebrow:"Transactions &amp; WAL · Recall",t:"r",h:"Quick recall: transactions and WAL",qs:[
+{q:`Which ACID letter is shared responsibility between DB and application, and why?`,a:`Consistency — the DB only enforces invariants you explicitly declared (constraints). Any business invariant not declared as a constraint is entirely the application's job. A transaction can be atomic and durable but still "wrong" if the business logic was wrong.`},
+{q:`Why is the WAL written before the data page — and what does this enable after a crash?`,a:`Sequential log append is dramatically cheaper than a random data-page write. Writing intent first means a crash mid-update leaves enough information to redo committed changes or undo uncommitted ones — the log is the recovery story.`},
+{q:`MVCC solves what problem that pure locking cannot?`,a:`Readers blocking writers (and vice versa). MVCC gives every reader a consistent snapshot of old versions while writers create new versions — reads and writes stop contending for the same lock. It does NOT solve writer/writer conflict on the same row.`}]},
+
+/* SCALING + SYNTHESIS */
+{sec:"scale",c:"amber",eyebrow:"15–16 · Memory and Recovery",t:"q",q:`The buffer manager is essentially a cache for pages. How does crash recovery use the relationship between the buffer manager and the WAL — and what is a checkpoint?`},
+
+{sec:"scale",c:"amber",eyebrow:"15–16 · Memory and Recovery",t:"a",h:"Buffer manager + WAL + checkpoint = crash safety",body:`
+<div class="ascii">Buffer manager:
+  Disk pages <--> Buffer Pool <--> Query Execution
+  Cache hit: use page directly (no disk trip)
+  Cache miss: load from disk
+  Eviction policy (LRU variant): a large sequential scan
+  can flush hot pages of an unrelated workload (LRU trap)
+
+Crash recovery:
+  Crash -> restart -> read checkpoint -> redo committed WAL entries
+        -> undo incomplete work if needed
+
+Checkpoint: a known-good snapshot marker.
+  "Everything before this point is already safely on disk."
+  Without checkpoints: replay entire WAL from beginning = O(age of DB).
+  With checkpoints: replay only since last checkpoint = O(recent work).
+
+Checkpoint frequency = dial between I/O cost (frequent) and
+recovery time (infrequent). Not a free performance lever.</div>`},
+
+{sec:"scale",c:"amber",eyebrow:"17–19 · Scaling and Distribution",t:"q",q:`Single-node SQL gives the strongest guarantees. Every scaling step trades some guarantee for some capacity. Name the four scaling patterns and the specific guarantee each one surrenders.`},
+
+{sec:"scale",c:"amber",eyebrow:"17–19 · Scaling and Distribution",t:"a",h:"Every scaling decision converts simplicity into distributed complexity",body:`
+<div class="ascii">Pattern            Advantage          Tradeoff / Guarantee Surrendered
+Vertical scaling   Simple             Limited, expensive hardware ceiling
+Read replicas      Great for reads    Writes still bottleneck; replica lag
+Partitioning       Distributes data   Cross-partition queries (scatter-gather)
+Sharding           Horizontal scale   Distributed transactions, complex joins
+Distributed SQL    Full scalability   Coordination overhead, latency
+
+Primary (writes)
+  +--> Replica 1 (reads) <- replication via WAL/binlog shipping
+  +--> Replica 2 (reads)
+
+Read scaling = easy (add replicas).
+Write scaling = hard (single primary or distributed consensus).</div>
+<div class="note"><b>Every scaling decision converts local simplicity into distributed complexity. The right question is never "can we scale?" — it is "what guarantees do we surrender when we do, and who in this organization understands and owns that trade?"</b></div>`,
+cto:[`Every scaling decision converts local simplicity into distributed complexity. The right question is never "can we scale?" — it is "what guarantees do we surrender when we do, and who in this organization understands and owns that trade?"`]},
+
+{sec:"scale",c:"amber",eyebrow:"20 · Putting It All Together",t:"a",h:"Example query — the whole stack in one trace",body:`
+<div class="ascii">SELECT * FROM orders
+WHERE customer_id = 1001
+ORDER BY created_at DESC LIMIT 20;
+
+Strong design:
+  Index: (customer_id, created_at DESC)
+
+Execution:
+  1. Index seek to customer_id=1001
+  2. Walk newest rows in index order (leaf chain, no sort)
+  3. Fetch top 20 (possibly from covering index: no table touch)
+
+Layer stack for this one query:
+  Parser           -> validates SQL, builds AST
+  Optimizer        -> chooses index seek + range scan plan
+  Execution Engine -> walks B+ tree leaf chain
+  Buffer Manager   -> serves pages from RAM where possible
+  Storage Engine   -> reads from disk on cache miss
+  WAL              -> ensures any concurrent writes are consistent</div>
+<div class="note">This is SQL's signature strength: declarative query + optimizer + efficient execution = powerful abstraction. The user wrote 4 lines of SQL. The system made a dozen decisions to execute it correctly. The magic is making all of those decisions invisible while preserving every guarantee.</div>`},
+
+{sec:"scale",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: SQL engine architecture compressed",qs:[
+{q:`The one tension every SQL DB layer is fighting — in one sentence.`,a:`How to provide strong correctness guarantees (constraints, ACID, isolation) while achieving acceptable performance (indexes, MVCC, buffer pool, optimizer) — two goals that pull in opposite directions at every layer.`},
+{q:`Four scaling patterns, each with its surrendered guarantee.`,a:`Vertical (no cross-machine guarantee surrendered, but hits hardware ceiling). Read replicas (replica lag — no read-your-write guarantee on replicas). Partitioning (cross-partition queries require scatter-gather). Sharding (distributed transactions, joins across shards become application problems).`},
+{q:`A query plan that was optimal yesterday may be wrong today on the same SQL. Why?`,a:`Plans are a function of data state, not SQL text. Statistics drift as row counts grow, value distributions shift, or bulk loads change the data shape. The optimizer reasons about the statistics it has, not the data as it actually is.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

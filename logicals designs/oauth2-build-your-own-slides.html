@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Build Your Own OAuth 2.0</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Build Your Own OAuth 2.0 · Four Endpoints, One Token Store</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"core",label:"CORE IDEA+FLOW",c:"teal"},
+ {id:"build",label:"BUILD IT: 4 ENDPOINTS",c:"gold"},
+ {id:"think",label:"ARCHITECT THINKING",c:"violet"},
+ {id:"final",label:"FAILURE MODES+RECALL",c:"rose"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Build Your Own OAuth 2.0",t:"a",h:"Four endpoints, one token store — and the questions an architect asks <em>before</em> shipping any of it.",body:`
+<p>OAuth 2.0 looks simple: users log in via another trusted system and get a temporary permission token instead of sharing their password. Inside, it is a carefully choreographed code-exchange protocol designed so that no single component — not the client, not the authorization server, not the resource server — ever holds more trust than it needs.</p>
+<div class="note"><b>Core idea:</b> Authorization is easy to build in a way that works. The hard part is building it so the failure modes — token leakage, scope creep, stolen refresh tokens — <em>can't happen accidentally</em>.</div>`},
+
+/* CORE IDEA + FLOW */
+{sec:"core",c:"teal",eyebrow:"Core Idea",t:"q",q:`The analogy: you (user), a bank (Google), and a restaurant (your app). The restaurant wants to access your bank data. What is the specific danger the OAuth protocol is designed to prevent — and how does the "verified slip" model solve it?`},
+
+{sec:"core",c:"teal",eyebrow:"Core Idea",t:"a",h:"Don't give the bank password to the restaurant",body:`
+<div class="ascii">Without OAuth (dangerous):
+  User gives bank password to restaurant
+  -> Restaurant can read, write, transfer, close account
+  -> Restaurant credential database breach = bank account breach
+  -> No revocation without changing the bank password
+
+With OAuth (safe):
+  User authenticates to the bank (Google) directly
+  -> Bank issues a scoped permission slip (token)
+  -> Restaurant receives the token, not the password
+  -> Token can be revoked, scoped, time-limited
+  -> Bank breach at restaurant = token revoked, not password reset
+
+The "verified slip" properties:
+  temporary   (expires)
+  scoped      (read-only, not write)
+  revocable   (bank can invalidate without changing password)
+  not the credential  (restaurant can't use it to be you)</div>`},
+
+{sec:"core",c:"teal",eyebrow:"The Flow",t:"q",q:`Walk the five steps of the Authorization Code flow — and explain why there are TWO round trips (user → code, code → token) rather than one direct token issuance.`},
+
+{sec:"core",c:"teal",eyebrow:"The Flow",t:"a",h:"Why the code exchange step exists",body:`
+<div class="ascii">Step 1: User clicks "Login with Google"
+Step 2: App redirects to Google (with client_id, scope, redirect_uri)
+Step 3: Google returns CODE to the redirect_uri
+Step 4: App backend exchanges CODE + client_secret -> TOKEN
+Step 5: App uses TOKEN to call /userinfo or protected APIs
+
+Why TWO trips (code → token)?
+  Without it: Google redirects the TOKEN directly in the URL.
+  The browser URL bar shows the token.
+  Browser history logs the token.
+  Referrer headers may leak the token.
+  Any JS on the page can read window.location.
+
+The code is SHORT-LIVED (seconds), SINGLE-USE, and
+  MEANINGLESS without the client_secret.
+  The token exchange happens BACKEND-TO-BACKEND:
+  -> never visible in the browser
+  -> requires client_secret (proves the app is who it says it is)
+  -> mitigates redirect URL interception attacks</div>
+<div class="note">The code-exchange step is the key security innovation. The code alone is useless without the client_secret. The client_secret is never sent to the browser. The combination means even if an attacker intercepts the redirect URL containing the code, they cannot exchange it for a token without the secret that only the backend holds.</div>`},
+
+{sec:"core",c:"teal",eyebrow:"Core Idea &amp; Flow · Recall",t:"r",h:"Quick recall: core idea and flow",qs:[
+{q:`What three properties of the OAuth token make it safer than sharing the bank password?`,a:`Temporary (expires so stale tokens become worthless), scoped (read-only or specific permissions, not full access), and revocable (bank can invalidate it without requiring a password change).`},
+{q:`Why does the Authorization Code flow have two round trips (user → code, then code → token) rather than one direct token redirect?`,a:`A token in the redirect URL would be visible in browser history, referrer headers, and any JS on the page. The code is short-lived and meaningless without the client_secret. The backend-to-backend exchange keeps the token out of the browser entirely.`}]},
+
+/* BUILD IT: 4 ENDPOINTS */
+{sec:"build",c:"gold",eyebrow:"Building It: /authorize",t:"q",q:`You are building the <code>/authorize</code> endpoint. The user logs in here. What do you generate — and what security properties must the generated code have?`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: /authorize",t:"a",h:"Login + give CODE",body:`
+<div class="ascii">/authorize endpoint:
+  Input: client_id, redirect_uri, scope, state, response_type=code
+  
+  Server validates:
+    client_id is a registered application
+    redirect_uri exactly matches the registered one
+    scope is within what client is allowed to request
+  
+  User authenticates (login form, MFA, etc.)
+  
+  Server generates CODE:
+    code -> user_id, client_id, scope, expiry (seconds, not minutes)
+    code -> stored server-side (or HMAC-signed) for validation
+  
+  Server redirects to redirect_uri?code=CODE&state=STATE
+  
+  Code properties REQUIRED:
+    cryptographically random (not guessable)
+    single-use (invalidated on first exchange attempt)
+    short-lived (seconds, not minutes)
+    bound to client_id (cannot be exchanged by a different app)</div>
+<div class="note">The <code>state</code> parameter is a CSRF guard — the client generates a random value, includes it in the redirect, and verifies it comes back unchanged. Without it, an attacker can craft a malicious redirect that triggers the code exchange in the victim's browser, binding the attacker's account to the victim's session.</div>`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: /token",t:"q",q:`The backend calls <code>/token</code> to exchange the code for a token. What inputs must it provide — and why must this exchange be backend-to-backend?`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: /token",t:"a",h:"CODE → TOKEN via server-to-server",body:`
+<div class="ascii">/token endpoint:
+  Input (POST, not GET):
+    grant_type=authorization_code
+    code=CODE (the short-lived code from /authorize)
+    redirect_uri (must match what was used in /authorize)
+    client_id
+    client_secret (proves the app is who it claims to be)
+  
+  Server validates:
+    code exists, not yet used, not expired
+    client_id matches what issued the code
+    client_secret matches what's registered
+    redirect_uri matches (prevents code injection attacks)
+  
+  Server invalidates code (single-use enforcement)
+  
+  Server generates:
+    access_token (short-lived, e.g. 1 hour)
+    refresh_token (long-lived, single-use rotation)
+    token_type: "Bearer"
+    expires_in: 3600
+    scope: (the approved scopes)
+
+Why backend-to-backend?
+  client_secret must NEVER appear in frontend JS code or URLs.
+  The token endpoint requires it -> it MUST be called from backend.</div>`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: Token Store",t:"q",q:`Two options for the token store: opaque tokens (DB lookup per request) vs. JWT (stateless, self-contained). What does each buy — and what does each cost?`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: Token Store",t:"a",h:"Stateful vs. stateless tokens",body:`
+<div class="ascii">Option A: Opaque token (server-side store)
+  access_token -> user_id, scope, expiry  (in DB or Redis)
+  
+  + Instant revocation (delete the DB record, token is dead)
+  + Token carries no information (leaked token reveals nothing)
+  - Every API call requires a DB lookup to validate
+  - Horizontal scaling requires shared session store (Redis)
+
+Option B: JWT (JSON Web Token)
+  Header.Payload.Signature
+  Payload: {user_id, scope, expiry, iss, aud}
+  Signed with server's private key
+  
+  + Stateless: resource server validates signature, no DB lookup
+  + Scales easily (no shared state for validation)
+  - Revocation is hard: token is valid until expiry even if
+    you "log out" -- need a token blacklist to revoke early
+  - Payload is visible (base64 decoded, not encrypted)
+    -> don't put sensitive data in JWT claims
+
+Hybrid: short-lived JWT access tokens + revocable opaque refresh tokens</div>
+<div class="note">JWTs are self-contained truth. Their biggest weakness: you can't take back a token you've issued. If an access token is stolen and the expiry is 1 hour, the attacker has 1 hour. Keep JWT access token expiry short (15 minutes). Use opaque refresh tokens for longer sessions, with rotation on every use.</div>`},
+
+{sec:"build",c:"gold",eyebrow:"Building It: /userinfo and the Full Sketch",t:"a",h:"Protected API and complete flow",body:`
+<div class="ascii">/userinfo endpoint:
+  Input: Authorization: Bearer {access_token}
+  
+  Server validates token:
+    Option A: look up in DB, check expiry and scope
+    Option B: verify JWT signature, check expiry and scope
+  
+  Return: user data (email, name, sub/user_id, scopes, etc.)
+
+Complete flow sketch:
+User
+  |
+  v
+Client App ------> /authorize (login)
+  |                    |
+  |                    v
+  |              returns CODE
+  |
+  v
+/token (exchange) -----> TOKEN
+  |
+  v
+/userinfo (Bearer TOKEN) -----> user data
+
+What /userinfo should NOT return:
+  Passwords, internal IDs not meant for the client, anything
+  beyond what the approved scope allows.</div>`},
+
+{sec:"build",c:"gold",eyebrow:"Building It · Recall",t:"r",h:"Quick recall: the four endpoints",qs:[
+{q:`/authorize generates a code. Name three security properties the code must have.`,a:`Cryptographically random (not guessable), single-use (invalidated on first exchange), and short-lived (seconds, not minutes). Also bound to client_id — cannot be exchanged by a different application.`},
+{q:`Opaque tokens vs. JWT: which is easier to revoke and why?`,a:`Opaque tokens — deleting the DB record immediately invalidates the token. A JWT is valid until its expiry claim is reached; early revocation requires a token blacklist, which reintroduces server-side state and DB lookups.`},
+{q:`Why must the /token exchange happen backend-to-backend, never from the browser?`,a:`It requires the client_secret, which must never appear in frontend JS code or be visible in browser DevTools. The backend-to-backend call keeps the secret server-side where it can't be stolen from the client.`}]},
+
+/* ARCHITECT THINKING */
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Token Expiry",t:"q",q:`Access tokens expire in 1 hour. A user logs out. The access token is now "stale" but still cryptographically valid for up to 60 minutes. What are the three design options — and which one is practical at scale?`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Token Expiry",t:"a",h:"Short-lived + revocation blacklist",body:`
+<div class="ascii">Option 1: Make access tokens very short-lived (5-15 min)
+  + Stolen token window is small
+  + No revocation infrastructure needed
+  - Users need frequent re-authentication (poor UX)
+  - Mitigated by: refresh tokens (transparent re-auth)
+
+Option 2: Token blacklist (server-side revocation)
+  + Immediate revocation on logout or token theft
+  - Reintroduces state (DB/Redis lookup per request)
+  - Blacklist grows unboundedly (need TTL cleanup)
+
+Option 3: Short JWT access tokens + rotatable opaque refresh tokens
+  + Access token: 15 min, stateless JWT
+  + Refresh token: long-lived, stored server-side, revocable
+  + On logout: revoke the refresh token (future access denied)
+  + Stolen access token: max 15 min window
+  + Practical at scale: most widely deployed model
+
+Refresh token rotation:
+  Every use of a refresh token issues a NEW refresh token
+  and invalidates the old one.
+  Stolen refresh token: first use by either party invalidates both.
+  Reuse detection is possible (the legitimate user's next
+  request triggers a detected compromise).</div>`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Scaling",t:"q",q:`Your OAuth server becomes a critical dependency for every API call. What are the scaling and availability concerns — and how do JWT access tokens specifically help here?`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Scaling",t:"a",h:"Stateless validation at resource server",body:`
+<div class="ascii">Scaling concern: if every API call hits the OAuth server to
+  validate an opaque token, the OAuth server becomes a
+  single point of failure AND a performance bottleneck.
+
+JWT solves this for validation:
+  Resource server verifies JWT SIGNATURE locally
+  using the OAuth server's PUBLIC KEY
+  -> no call to OAuth server per request
+  -> OAuth server only involved at: login, token issue, logout
+  -> Public key can be cached (JWK endpoint / key rotation)
+
+Public key rotation:
+  /jwks.json endpoint exposes current signing keys
+  Resource server caches keys, refreshes periodically
+  Old key kept active for a grace period during rotation
+  -> Tokens signed with old key remain valid during grace window
+
+Availability:
+  If OAuth server goes down:
+    Existing JWT access tokens: still valid (self-contained)
+    New logins: fail (cannot issue new tokens)
+    Refreshes: fail (cannot issue new access tokens)
+  -> Keep access token expiry short (15 min) so users can
+     re-authenticate as soon as OAuth server recovers</div>`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Security",t:"q",q:`Three common OAuth implementation mistakes that open real attack surfaces. What are they — and why is "use HTTPS" insufficient on its own?`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Security",t:"a",h:"The failure modes that can't happen accidentally",body:`
+<div class="ascii">Mistake 1: redirect_uri validation too loose
+  Attack: redirect_uri=https://evil.com/callback
+  If server allows subdomains or wildcards -> code delivered to attacker
+  Fix: exact string match on registered redirect_uri, no wildcards
+
+Mistake 2: missing state parameter (CSRF)
+  Attack: attacker crafts a URL with their authorization code
+  -> victim clicks -> victim's account linked to attacker's identity
+  Fix: state = random CSRF token, generated per request,
+       verified on callback
+
+Mistake 3: client_secret in frontend code / mobile apps
+  Public clients (SPAs, mobile apps) CANNOT keep a secret.
+  Use PKCE (Proof Key for Code Exchange) instead:
+    code_verifier: random, high-entropy, generated by client
+    code_challenge: SHA256(code_verifier), sent with /authorize
+    On /token: client sends code_verifier -> server verifies
+  -> Even if code is intercepted, useless without verifier
+
+"Use HTTPS" is not sufficient:
+  HTTPS protects the transport. It doesn't prevent:
+    - Redirect URI manipulation
+    - CSRF attacks on the callback
+    - XSS stealing tokens from localStorage (never store there)
+    - Client secret leakage in public clients</div>`,
+cto:[`A good security design creates clear boundaries so that a bug in one part of the system can't accidentally give access to another. OAuth's code-exchange flow, PKCE, state parameter, and short-lived tokens are all mechanisms that create these boundaries. Authorization is easy to build in a way that works. The hard part is making the failure modes structurally impossible, not just avoided by convention.`]},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Revocation",t:"q",q:`A refresh token is stolen. How do you detect it — and what is the mechanism that limits the damage window even before detection?`},
+
+{sec:"think",c:"violet",eyebrow:"Architect Thinking: Revocation",t:"a",h:"Refresh token rotation + reuse detection",body:`
+<div class="ascii">Refresh token rotation:
+  Each /token call with a refresh_token:
+    -> issues NEW access_token
+    -> issues NEW refresh_token (replaces old one)
+    -> INVALIDATES old refresh_token
+
+Stolen refresh token scenario:
+  Attacker uses stolen refresh_token -> gets new access+refresh
+  Legitimate user uses (now invalidated) old refresh_token
+  -> Server detects REUSE of an invalidated token
+  -> COMPROMISE SIGNAL
+  -> Server revokes ENTIRE token family for this user
+  -> Both attacker and user are logged out
+  -> User re-authenticates, attacker loses access
+
+Damage window without detection:
+  Short JWT access token (15 min) limits damage even if
+  reuse detection fails or is delayed.
+  Attacker maximum window: 15 minutes before access token expires
+  and they need to use the stolen refresh token again.</div>`},
+
+/* FAILURE MODES + RECALL */
+{sec:"final",c:"rose",eyebrow:"Architect Thinking · Recall",t:"r",h:"Quick recall: architect thinking on OAuth",qs:[
+{q:`Short-lived JWT access tokens + rotatable opaque refresh tokens — why is this the practical model at scale?`,a:`JWT access tokens are stateless (no DB lookup per request, resource server validates signature locally). Refresh tokens are long-lived but revocable (stored server-side, each use issues a new one). The combination: stateless validation at scale + meaningful revocation on logout or compromise.`},
+{q:`Name the three common OAuth mistakes that open real attack surfaces.`,a:`(1) Loose redirect_uri validation (attacker redirects code to evil.com). (2) Missing state parameter (CSRF allows attacker to bind their identity to victim). (3) client_secret in public client code (SPAs/mobile can't keep secrets — use PKCE instead).`},
+{q:`Refresh token rotation + reuse detection — how does it detect a stolen token?`,a:`Each refresh token is single-use. If a stolen token is used by the attacker before the legitimate user uses it, the legitimate user's subsequent attempt uses an already-invalidated token — the server detects reuse, signals compromise, and revokes the entire token family.`}]},
+
+{sec:"final",c:"rose",eyebrow:"Final Recall",t:"r",h:"Final: OAuth 2.0 compressed",qs:[
+{q:`OAuth 2.0 in one sentence.`,a:`Let users authenticate at a trusted identity provider, receive a scoped, time-limited, revocable token (not their password), and present that token to resource servers — so no app ever needs to hold or know the user's actual credential.`},
+{q:`The authorization code flow has two round trips. Why not one?`,a:`A single redirect delivering the token directly puts it in the browser URL, history, and any JS on the page. The code is worthless without the client_secret — the backend-to-backend exchange keeps the token out of the browser entirely.`},
+{q:`Why is "use HTTPS" insufficient for OAuth security?`,a:`HTTPS protects the transport. It doesn't prevent: redirect_uri manipulation (code to wrong destination), CSRF on the callback (missing state), client_secret leakage in public clients (use PKCE), or XSS stealing tokens from localStorage. Each is a structural vulnerability, not a transport issue.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

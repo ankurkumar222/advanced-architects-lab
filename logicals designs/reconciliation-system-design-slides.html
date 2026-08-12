@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Reconciliation System Design</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Reconciliation System Design · Every Mechanism Earns Its Place</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"s01",label:"WHY+OPTIMIZE+RECORD",c:"teal"},
+ {id:"s02",label:"MATCH KEY+PRECISION+NWAY",c:"gold"},
+ {id:"s03",label:"STATE+TIMING+IDEMPOTENCY",c:"violet"},
+ {id:"s04",label:"EXCEPTION+SCALE+CONSISTENCY",c:"rose"},
+ {id:"s05",label:"AUDIT+SPLIT+REDESIGN",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Design a Reconciliation System",t:"a",h:"Not a matching engine. A design review where <em>every mechanism must earn its place by solving the problem the previous decision created</em>.",body:`
+<p>Two Principal Architects in a design review. Architect A challenges every assumption. Architect B — that's you — designs from first principles, grounded in payments: mutual fund order flow, NSDL/MOFSL settlements, PolicyBazaar premium collection, LAMF disbursement.</p>
+<div class="note">Format: read A's challenge, form your own answer, then reveal to compare. <b>Nothing here is a definition — every mechanism shows up because a previous decision became insufficient.</b></div>`},
+
+/* WHY + OPTIMIZE + RECORD */
+{sec:"s01",c:"teal",eyebrow:"Stage 0 · Why At All",t:"q",q:`<b>A (skeptic):</b> "I don't want a reconciliation engine. Convince me you even need one — why can't finance just eyeball the numbers at month end?"`,
+
+},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 0 · Why At All",t:"a",h:"Three independently-written stories about the same money",body:`
+<div class="ascii">A single payment:
+BANK:         "payment settled, UTR=8827..."
+PSP:          "webhook fired, status=SUCCESS"
+Our Ledger:   "order marked PAID"
+
+Three independent stories. Nobody is comparing them.
+
+What breaks if we just trust the ledger?
+  PSP webhook fires -> system marks order PAID -> bank settlement
+  silently fails or gets reversed hours later -> ledger says something
+  that isn't true -> nothing forces it to notice.
+
+Why isn't a nightly SQL join enough?
+BANK FILE (per batch):            LEDGER (per order):
+  batch_id=B12, amount=₹4.8L         order_id=O991, amount=₹12,000
+                                      order_id=O992, amount=₹8,500
+                                      ... (500 more rows inside B12)
+No common key. Can't join. Reconciliation is the only mechanism that
+forces three independently-written stories about the same money to agree.</div>`},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 1 · What Are We Optimizing?",t:"q",q:`<b>A:</b> "Pick one, only one: speed, completeness, or correctness. Compare the cost of a recon system that's slow-but-right against one that's fast-but-occasionally-wrong. Which failure mode is more dangerous for money?"`,
+
+},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 1 · What Are We Optimizing?",t:"a",h:"Correctness-first is not a preference — it is the constraint",body:`
+<p><strong>Correctness. Not speed.</strong></p>
+<p>A fast, wrong match takes two unrelated transactions, declares them reconciled, and closes the case. A real discrepancy — money short, money duplicated — now looks resolved and nobody ever looks at it again.</p>
+<div class="ascii">FALSE MATCH:           MISSED MATCH:
+  [A] --matched--> [B]    [A]   ...unmatched...   [B]
+  case CLOSED              case OPEN, flagged for review
+  discrepancy: INVISIBLE   discrepancy: VISIBLE, recoverable
+
+Concrete example: Mutual fund units are allotted based on NAV
+cut-off once payment is confirmed. A premature match marks a failed
+payment as settled -> units allotted against money never received.
+Units, unlike a DB row, can't be silently reversed.</div>`,
+cto:[`Reconciliation is not just about finding errors — it's about proving correctness. Speed is useful, but a fast wrong match is worse than a slow right one.`]},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 2 · What Is a Transaction Record?",t:"q",q:`<b>A:</b> "You'll be comparing a bank MT940 file, a PSP webhook JSON, and an internal Kafka event. Same shape?"`,
+
+},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 2 · What Is a Transaction Record?",t:"a",h:"Normalize first — then compare",body:`
+<div class="ascii">Three different shapes:
+BANK MT940:     :61:250714C12000NTRFUTR8827...
+PSP WEBHOOK:    {"txn_ref":"pay_9F2","status":"success","amt":1200000}
+INTERNAL EVENT: {order_id:O991, ledger_state:PAID, ts:...}
+
+Wrong approach: store all three raw, write comparison logic
+that understands each format. Every new source doubles branching.
+
+Right approach: normalize into canonical schema BEFORE comparison:
+  our_ref           (the ID we generated)
+  counterparty_ref  (the ID they generated)
+  amount
+  currency
+  timestamp
+  source_system
+  direction
+
+Both fields separately -- force-fitting them into one field is
+exactly the shortcut that breaks matching two stages from now.</div>`},
+
+{sec:"s01",c:"teal",eyebrow:"Stage 0-2 · Recall",t:"r",h:"Quick recall: why, optimize, record",qs:[
+{q:`Why isn't a nightly SQL join between two tables "reconciliation"?`,a:`The two tables don't have matching granularity. A bank settlement file has one row per batch of 500 transactions; the ledger has one row per order. There's no common key — the correlation must be designed into the payment flow itself.`},
+{q:`A fast-but-wrong match vs. a slow-but-right match — which failure is more dangerous and why?`,a:`A false match closes the case and makes the discrepancy invisible. Nobody looks at a "resolved" case. A missed match stays in the queue — ugly, but visible and recoverable. Silence is the one outcome reconciliation must never produce.`},
+{q:`Why normalize to a canonical schema before any comparison logic runs?`,a:`Without normalization, every matching rule needs N branches (one per source format), and every new source doubles the branching. Normalization collapses N formats into one shape; all comparison logic is written once.`}]},
+
+/* MATCH KEY + PRECISION + NWAY */
+{sec:"s02",c:"gold",eyebrow:"Stage 3 · The Matching Key",t:"q",q:`<b>A:</b> "Just match on transaction ID. Why doesn't that work on day one?"`,
+
+},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 3 · The Matching Key",t:"a",h:"The bank never sees your internal order ID",body:`
+<div class="ascii">The bank only knows the UTR or RRN IT generated.
+Our internal order_id never travels to the bank.
+
+Fix: propagate a correlation ID end-to-end at payment initiation,
+embedded in the narration or remarks field.
+
+INITIATION:
+  Our order O991 -> payment instruction -> narration: "RECON:O991"
+
+BANK SETTLEMENT FILE (T+1):
+  UTR=8827... narration="RECON:O991" amount=12,000
+
+MATCH: narration field carries our key back to us.
+
+What if bank truncates narration to 20 characters?
+  -> degrade, not break: fall back to composite fuzzy match
+     on amount + account number + time window</div>
+<div class="note"><b>Matching quality is decided upstream, at payment initiation — not at matching time.</b> If the correlation key isn't designed into the payment flow itself, no cleverness at the recon layer can fully recover it later.</div>`},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 4 · Precision vs. Recall",t:"q",q:`<b>A:</b> "Fuzzy matching will sometimes match the wrong pair and sometimes miss a real pair. Which failure do you tolerate — and what is the actual cost of each?"`,
+
+},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 4 · Precision vs. Recall",t:"a",h:"Tolerate missed matches, never false matches",body:`
+<div class="ascii">FALSE MATCH (precision failure):
+  Two unrelated transactions declared reconciled.
+  Case CLOSED. Discrepancy INVISIBLE. Nobody looks again.
+
+MISSED MATCH (recall failure):
+  Sits in review queue. Ugly but VISIBLE. Recoverable.
+
+Design consequence:
+  Exact match preferred wherever correlation key survives.
+  Fuzzy match ONLY as last resort, and even then routes to
+  mandatory manual confirmation -- never auto-closes.
+
+Tighten threshold to near-exact:
+  more missed matches (visible)
+  fewer false matches (invisible catastrophes)</div>`,
+cto:[`In financial systems, a missed mismatch is silent and dangerous. A false alarm just slows the team down. Know which failure your business can tolerate less, and design for that one.`]},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 5 · N-Way Reconciliation",t:"q",q:`<b>A:</b> "A LAMF disbursement needs the bank's transfer, NSDL's lien marking, and your internal ledger to all agree. You've only designed for two-way matching. What now?"`,
+
+},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 5 · N-Way Reconciliation",t:"a",h:"Per-correlation-key status across all N sources",body:`
+<div class="ascii">PAIRWISE (blind to the third source):
+  Bank <-> Ledger:  MATCH
+  NSDL <-> Ledger:  BREAK    <- but WHY? bank says fine!
+
+N-WAY (one status per correlation key):
+  key=LOAN-4471: Bank=OK, Ledger=OK, NSDL=MISSING
+  -> classify as "2-of-3 matched, NSDL pending" -- specific, actionable
+
+Status options:
+  matched-all          -> fully reconciled
+  matched-partial (N-M) -> name which source is missing
+  unmatched-all        -> nothing agrees
+
+"2-of-3" is the case a binary system can't even represent.
+
+New problem: NSDL settlement data lands T+1. PSP webhooks land
+in real time. How do we avoid false "NSDL missing" alerts?
+-> stage 7 must solve the timing window problem.</div>`},
+
+{sec:"s02",c:"gold",eyebrow:"Stage 3-5 · Recall",t:"r",h:"Quick recall: matching key, precision, N-way",qs:[
+{q:`Matching quality is decided upstream, not at matching time. What does this mean operationally?`,a:`The correlation ID must be embedded in the payment instruction at initiation (e.g. in the narration field), so it survives the trip through the bank's systems and comes back in the settlement file. No post-hoc cleverness recovers a missing key.`},
+{q:`Tolerate missed matches, never false matches — why the asymmetry?`,a:`A false match closes the case and hides the discrepancy permanently. A missed match stays in the queue — ugly, visible, and recoverable. Silence is the unacceptable outcome; a queue full of unresolved cases is just a work list.`},
+{q:`Why does pairwise matching fail for a 3-source reconciliation (bank + NSDL + ledger)?`,a:`If 2 of 3 agree and 1 doesn't, pairwise gives two independent disconnected answers instead of one clear picture. N-way recon exposes "2-of-3, NSDL pending" — specific and actionable, impossible to represent in binary matched/unmatched.`}]},
+
+/* STATE + TIMING + IDEMPOTENCY */
+{sec:"s03",c:"violet",eyebrow:"Stage 6 · State Machine",t:"q",q:`<b>A:</b> "The moment a transaction enters the recon system, is it 'matched' or 'unmatched' — a binary?" What states are actually needed, and why must every state have an SLA-driven timeout?`},
+
+{sec:"s03",c:"violet",eyebrow:"Stage 6 · State Machine",t:"a",h:"Binary hides too much",body:`
+<div class="ascii">PENDING -> (counterpart arrives, agrees) -> MATCHED -> CLOSED
+  |
+  +--> (counterpart arrives, disagrees) -> BREAK -> UNDER_REVIEW -> CLOSED
+  |
+  +--> (window expires, nothing arrives) -> UNRESOLVED -> UNDER_REVIEW -> CLOSED
+
+Why every state needs an SLA timeout:
+  "PENDING forever" is indistinguishable from "genuinely lost money
+  that nobody will ever chase."
+  Past a threshold, the system must alert a human.
+  SILENCE can never be a valid resting state in a financial system.</div>`},
+
+{sec:"s03",c:"violet",eyebrow:"Stage 7 · Timing Windows",t:"q",q:`<b>A:</b> "NSDL settlement files land T+1. A ledger entry is created today — the bank file won't exist until tomorrow. What do you do with it right now — and how do you tell 'not found yet' from 'actually missing'?"`,
+
+},
+
+{sec:"s03",c:"violet",eyebrow:"Stage 7 · Timing Windows",t:"a",h:"Window it — don't match at read time",body:`
+<div class="ascii">Don't match at read time — window it.
+Every PENDING record gets an expected_arrival derived from the
+source's known settlement SLA.
+
+TIMELINE for one correlation key:
+  T+0   ledger entry created       -> state: PENDING
+  T+0   PSP webhook arrives, matches  -> partial match recorded
+  T+1   expected NSDL window opens
+  T+1+grace: NSDL file still absent   -> NOW eligible to flip UNRESOLVED
+  T+0..T+1+grace: asking "is it missing?" is PREMATURE
+
+If bank file is just late by 6 hours (SLA breach, not a bug)?
+  Window needs grace buffer beyond nominal SLA before escalating.
+  Late-arriving file must be able to RE-OPEN a record that
+  already flipped to UNRESOLVED -- not be silently dropped.</div>
+<div class="note">Reconciliation time and event time are different axes. A design that treats "not here right now" as "missing" will generate constant false alarms. Correctness means modeling each source's arrival-time distribution, not just its data format.</div>`},
+
+{sec:"s03",c:"violet",eyebrow:"Stage 8 · Idempotency",t:"q",q:`<b>A:</b> "Your webhook endpoint times out once. The PSP retries the same delivery three times. Now you have three ledger events for one payment. What happens to reconciliation?"`,
+
+},
+
+{sec:"s03",c:"violet",eyebrow:"Stage 8 · Idempotency",t:"a",h:"Dedup at ingestion, before the recon pipeline",body:`
+<div class="ascii">Without idempotency key at ingestion:
+  Three retries -> three separate ledger rows
+  Matcher: one real bank credit + three candidate ledger rows
+  -> phantom break, or worse: phantom double-match
+
+Wrong: dedup during the matching job just before comparison
+  -> damage already sitting in the ledger
+
+Right: dedup at INGESTION using (source_system, source_event_id)
+  as a hard uniqueness constraint, before event reaches recon pipeline
+
+INGESTION:
+  webhook delivery 1: (psp, evt_9F2) -> insert, new
+  webhook delivery 2: (psp, evt_9F2) -> REJECT, duplicate key
+  webhook delivery 3: (psp, evt_9F2) -> REJECT, duplicate key
+  Ledger sees ONE event for this payment.
+
+Genuine double payment (bank credits account twice by mistake)?
+  Two different source_event_ids -> both reconcile independently.
+  The dedup key is scoped per source's own event id.</div>`,
+cto:[`A reconciliation run that isn't idempotent is dangerous. Running it twice on the same data must produce the same result. Without this, retries create new errors instead of fixing them.`]},
+
+{sec:"s03",c:"violet",eyebrow:"State, Timing &amp; Idempotency · Recall",t:"r",h:"Quick recall: state machine, timing, idempotency",qs:[
+{q:`Why must every recon state have an SLA-driven timeout that forces a transition?`,a:`"Pending forever" is indistinguishable from "genuinely lost money that nobody will ever chase." Without a timeout, silence becomes a valid resting state — which is the one outcome financial reconciliation must never allow.`},
+{q:`The correct technique for "not found yet" vs. "actually missing"?`,a:`Window it. Each PENDING record has an expected_arrival derived from the source's settlement SLA. The matching job only asks "is this missing?" after that window (plus grace buffer) closes. Before that, asking is premature.`},
+{q:`Why must idempotency be enforced at ingestion, not at matching time?`,a:`If three retries create three ledger rows, the matching job sees three candidates for one bank credit — a phantom break or phantom double-match. Dedup at ingestion (unique constraint on source_system + source_event_id) prevents duplicates from ever reaching the pipeline.`}]},
+
+/* EXCEPTION + SCALE + CONSISTENCY */
+{sec:"s04",c:"rose",eyebrow:"Stage 9 · Exception Queue",t:"q",q:`<b>A:</b> "You now have UNRESOLVED and BREAK states. Then what — email finance a spreadsheet every morning?" What does a real exception queue require beyond just listing unresolved records?`},
+
+{sec:"s04",c:"rose",eyebrow:"Stage 9 · Exception Queue",t:"a",h:"Typed, owned, queryable — not a list",body:`
+<div class="ascii">A spreadsheet = "eyeball at month end" failure mode,
+just automated. Instead: a queryable exception queue where
+every BREAK and UNRESOLVED record is:
+  CLASSIFIED by break type
+  EXPLICITLY ASSIGNED to an owner
+  not just listed
+
+BREAK TYPE            ->  OWNER / NEXT ACTION
+  amount_mismatch       -> contact counterparty aggregator
+  missing_counterpart   -> chase custodian / settlement team
+  status_mismatch       -> reverify with source system
+  duplicate_detected    -> engineering, check ingestion dedup
+
+Untyped, undifferentiated queue in 6 months?
+  -> becomes exactly the spreadsheet nobody reads,
+     just inside a DB table instead of Excel</div>`},
+
+{sec:"s04",c:"rose",eyebrow:"Stage 10 · Scale",t:"q",q:`<b>A:</b> "Millions of records a day. One nightly matching job scans everything. What breaks first — and most people jump to 'add more workers,' but what is the actual unit of independence you're parallelizing across?"`,
+
+},
+
+{sec:"s04",c:"rose",eyebrow:"Stage 10 · Scale",t:"a",h:"Partition by business semantics, not calendar days",body:`
+<div class="ascii">Problem: one matching job serializes work that was never serial.
+  Job runtime grows with volume until it can't finish before
+  next day's data lands.
+
+Unit of independence: the correlation key.
+  One key's match decision NEVER depends on another key's data.
+  -> Partition by source-system + date-window
+  -> match each partition independently, in parallel
+  -> no shared lock between partitions
+
+BEFORE:                  AFTER:
+  1 job, all serial         N partitions (source, date-window)
+                            each matched independently in parallel
+
+LAMF loan initiated Day 1, settles Day 3 -- which partition?
+  Partition by INITIATION date, not settlement date.
+  Allow matching job to look back across trailing partitions.
+  Hard calendar-day boundary doesn't match async settlement reality.</div>`},
+
+{sec:"s04",c:"rose",eyebrow:"Stage 11 · Consistency vs. Availability",t:"q",q:`<b>A:</b> "Ingestion writes to the recon store, matching job reads it, exception queue reads it — all at once. The store goes briefly unavailable mid-matching-run. What do you do?"`,
+
+},
+
+{sec:"s04",c:"rose",eyebrow:"Stage 11 · Consistency vs. Availability",t:"a",h:"Prefer consistency — pause and retry",body:`
+<div class="ascii">STORE MID-WRITE:
+  order O991: half-written row
+  -> if matched now: matcher reads inconsistent state
+                     -> flags a false BREAK
+                     -> EXACTLY the outcome stage 4 forbids
+
+Pause the matching job and retry.
+Do NOT match against a partially-written view of the ledger.
+
+Doesn't this hurt T+1 SLA?
+  Not meaningfully. Matching is an async, windowed process.
+  A few minutes of store unavailability doesn't compound.
+  This system, unlike the payment rails it's checking, is
+  ALLOWED to be temporarily unavailable.
+  It is NEVER allowed to be confidently wrong.</div>`},
+
+{sec:"s04",c:"rose",eyebrow:"Exception, Scale &amp; Consistency · Recall",t:"r",h:"Quick recall: exception queue, scale, consistency",qs:[
+{q:`Why is an untyped, unassigned exception queue just a spreadsheet with a nicer UI?`,a:`Without typed break reasons and explicit owner assignment, nobody knows whose problem it is. After 6 months it becomes invisible debt — a list nobody reads. Classification by break type + assigned owner turns it into actionable work.`},
+{q:`The unit of independence for parallelizing recon matching?`,a:`The correlation key — one key's match decision never depends on another. Partition by (source_system + date-window), match each partition independently in parallel, with no shared lock.`},
+{q:`Recon store goes unavailable mid-matching-run — consistency or availability? Why?`,a:`Consistency — pause and retry. Matching against a partially-written store produces false BREAKs, which are exactly the false-positive failures the entire system was designed to prevent. This system can tolerate being briefly unavailable; it cannot tolerate being confidently wrong.`}]},
+
+/* AUDIT + SPLIT + REDESIGN */
+{sec:"s05",c:"amber",eyebrow:"Stage 12 · Immutable Audit",t:"q",q:`<b>A:</b> "A record is MATCHED. Someone finds a data entry error in it later. Do you fix the row?"`,
+
+},
+
+{sec:"s05",c:"amber",eyebrow:"Stage 12 · Immutable Audit",t:"a",h:"Never mutate — append a correction event",body:`
+<div class="ascii">WRONG (mutate in place):
+  UPDATE recon SET amount=12500 WHERE id=R441;
+  -> history of the error is GONE
+
+RIGHT (append correction):
+  recon: [MATCHED amount=12000]
+         [CORRECTION amount=12500]
+  -> both facts survive, in order
+
+Why does extra complexity earn its place?
+  A matched-then-silently-edited record destroys exactly what
+  audit and compliance rely on: "what did the system believe was
+  true on a given date?" That must be reconstructable precisely.
+
+This is the same history-vs-state principle that shaped the
+transaction model in stage 2, now applied to the recon system's
+own output. The reconciliation record must be at least as
+immutable as the transactions it's judging.</div>`},
+
+{sec:"s05",c:"amber",eyebrow:"Stage 13 · Split Matches",t:"q",q:`<b>A:</b> "A customer redeems MF units and the bank credits in two separate tranches. One ledger order, two bank credits. Your one-to-one matching broke. And what stops this from becoming 'match any combination whose amounts sum to the target' — a fraud risk?"`,
+
+},
+
+{sec:"s05",c:"amber",eyebrow:"Stage 13 · Split Matches",t:"a",h:"Candidate set must be constrained before amounts are considered",body:`
+<div class="ascii">LEDGER:  order O991, amount=₹20,000
+BANK:    credit C1, amount=₹12,000, ref="RECON:O991"
+         credit C2, amount=₹8,000,  ref="RECON:O991"
+MATCH:   C1 + C2 == O991, same correlation key -> valid
+
+The fraud guardrail:
+  Candidate set constrained by:
+    SAME correlation key  (or explicit parent-child order reference)
+  Amount-sum-matching across UNRELATED transactions = NEVER allowed
+  No matter how neatly the total lines up.
+
+Reverse case: one bank batch covering 100 small ledger orders
+  Batch reference on bank side must map to a known, declared batch
+  of ledger order IDs. Never inferred from amounts alone.</div>`},
+
+{sec:"s05",c:"amber",eyebrow:"Stage 14 · Reconciliation 2.0",t:"q",q:`<b>A:</b> "Last question. If you were starting today, with everything you now know, what's the ONE decision from this entire conversation you'd revisit — and what would you give up by changing it?" <em>No reference answer. Your own reasoning is the test.</em>`},
+
+{sec:"s05",c:"amber",eyebrow:"Stage 14 · Reconciliation 2.0",t:"a",h:"What this conversation never did",body:`
+<p>This conversation never said "a recon system has matching rules, an exception queue, and an audit trail" as a starting fact. Every mechanism showed up because a previous decision became insufficient:</p>
+<div class="ascii">Problem -> Constraint -> Tradeoff -> Design Decision -> New Problem
+
+Stage 0: three independent stories -> need reconciliation
+Stage 1: speed vs. correctness -> correctness constraint
+Stage 2: different formats -> normalize first
+Stage 3: no common key -> correlation key at initiation
+Stage 4: fuzzy risk -> precision over recall
+Stage 5: 2-way blind -> n-way per correlation key
+Stage 6: binary inadequate -> explicit state machine
+Stage 7: timing ambiguity -> SLA-driven arrival windows
+Stage 8: retries -> idempotency at ingestion
+Stage 9: undifferentiated breaks -> typed, owned exception queue
+Stage 10: serial bottleneck -> partition by business semantics
+Stage 11: partial writes -> consistency over availability
+Stage 12: mutability -> append corrections, never overwrite
+Stage 13: 1:1 assumption -> n:m with constrained candidate sets</div>
+<div class="note">Stages not covered — extend into them yourself: real-time streaming recon vs. batch (where is the line?), ML-assisted fuzzy-matching thresholds (how to keep them auditable?), cross-currency FX recon with rate-timing risk, regulatory reporting integration (RBI/SEBI) off the same recon store, self-healing auto-resolution for well-understood recurring break patterns.</div>`,
+cto:[`The most consequential reconciliation decisions look like technical choices but are governance choices in disguise — what to normalize, when a match is allowed to auto-close, what constitutes an immutable record. Make them visible before the regulator does it for you.`]},
+
+{sec:"s05",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: reconciliation system design compressed",qs:[
+{q:`The entire conversation compressed into one chain.`,a:`Correctness over speed → normalized canonical schema → correlation key designed at initiation, not matching time → false matches forbidden, missed matches tolerated → n-way status per key, not pairwise → explicit states with SLA-driven timeouts → arrival-time windows, not naive joins → idempotency at ingestion → typed, owned exception queue → partition by business semantics → consistency over availability → append corrections, never mutate → every "feature" was a forced move, not a choice made in a vacuum.`},
+{q:`Why must split matching constrain the candidate set before comparing amounts?`,a:`Allowing "any combination whose amounts sum to the target" is a fraud risk — unrelated transactions could be grouped to satisfy an amount match. Only transactions sharing the same correlation key (or an explicit parent-child reference) are eligible to be aggregated.`},
+{q:`Why must matched recon records be immutable, with corrections appended rather than fields updated?`,a:`A mutated record destroys the ability to reconstruct "what did the system believe on a given date" — exactly what audit and compliance require. Append-only corrections preserve both the original match and the correction in the same event log.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · The Phoenix DR Architecture</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>The Phoenix Architecture · Intelligent Disaster Recovery</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"l01",label:"L0+L1 CHAOS+ACTIVE-ACTIVE",c:"teal"},
+ {id:"l23",label:"L2+L3 REPLICATION+SELF-HEAL",c:"gold"},
+ {id:"l4",label:"L4 GRADUAL RECOVERY",c:"violet"},
+ {id:"l56",label:"L5+L6 VAULT+VERIFICATION",c:"rose"},
+ {id:"final",label:"DECISIONS+RECALL",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"The Phoenix Architecture",t:"a",h:"Intelligent Disaster Recovery — <em>Design for failure, recover with intelligence.</em>",body:`
+<p>Not just a backup strategy — a self-healing, predictive resilience ecosystem that assumes failure is inevitable and designs for graceful, intelligent recovery. Six layers, each solving a failure mode the previous layer couldn't handle alone.</p>
+<div class="ascii">L0: Chaos Engineering & Predictive Analytics
+    -> find failure before it finds you
+L1: Real-Time Data Protection Fabric
+    -> active-active with a tie-breaker
+L2: Intelligent Data Replication Bus
+    -> event-driven, conflict-resolved
+L3: Self-Healing Infrastructure Mesh
+    -> state machine that fixes itself
+L4: Gradual Recovery Patterns
+    -> match strategy to failure, land it slowly
+L5: Immutable Air-Gapped Vault
+    -> three tiers, one an attacker can't reach
+L6: Continuous Verification & DR Drills
+    -> a backup doesn't exist until you've restored it</div>`},
+
+/* L0 + L1 */
+{sec:"l01",c:"teal",eyebrow:"L0 · Chaos Engineering &amp; Predictive Analytics",t:"q",q:`The system runs two background engines continuously: one predicts where failure is heading, the other manufactures failure on purpose. Why are <b>both</b> needed — and what does it mean that their output feeds the same downstream system?`},
+
+{sec:"l01",c:"teal",eyebrow:"L0 · Chaos Engineering &amp; Predictive Analytics",t:"a",h:"Find failure before it finds you",body:`
+<div class="ascii">Two engines, continuous background:
+Predictive Failure Engine:
+  ML model: failure prediction
+  Historical pattern analysis
+  Anomaly detection
+  (correlates memory pressure, disk latency, packet loss, error-rate
+   trajectories -> flags failure before it happens)
+
+Chaos Monkey Orchestrator:
+  Scheduled instance kill
+  Network partition simulation
+  Disk corruption & DNS drills
+
+Both route findings into Layer 3 Self-Healing State Machine.
+A predicted disk-latency trend AND a chaos-drill failure are
+treated as the same category of signal -- inputs that can push
+the system from Healthy -> Degraded and trigger remediation.</div>
+<div class="note">Why both? Predictive analytics catches slow-moving degradation (memory leak, disk wear). Chaos engineering reveals failure modes the analytics didn't know to predict. The combination desensitizes teams to noise and sharpens response to real issues — anti-fragility through deliberate exposure. The highest-value output: teams that have practiced failure are never experiencing their first real test during an incident.</div>`},
+
+{sec:"l01",c:"teal",eyebrow:"L1 · Active-Active Multi-Region with Witness",t:"q",q:`Two regions running live traffic in parallel. A network partition occurs. Both regions now believe they might be the survivor. How does the witness region solve split-brain — and why does the witness hold no application traffic?`},
+
+{sec:"l01",c:"teal",eyebrow:"L1 · Active-Active Multi-Region with Witness",t:"a",h:"Three regions: two active, one neutral tie-breaker",body:`
+<div class="ascii">REGION A — PRIMARY          REGION B — SECONDARY
+APP TIER                     APP TIER
+CACHE (Redis)                CACHE (Redis)
+DB — PRIMARY                 DB — STANDBY
+write path, live traffic      sync-replicated, ready for cutover
+                 <--- SYNC --->
+
+REGION C — WITNESS
+WITNESS NODE + QUORUM LOGIC
+no app traffic
+split-brain guard
+
+Global Traffic Manager (GTM):
+  health probes + latency routing + geo-proximity
+
+With only TWO regions + partition:
+  Each side can't tell if the other is down or just unreachable.
+  Both may declare themselves primary (split-brain).
+
+WITNESS solution:
+  The witness has no app traffic to lose by being wrong.
+  Its only job: hold quorum logic.
+  With 3 nodes (A, B, C), a partition needs 2 of 3 to proceed.
+  One side always has the witness -> one authoritative survivor.</div>
+<div class="note">The witness region is lightweight — no application traffic, no user data. Its sole function is breaking ties. This is a direct application of the Raft/Paxos principle: you need 2f+1 nodes to tolerate f failures. With f=1, you need 3. Two regions + one witness = 3, with witness cost dramatically lower than a third full region.</div>`},
+
+{sec:"l01",c:"teal",eyebrow:"L0 &amp; L1 · Recall",t:"r",h:"Quick recall: chaos, predictive, active-active",qs:[
+{q:`Why must both a predictive failure engine and a chaos orchestrator exist — can't one cover for the other?`,a:`Predictive analytics catches known slow-moving degradation. Chaos engineering reveals unknown failure modes (ones the model doesn't know to predict) and builds muscle memory in the team. Together they cover both known and unknown failure paths.`},
+{q:`Why does the witness region hold no application traffic — and what quorum math does it enable?`,a:`No app traffic = nothing lost if it makes a wrong call in a partition. Its sole job is quorum logic. With A + B + C, any 2 of 3 can proceed — a partition always leaves one side with 2 nodes (A+C or B+C), so one side can always continue authoritatively.`}]},
+
+/* L2 + L3 */
+{sec:"l23",c:"gold",eyebrow:"L2 · Intelligent Data Replication Bus",t:"q",q:`Changes are captured off the write-ahead log, streamed through a deduplicated event bus, and resolved for conflicts before landing on any target. What are the three conflict resolution strategies — and when should you choose each?`},
+
+{sec:"l23",c:"gold",eyebrow:"L2 · Intelligent Data Replication Bus",t:"a",h:"CDC → replication pipeline → conflict resolution",body:`
+<div class="ascii">Transaction Log (WAL shipping)
+  -> Replication Pipeline (Kafka/EventHub, ordering guaranteed, dedup)
+  -> Conflict Resolution
+  -> Region B Primary / Region C Replica / Analytics Store
+
+Conflict Resolution Strategies:
+  CRDT (Conflict-free Replicated Data Types):
+    + automatic merge, no human needed
+    - only works for specific data types (counters, sets, last-write-wins registers)
+    - complex to implement for arbitrary business data
+
+  LWW / Last-Write-Wins (timestamp or vector clock):
+    + simple, widely used
+    - clock skew makes timestamp ordering unreliable
+    - vector clocks correct but complex at scale
+
+  Application-specific rules:
+    + most correct for business semantics
+    - requires domain knowledge baked into replication logic
+    - highest implementation cost
+
+For financial data: application-specific rules mandatory.
+For cache/session: LWW acceptable.</div>`},
+
+{sec:"l23",c:"gold",eyebrow:"L3 · Self-Healing Infrastructure Mesh",t:"q",q:`Health flows through three states: Healthy → Degraded → Critical. What is the specific automated remediation at each escalation — and why must a verification stage exist before the system is allowed to call itself healthy again?`},
+
+{sec:"l23",c:"gold",eyebrow:"L3 · Self-Healing Infrastructure Mesh",t:"a",h:"A state machine that fixes itself",body:`
+<div class="ascii">HEALTHY
+  |
+  v (partial outage / latency spike)
+DEGRADED (Amber)
+  -> Auto-Scale Trigger: pod/VM +, AZ switch
+  |
+  v (complete outage / data-loss risk)
+CRITICAL (Red)
+  -> Failover Orchestrator: DNS flip, traffic shift
+  -> Circuit Breaker: isolate, throttle, shed load
+  |
+  v
+VERIFICATION (closed loop)
+  -> synthetic transactions
+  -> consistency checks
+  -> performance tests
+  |
+  v (pass)
+HEALTHY again
+
+Why verification is mandatory:
+  A failover that "completed" but left the system in an inconsistent
+  state is more dangerous than staying in Degraded.
+  Declaring healthy before verifying = false safety signal.
+  Findings from L0 (chaos + predictive) also feed into this loop.</div>`},
+
+{sec:"l23",c:"gold",eyebrow:"L2 &amp; L3 · Recall",t:"r",h:"Quick recall: replication bus and self-healing",qs:[
+{q:`Name the three conflict resolution strategies for the replication bus and when each applies.`,a:`CRDT: automatic merge, works for specific data types (counters, sets). LWW: simple but unreliable with clock skew. Application-specific rules: most correct for business semantics, highest cost. For financial data: application-specific mandatory. For cache/session: LWW acceptable.`},
+{q:`Why must a verification stage exist before the state machine can return to Healthy?`,a:`A failover that "completed" but left the system inconsistent is more dangerous than staying degraded — it creates a false safety signal. Synthetic transactions + consistency checks close the loop and confirm actual health, not just "the script ran."`}]},
+
+/* L4 */
+{sec:"l4",c:"violet",eyebrow:"L4 · Gradual Recovery Patterns",t:"q",q:`Why does traffic get restored in five phases (1% → 10% → 25% → 50% → 100%) instead of a single 0→100% cutover — and what are the two specific triggers for automatic rollback?`},
+
+{sec:"l4",c:"violet",eyebrow:"L4 · Gradual Recovery Patterns",t:"a",h:"Canary ramp prevents thundering herd",body:`
+<div class="ascii">Recovery strategy selector:
+  AZ outage:        Auto-failover    RTO < 1 min    RPO 0 sec
+  Region outage:    GTM redirect     RTO < 5 min    RPO < 1 sec
+  Data corruption:  PITR restore     RTO < 1 hr     RPO < 1 min
+  Ransomware:       Immutable restore RTO < 4 hr    RPO 0 data
+  Cascading:        Bulkhead isolation RTO < 30 min  RPO varies
+
+Seven-stage recovery pipeline:
+  DETECT(30s) -> DIAGNOSE(60s) -> DECIDE(10s) -> DECLARE(5s)
+  -> DRAIN(var) -> DEPLOY(var) -> VERIFY(120s)
+
+Phased traffic restoration:
+  1%       10%      25%      50%      100%
+  canary   5min     5min    10min    continuous
+  5min
+
+Why not 0→100%:
+  Instant cutover risks thundering herd (cache cold, connection
+  storms, downstream overwhelm).
+  A broken failover serving 100% traffic = catastrophe.
+  1% first: catches a broken failover at 1% blast radius.
+
+Automatic rollback triggers:
+  error rate > 1%  (too many failures)
+  P99 > 500ms      (latency regression)</div>`},
+
+{sec:"l4",c:"violet",eyebrow:"L4 · Recall",t:"r",h:"Quick recall: gradual recovery",qs:[
+{q:`Five-phase traffic ramp: 1%→10%→25%→50%→100%. What two metrics trigger automatic rollback at each phase?`,a:`Error rate > 1% OR P99 latency > 500ms. Either threshold triggers automatic rollback to the previous phase — the blast radius is contained to the current phase's traffic percentage.`},
+{q:`Name the seven stages of the recovery pipeline in order.`,a:`DETECT (30s) → DIAGNOSE (60s) → DECIDE (10s) → DECLARE (5s) → DRAIN (variable) → DEPLOY (variable) → VERIFY (120s). Worst case for AZ outage: comfortably under most RTO targets.`}]},
+
+/* L5 + L6 */
+{sec:"l56",c:"rose",eyebrow:"L5 · Immutable Air-Gapped Vault",t:"q",q:`Hot, warm, and cold tiers. What specific properties make the cold tier the one an attacker — even with full admin access — cannot reach?`},
+
+{sec:"l56",c:"rose",eyebrow:"L5 · Immutable Air-Gapped Vault",t:"a",h:"Three tiers, one unreachable",body:`
+<div class="ascii">ONLINE — HOT + WARM:
+  Hot Tier < 1hr RPO:
+    continuous backup, incremental-forever, 30-day rolling window
+  Warm Tier < 4hr RPO:
+    daily snapshots, 90-day retention, compressed & encrypted
+
+AIR-GAPPED — COLD TIER (COMPLIANCE VAULT):
+  Immutable Snapshots:
+    Legal hold enabled, WORM storage (Write Once, Read Many)
+    Require MFA delete, 7-year retention
+  Operational Air-Gap:
+    SEPARATE account (different cloud account/subscription)
+    DIFFERENT credentials (admin compromise can't reach it)
+    TIME-DELAYED deletes (24-hour window to detect and cancel)
+    Ideally: different cloud provider entirely
+
+Region-A Vault <-> Region-B Vault (independently governed)
+
+Warm tier reachable: compromised admin account can reach it.
+Cold tier design: even FULL admin access cannot immediately
+  delete backups (24-hour delay + dual-officer MFA required).</div>
+<div class="note"><b>The immutable recovery point:</b> an attacker can't delete what requires time-delayed deletion, a separate credential set, and dual-officer MFA. This is specifically designed for ransomware: the attacker encrypts production and all reachable backups, but can't touch the air-gapped cold tier. Recovery from cold tier is the last resort — the backup of last resort.</div>`},
+
+{sec:"l56",c:"rose",eyebrow:"L6 · Continuous Verification &amp; DR Drills",t:"q",q:`"A backup doesn't exist until you've restored it." What does this mean operationally — and sketch the five-cadence drill schedule?`},
+
+{sec:"l56",c:"rose",eyebrow:"L6 · Continuous Verification &amp; DR Drills",t:"a",h:"Prove it, don't assume it",body:`
+<div class="ascii">Continuous Verification Pipeline (runs daily):
+  Backup Snapshot
+    -> Restore to Staging
+    -> Mount & Verify
+    -> Synthetic Transaction Test (read/write, query, perf)
+  Alert if: checksum mismatch, restore > RTO, data inconsistency
+
+Why this matters:
+  A completed backup job proves the WRITE succeeded.
+  It says nothing about whether the data is RESTORABLE,
+  uncorrupted, or USABLE by the application.
+
+Drill cadence:
+  Daily:       restore random backup -> verify checksums (automated)
+  Weekly:      AZ failover simulation -> validate RTO < 2 min
+  Monthly:     region failover drill -> full DR site activation
+  Quarterly:   ransomware recovery -> air-gap restore verification
+  Annually:    full DR simulation with external auditors
+
+Observability matrix:
+  Replication lag > 5s: WARNING -> switch to sync mode
+  RPO compliance > 99%: CRITICAL -> trigger PITR freeze
+  Data corruption detected: ANY -> freeze writes, alert SecOps
+  Split-brain risk confirmed: -> activate witness, fence</div>`,
+cto:[`"A backup doesn't exist until you've restored it." A completed backup job proves the write succeeded — it says nothing about whether the data is restorable or usable. Daily automated restores to staging close this gap.`]},
+
+{sec:"l56",c:"rose",eyebrow:"L5 &amp; L6 · Recall",t:"r",h:"Quick recall: vault and verification",qs:[
+{q:`What three properties make the cold tier unreachable even with full admin access?`,a:`Separate account/credentials (admin compromise on main account doesn't reach it), WORM storage + legal hold (can't overwrite), and time-delayed deletes + dual-officer MFA (can't delete immediately even with the right credentials).`},
+{q:`"A backup doesn't exist until you've restored it" — what does this mean operationally?`,a:`A backup job proving successful write says nothing about restorability. The daily automated restore pipeline (restore random snapshot → mount → synthetic transactions → checksum check) is the only way to know the backup actually works before you need it.`}]},
+
+/* DECISIONS + RECALL */
+{sec:"final",c:"amber",eyebrow:"Design Decisions",t:"a",h:"Six key design decisions and the reasoning behind each",body:`
+<ul class="pts">
+<li><strong>Witness region pattern:</strong> prevents split-brain without the cost of a third full active region. Neutral quorum logic only.</li>
+<li><strong>Predictive failure engine:</strong> ML correlates memory pressure, disk latency, packet loss, error-rate trajectories to flag failure before it happens — not after it surfaces.</li>
+<li><strong>Immutable recovery points:</strong> separate credentials, 24-hour delete delay, dual-officer MFA. Even full admin compromise cannot immediately destroy the cold-tier backup.</li>
+<li><strong>Gradual recovery canary:</strong> traffic shifts in increments, each validated with synthetic transactions, with automatic rollback on error or latency threshold breach.</li>
+<li><strong>The verification paradox:</strong> daily automated restores to staging with full transaction simulation — the only honest proof that recovery is possible.</li>
+<li><strong>Anti-fragility through chaos:</strong> continuous production fault injection desensitizes teams to noise and sharpens response to real issues. Teams that haven't practiced failure are running their first real test during an incident.</li>
+</ul>`,
+cto:[`Bottom line: not just a backup strategy — a self-healing, predictive resilience ecosystem that assumes failure is inevitable and designs for graceful, intelligent recovery. Active-active with witness prevents split-brain. Predictive analytics catches degradation before it becomes an incident. Immutable cold-tier backups survive ransomware. Gradual recovery prevents thundering herd. Continuous verification proves the system actually works.`]},
+
+{sec:"final",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: Phoenix DR Architecture compressed",qs:[
+{q:`Name the six layers and the one failure mode each solves.`,a:`L0: unknown failure modes (chaos + predictive). L1: split-brain during region partition (witness). L2: replication conflicts (CDC + conflict resolution). L3: slow human response (automated state machine). L4: thundering herd on recovery (canary ramp). L5: ransomware and admin compromise (air-gapped immutable vault). L6: unverified backups (daily restore drills).`},
+{q:`What is the rollout sequence — and why weeks 1-2 (immutable backups) before weeks 5-6 (active-active)?`,a:`Weeks 1-2: immutable backups + cross-region replication — the last-resort safety net that must exist before you start building more complex live systems. Weeks 3-4: verify the backups actually work. Weeks 5-6: active-active (which relies on verified replication). Build the floor first, then the structure on top.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>

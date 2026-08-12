@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architects Lab · Log-Structured Storage</title>
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#151823; --panel2:#1b1f2e;
+    --ink:#e8e6df; --dim:#8b8fa3;
+    --gold:#d4af5a; --gold-soft:#b8964a;
+    --teal:#5ad4c8; --rose:#d47a8a; --violet:#9a8ad4; --amber:#d4915a;
+    --line:#2a2f42;
+    --mono:'Courier New', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;min-height:100vh}
+  header{padding:16px 26px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  header .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase}
+  header h1{font-size:1rem;font-weight:normal}
+  header .count{margin-left:auto;font-family:var(--mono);font-size:.72rem;color:var(--dim)}
+  .tabs{display:flex;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{flex:1;min-width:110px;padding:9px 10px;text-align:center;font-family:var(--mono);font-size:.64rem;letter-spacing:.06em;color:var(--dim);border-right:1px solid var(--line);cursor:pointer;white-space:nowrap;transition:.2s;background:transparent;border-top:none;border-bottom:none;border-left:none}
+  .tab:last-child{border-right:none}
+  .tab.active{color:var(--bg);font-weight:bold}
+  .tab[data-c="gold"].active{background:var(--gold)}
+  .tab[data-c="teal"].active{background:var(--teal)}
+  .tab[data-c="rose"].active{background:var(--rose)}
+  .tab[data-c="violet"].active{background:var(--violet)}
+  .tab[data-c="amber"].active{background:var(--amber)}
+  .tab[data-c="ink"].active{background:var(--ink)}
+  main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px 96px;overflow-y:auto}
+  .slide{max-width:780px;width:100%;animation:fadeUp .4s ease both}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px}
+  .eyebrow.gold{color:var(--gold)} .eyebrow.teal{color:var(--teal)} .eyebrow.rose{color:var(--rose)}
+  .eyebrow.violet{color:var(--violet)} .eyebrow.amber{color:var(--amber)} .eyebrow.ink{color:var(--dim)}
+  .slide h2{font-size:1.55rem;font-weight:normal;line-height:1.3;margin-bottom:14px}
+  .slide h2 em{font-style:italic;color:var(--gold)}
+  .slide p{color:#c9c7bf;line-height:1.75;font-size:1rem;margin-bottom:13px}
+  .slide p strong, .slide li strong{color:var(--ink)}
+  .slide code{font-family:var(--mono);font-size:.85em;background:var(--panel2);padding:2px 6px;border-radius:3px;color:var(--gold)}
+  .ascii{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:6px;padding:14px 16px;margin:14px 0;font-family:var(--mono);font-size:.74rem;line-height:1.5;color:#b9c2d8;overflow-x:auto;white-space:pre}
+  .ascii .hl{color:var(--gold)} .ascii .tl{color:var(--teal)} .ascii .rs{color:var(--rose)}
+  .note{border:1px dashed var(--gold-soft);border-radius:6px;padding:11px 15px;margin:14px 0;font-size:.9rem;color:#cfc9ae;line-height:1.65}
+  .note b{color:var(--gold)}
+  ul.pts{margin:10px 0 13px 2px;list-style:none}
+  ul.pts li{padding:6px 0 6px 21px;position:relative;color:#c9c7bf;line-height:1.6;font-size:.95rem}
+  ul.pts li::before{content:"\203A";position:absolute;left:4px;color:var(--gold);font-family:var(--mono)}
+  /* ---- Think First (question) slides ---- */
+  .qcard{border:2px solid var(--gold);border-radius:10px;background:linear-gradient(160deg,#1a1608,#151823);padding:30px 28px;margin:6px 0 18px;position:relative}
+  .qcard::before{content:"?";position:absolute;top:-20px;left:22px;width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--bg);font-family:var(--mono);font-weight:bold;font-size:1.3rem;display:flex;align-items:center;justify-content:center}
+  .qcard .qlabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.25em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+  .qcard .qtext{font-size:1.25rem;line-height:1.55;color:var(--ink);font-style:italic}
+  .qcard .qsub{margin-top:14px;font-size:.86rem;color:var(--dim);font-style:normal;font-family:var(--mono)}
+  /* ---- lenses (CTO / Director) ---- */
+  details.lens{margin:10px 0;border:1px solid var(--line);border-radius:6px;background:var(--panel)}
+  details.lens summary{cursor:pointer;padding:10px 14px;font-family:var(--mono);font-size:.74rem;letter-spacing:.1em;color:var(--teal);list-style:none}
+  details.lens summary::before{content:"+ ";color:var(--gold)}
+  details.lens[open] summary::before{content:"\2212 "}
+  details.lens.dir summary{color:var(--rose)}
+  details.lens .body{padding:2px 16px 13px}
+  details.lens .body li{font-size:.9rem}
+  /* ---- recall quiz slides ---- */
+  .recall-item{border:1px solid var(--line);border-left:3px solid var(--teal);border-radius:6px;background:var(--panel);margin:12px 0;overflow:hidden}
+  .recall-item summary{cursor:pointer;padding:13px 16px;font-size:.98rem;color:var(--ink);list-style:none;line-height:1.55}
+  .recall-item summary::before{content:"Q  ";font-family:var(--mono);color:var(--teal);font-weight:bold}
+  .recall-item .ans{padding:0 16px 13px;color:#b9c2b0;font-size:.92rem;line-height:1.65;border-top:1px dashed var(--line);padding-top:11px;margin:0 16px 13px;padding-left:0;padding-right:0}
+  .recall-item .ans b{color:var(--teal)}
+  .recall-hint{font-family:var(--mono);font-size:.7rem;color:var(--dim);margin-top:6px}
+  footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,15,20,.93);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:11px 20px;display:flex;align-items:center;gap:14px}
+  .dots{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--line);cursor:pointer;transition:.2s}
+  .dot.on{background:var(--gold);transform:scale(1.45)}
+  .dot.q{border:1px solid var(--gold);background:transparent}
+  .dot.q.on{background:var(--gold)}
+  button.nav{font-family:var(--mono);font-size:.78rem;letter-spacing:.1em;background:transparent;color:var(--ink);border:1px solid var(--line);padding:9px 18px;border-radius:5px;cursor:pointer;transition:.2s}
+  button.nav:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+  button.nav.primary{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:bold}
+  button.nav.primary:hover{background:#e2c070}
+  button.nav:disabled{opacity:.25;cursor:default}
+  button.nav:focus-visible,.tab:focus-visible,.dot:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .hint{position:fixed;bottom:62px;right:18px;font-family:var(--mono);font-size:.6rem;color:var(--dim);letter-spacing:.1em}
+  @media(max-width:600px){.slide h2{font-size:1.28rem}.ascii{font-size:.58rem;padding:11px}.hint{display:none}.qcard .qtext{font-size:1.08rem}}
+</style>
+</head>
+<body>
+<header>
+  <span class="k">Architects Lab</span>
+  <h1>Log-Structured Storage · Append, Compact, Crash, Repeat</h1>
+  <span class="count" id="counter"></span>
+</header>
+<div class="tabs" id="tabs"></div>
+<main><div id="stage"></div></main>
+<div class="hint">&larr; &rarr; keys work too</div>
+<footer>
+  <button class="nav" id="prevBtn">&larr; Prev</button>
+  <div class="dots" id="dots"></div>
+  <button class="nav primary" id="nextBtn">Next &rarr;</button>
+</footer>
+<script>
+const SECTIONS=[
+ {id:"intro",label:"START",c:"ink"},
+ {id:"core",label:"CORE IDEA+VERSIONS",c:"teal"},
+ {id:"delete",label:"DELETES+CRASH",c:"gold"},
+ {id:"compact",label:"COMPACTION+AMPLIFICATION",c:"violet"},
+ {id:"rw",label:"WRITE+READ PATH",c:"rose"},
+ {id:"struct",label:"SEGMENTS+RESTART",c:"amber"}
+];
+const S=[
+
+{sec:"intro",c:"ink",eyebrow:"Log-Structured Storage",t:"a",h:"Append looks simple. <em>Compaction, crash recovery, and three kinds of amplification</em> are not.",body:`
+<p>In a log-structured storage system, instead of updating data in place, you append new versions at the end. The old version stays. This makes writes fast and crash recovery elegant — and creates a layered set of hard problems: how do you find the latest version? How do you reclaim space? How do you delete something from an append-only log?</p>
+<div class="ascii">Traditional update: go to old place and overwrite
+Log-structured update: append new version at end, clean old later</div>
+<div class="note"><b>How to use:</b> "?" slides ask you to predict first. Press Next to compare. Recall quizzes close each section.</div>`},
+
+/* CORE + VERSIONS */
+{sec:"core",c:"teal",eyebrow:"01 · Finding the Latest Version",t:"q",q:`If old versions remain in the log forever, how does a read know which entry for key A is the <b>latest</b> — and why is scanning the full log to find out completely unacceptable?`},
+
+{sec:"core",c:"teal",eyebrow:"01 · Finding the Latest Version",t:"a",h:"Log + index, not just log",body:`
+<div class="ascii">Log:
+offset 10 -> key=A value=1
+offset 30 -> key=A value=2
+offset 50 -> key=A value=3  <-- latest
+
+Full scan to find latest:
+Read A -> scan log -> find A at 10, 30, 50 -> choose latest
+WORKS conceptually. TERRIBLE for performance.
+
+Solution: in-memory index
+A -> offset 50
+B -> offset 20
+C -> offset 40
+
+Read path: key A -> mem index says offset 50 -> read one record</div>
+<div class="note">The real system is <b>log + index</b>, not just log. This is the foundational insight. Every design decision downstream flows from maintaining that index correctly. If the index is in-memory: what happens on machine restart? If a key is updated 1M times: do you keep all historical entries? The index answers "where is the latest?" The log is the durable truth. Neither works alone.</div>`,
+cto:[`Log-structured storage makes writes fast by making reads and compaction do more work. Every design decision in an LSM engine flows from this single trade-off.`]},
+
+{sec:"core",c:"teal",eyebrow:"01 · Finding the Latest Version",t:"q",q:`The in-memory index is lost on machine restart. What are the two design strategies to rebuild it — and what does each cost?`},
+
+{sec:"core",c:"teal",eyebrow:"01 · Finding the Latest Version",t:"a",h:"Rebuild vs checkpoint",body:`
+<div class="ascii">Strategy A: rebuild from log on every restart
+  scan all segment files
+  reconstruct index from scratch
+  Simple. Potentially very slow at large scale.
+  Restart time ~ total log size.
+
+Strategy B: checkpoint / manifest approach
+  periodically save index snapshot to disk
+  on restart, load snapshot + replay only the delta
+  Faster restart. More metadata complexity.
+  Manifest itself must be durable and consistent.</div>
+<div class="note">Should restart time be proportional to total data size? Bad at large scale. But if manifest says one thing and a segment says another after a crash — who wins? The segment (ground truth) or the manifest (last known state)? This is a non-trivial recovery question. The safe answer: trust the log, verify with checksum, rebuild what's inconsistent.</div>`},
+
+{sec:"core",c:"teal",eyebrow:"02 · Compaction — Cleaning Stale Data",t:"q",q:`If appending creates garbage (old versions of the same key), what is the actual definition of compaction — and what tradeoff does it make unavoidable?`},
+
+{sec:"core",c:"teal",eyebrow:"02 · Compaction — Cleaning Stale Data",t:"a",h:"The cost of cleaning",body:`
+<div class="ascii">Before compaction:
+Seg1: [A=1][B=1][C=1][D=1]
+Seg2: [A=2][C=2][E=1][F=1]
+Seg3: [A=3][B=2][G=1][H=1]
+
+Latest live per key: A3 B2 C2 D1 E1 F1 G1 H1
+
+After compaction:
+Seg4: [A=3][B=2][C=2][D=1][E=1][F=1][G=1][H=1]
+Old segments deleted.</div>
+<div class="note">Is the system still truly "append-only" after compaction? Write path = append-only. Storage lifecycle = append + rewrite + delete old segments. The core trade-off: <b>fast writes now, cleaning cost later</b>. If workload is update-heavy, garbage grows quickly and compaction pressure rises. If compaction is too aggressive: high rewrite cost, CPU, I/O contention, write amplification. If too lazy: wasted space, slower reads, longer restart rebuild, worse cache efficiency. Compaction isn't housekeeping — it's how the system stays correct.</div>`},
+
+{sec:"core",c:"teal",eyebrow:"Core Idea &amp; Versions · Recall",t:"r",h:"Quick recall: versions and compaction",qs:[
+{q:`The real system is "log + index, not just log." Why is the index necessary?`,a:`Scanning the full log to find the latest version of a key is O(all writes) per read. The in-memory index (key → latest offset) collapses that to O(1), making the read path tractable.`},
+{q:`Why is restart time proportional to log size a problem, and what's the alternative?`,a:`At large scale, full replay of the log takes too long. Alternative: periodic checkpointing/manifests that capture index state, so only the delta since the last checkpoint needs replaying.`},
+{q:`Why is compaction a correctness concern, not just housekeeping?`,a:`Without compaction, space grows unboundedly, reads must scan more stale data, and the cache becomes polluted. Compaction lag is an early warning sign that reads and storage are degrading.`}]},
+
+/* DELETES + CRASH */
+{sec:"delete",c:"gold",eyebrow:"03 · Deletes in Append-Only Storage",t:"q",q:`You cannot physically erase a record from an old immutable segment. How do you delete in an append-only log — and what is the subtle danger with tombstones under compaction?`},
+
+{sec:"delete",c:"gold",eyebrow:"03 · Deletes in Append-Only Storage",t:"a",h:"Tombstones and when they can be removed",body:`
+<div class="ascii">write A=100
+write B=200
+delete A
+
+Log: [A=100][B=200][A=TOMBSTONE]
+Meaning: latest state of A = deleted
+
+Can we physically erase A=100 immediately?
+No — it exists in an old immutable segment.
+
+When is the tombstone itself safe to compact away?
+ONLY when the system is certain no older value can come back
+from any remaining segment.</div>
+<div class="note">If a tombstone is compacted away before all older versions are also gone, and a system restart replays an older segment — the key resurrects. <b>How long should tombstones live?</b> At minimum: until every segment that could contain an older version of that key has also been compacted. In a replicated or distributed setup: until every replica has acknowledged the deletion, or the tombstone may re-appear on a stale replica. Treat delete as just another version — it simplifies reasoning.</div>`},
+
+{sec:"delete",c:"gold",eyebrow:"04 · Safe Crash Recovery",t:"q",q:`A write order question: "update in-memory index first, then persist to log" vs. "persist to log first, then update index." Why does the order matter for crash safety — and what is the correct ordering?`},
+
+{sec:"delete",c:"gold",eyebrow:"04 · Safe Crash Recovery",t:"a",h:"Log first, then expose",body:`
+<div class="ascii">WRONG order:
+1. update index in memory
+2. crash before log persisted
+After restart: index pointed to data that never became durable. BAD.
+
+CORRECT order:
+1. append to log buffer
+2. persist / checksum / fsync
+3. mark committed / expose
+4. update in-memory structures
+
+Crash recovery:
+[record1][record2][record3][partial garbage...crash]
+Recovery: scan until last valid checksum/length boundary
+          ignore torn tail</div>
+<div class="note">The durable log is the source of truth after a crash — not the in-memory index. If every in-memory structure can be rebuilt from the durable log, the design is clean. Use record framing: [length][key][value][checksum]. A crash in the middle of writing leaves a partial record — the checksum and length boundary tell you exactly where the last good record ends. <b>A write that hasn't hit durable storage isn't really a write.</b></div>`,
+cto:[`Record intent before action. The WAL's design principle reaches beyond databases: the cost of documenting what you are about to do is always lower than the cost of reconstructing it after something goes wrong. Write-ahead is an engineering posture, not a storage pattern.`]},
+
+{sec:"delete",c:"gold",eyebrow:"Deletes &amp; Crash · Recall",t:"r",h:"Quick recall: deletes and crash safety",qs:[
+{q:`Why can't you physically erase a deleted key immediately in append-only storage?`,a:`Old versions exist in old immutable segments. Physical erasure would require rewriting those segments. Instead, a tombstone is appended — the latest version of the key is "deleted," and the old values are cleaned up during compaction.`},
+{q:`What is the correct write ordering for crash safety, and why?`,a:`Persist to log first (with checksum/fsync) → only then mark committed and update in-memory index. If you update the index first and crash before the log persists, the index points to data that was never durably stored.`},
+{q:`When is it safe to remove a tombstone during compaction?`,a:`Only when every segment that could contain an older version of that key has also been compacted, and — in replicated systems — every replica has acknowledged the deletion.`}]},
+
+/* COMPACTION + AMPLIFICATION */
+{sec:"compact",c:"violet",eyebrow:"06 · What Exactly Is Being Compacted?",t:"q",q:`Compaction chooses the "newest" version of each key across multiple segments. What does "newest" actually mean — and why is timestamp-based ordering specifically dangerous in distributed systems?`},
+
+{sec:"compact",c:"violet",eyebrow:"06 · What Exactly Is Being Compacted?",t:"a",h:"Version ordering under distributed clocks",body:`
+<div class="ascii">How do we know A=3 is newer than A=2?
+Need version ordering by one of:
+  - log position (offset number)     <- cleanest in single machine
+  - sequence number                  <- needs central counter
+  - timestamp                        <- DANGEROUS in distributed
+  - hybrid logical clock (HLC)       <- safer distributed
+  - version vector                   <- complex but correct
+
+If clocks differ across machines, can timestamp-based
+"newest" be wrong? YES. Machine B is 2 seconds ahead.
+B's write looks "newer" even if A wrote after B in causal order.
+This is the same clock-skew problem that poisons every
+distributed timestamp-based system.</div>
+<div class="note">If a compactor runs while new writes are coming in, what snapshot should it respect? It must choose a consistent view — otherwise it might keep an older value because the index changed mid-run. The safest model: compact only up to a stable checkpoint; new writes above that checkpoint are not touched until the next compaction cycle.</div>`},
+
+{sec:"compact",c:"violet",eyebrow:"07 · The Three Amplifications",t:"q",q:`Write amplification, read amplification, space amplification — sketch the triangle. Why can you not reduce all three simultaneously?`},
+
+{sec:"compact",c:"violet",eyebrow:"07 · The Three Amplifications",t:"a",h:"The inescapable triangle",body:`
+<div class="ascii">Write Amplification: user writes 1 MB -> system writes 4 MB
+(one small write, rewritten many times during compaction)
+
+Read Amplification: to read key K, check memtable + seg1 + seg2 + disk
+(latest value spread across multiple segments)
+
+Space Amplification: live data = 100 GB, stored = 300 GB
+(stale data occupies space until compaction runs)
+
+         Write Amplification
+                /\
+               /  \
+              /    \
+Read Ampl <--+------+-> Space Ampl
+     usually reducing one hurts another</div>
+<div class="note"><b>If you compact aggressively</b>: space improves, reads improve, writes worsen (write amplification rises). <b>If you compact lazily</b>: writes improve, space worsens, reads may worsen. <b>Which amplification matters most?</b> Write-heavy ingest store: tolerate read amplification. Read-heavy KV store: tolerate write amplification. Archival store on cloud object storage: tolerate read amplification. SSD vs HDD changes the trade-off significantly. <b>Write amplification, read amplification, and space amplification cannot all be minimized at once. Choosing a storage engine means choosing which one you can live with.</b></div>`},
+
+{sec:"compact",c:"violet",eyebrow:"Compaction &amp; Amplification · Recall",t:"r",h:"Quick recall: compaction and the three amplifications",qs:[
+{q:`Why is timestamp-based version ordering dangerous in distributed systems?`,a:`Machines have clock skew — a machine with a fast clock makes its writes look "newer" even if they happened causally earlier. HLC or sequence numbers are safer alternatives.`},
+{q:`Name the three amplifications and their direction of tension.`,a:`Write amplification (user writes X, system writes >X due to compaction), Read amplification (reading one key requires checking multiple segments), Space amplification (stored data > live data). Reducing any one typically worsens at least one other.`}]},
+
+/* WRITE + READ PATH */
+{sec:"rw",c:"rose",eyebrow:"08 · The Write Path",t:"q",q:`What is the difference between a WAL and a memtable — and why do you need both rather than writing directly to immutable segments?`},
+
+{sec:"rw",c:"rose",eyebrow:"08 · The Write Path",t:"a",h:"Memory buffer + durable log",body:`
+<div class="ascii">Client write
+   |
+   v
+Memtable (in-memory buffer / hashmap)
+   |
+   v
+Append to WAL / active segment (durable)
+   |
+   v
+Ack after durability policy
+   |
+   v
+Later: flush buffer to immutable segment (sorted SSTable)</div>
+<div class="note">If log itself is already append-only, why also have a memtable/buffer? Because: fewer disk writes, batching many writes into one flush, sorted flush possible (makes compaction easier), better throughput. Should acknowledgment happen after memory only, OS page cache, fsync, or replication quorum? Each changes durability semantics. <b>Durability is a spectrum, not a binary.</b></div>`},
+
+{sec:"rw",c:"rose",eyebrow:"09 · The Read Path",t:"q",q:`For an existing key, reads search newest-to-oldest segments. For a <b>non-existent</b> key, this is even more expensive. What two tools exist to fix this — and how do they interact?`},
+
+{sec:"rw",c:"rose",eyebrow:"09 · The Read Path",t:"a",h:"Bloom filters and block caches",body:`
+<div class="ascii">Read key K:
+  1. Check in-memory latest map (fast)
+  2. Check recent immutable segments (newest first)
+  3. Bloom filter: "definitely not here" -> skip segment (fast!)
+  4. Find exact block via block index
+  5. Return latest visible value
+
+Why search newest first?
+  Latest version likely there. Stop at first hit.
+
+Key does not exist?
+  Must check ALL segments unless bloom filter prunes them.
+  Absent-key reads are MORE expensive without bloom filters.</div>
+<div class="note">Bloom filter: probabilistic structure — "definitely not in this segment" (no false negatives) OR "probably here" (possible false positives). A false positive costs one wasted segment read; a false negative would be catastrophic (missing data). How much RAM should be spent on cache, index, bloom filters, memtable? This balance is core to tuning any LSM-based system for a given workload.</div>`},
+
+{sec:"rw",c:"rose",eyebrow:"Write &amp; Read Path · Recall",t:"r",h:"Quick recall: write and read paths",qs:[
+{q:`Why is a memtable needed in addition to a WAL?`,a:`Batching many writes before flushing reduces disk write frequency, enables sorted flush (making compaction easier later), and improves overall throughput — while the WAL ensures durability across crashes.`},
+{q:`Why are non-existent key reads more expensive than existing-key reads without bloom filters?`,a:`A read for an existing key stops at the first segment that contains it (usually recent). A non-existent key requires checking every segment before concluding the key doesn't exist — bloom filters prune this by ruling out segments that definitely don't contain the key.`}]},
+
+/* SEGMENTS + RESTART */
+{sec:"struct",c:"amber",eyebrow:"11 · Segment Organization",t:"q",q:`How big should a segment be — and what is the trade-off at each extreme?`},
+
+{sec:"struct",c:"amber",eyebrow:"11 · Segment Organization",t:"a",h:"Segment size is a design dial",body:`
+<div class="ascii">Segment lifecycle:
+ACTIVE -> SEALED -> COMPACTING -> REPLACED -> DELETED
+
+Too small:
+  too many files, too much metadata, compaction overhead high
+
+Too large:
+  compaction becomes heavy (must rewrite large files)
+  reads less localized within a segment
+
+Should segments be sorted by key internally?
+  YES -> compaction becomes easier (merge-sort of sorted files)
+       -> read within a segment is cheaper (binary search)
+       -> flush path must sort before writing (cost shifted to write)
+  
+  NO  -> write path is simple / fast
+       -> compaction must sort while merging (heavier)
+       -> this is the key choice that determines whether you build
+          an LSM-like system or a pure append log</div>
+<div class="note">Sorted segments + compaction + multi-level merging is the essence of an LSM (Log-Structured Merge Tree). At what point does "append-only log storage" become "multi-level merged storage"? When you add: immutable sorted segments, merge-based compaction, and a write buffer (memtable). That is LSM. Pure log-structured storage without these is simpler but scales less well for read-heavy workloads.</div>`},
+
+{sec:"struct",c:"amber",eyebrow:"12 · Log vs. LSM",t:"q",q:`When does a pure append log become an LSM — and what is the design decision at each step that moves you from one to the other?`},
+
+{sec:"struct",c:"amber",eyebrow:"12 · Log vs. LSM",t:"a",h:"The natural evolution",body:`
+<div class="ascii">Pure log: just append records, use in-memory index
+  Pro: simplest possible write path
+  Con: compaction cannot sort efficiently, reads may scan many files
+
+Add sorted segments on flush:
+  Pro: compaction becomes merge-sort (efficient)
+  Con: flush now requires sorting (cost shifted to write time)
+
+Add multi-level compaction (LSM):
+  Level 0: flush from memtable (overlapping keys ok)
+  Level 1+: sorted, non-overlapping -> more expensive compaction
+             but much better read performance (fewer files to check)
+
+Writes -> append log
+Flush  -> immutable sorted segment
+Merge  -> cleaner, larger sorted segment
+Reads  -> index + bloom filters + segment search</div>
+<div class="note">If segments are unsorted, write path is simpler and faster, but read path and compaction become harder. If segments are sorted, compaction merge logic is easier, reads are more local, but the flush path must sort before writing. This is exactly the trade-off that separates Bitcask (simpler, unsorted append log + in-memory index) from RocksDB/LevelDB (full LSM with sorted segments and multi-level compaction).</div>`},
+
+{sec:"struct",c:"amber",eyebrow:"Final Recall",t:"r",h:"Final: log-structured storage compressed",qs:[
+{q:`The real system is "log + index." Explain why in one sentence.`,a:`Append-only storage accumulates all versions of a key; an index (key → latest offset) collapses the scan to O(1), making the system usable for reads.`},
+{q:`Name the three amplifications and which compaction strategy worsens or improves each.`,a:`Write (aggressive compaction worsens it), Read (lazy compaction worsens it — more segments to check), Space (lazy compaction worsens it — stale data accumulates). You choose which to tolerate based on your workload.`},
+{q:`What is the single design decision that turns an append log into an LSM?`,a:`Adding sorted, immutable segments (SSTables) at flush time, enabling merge-sort-based compaction that progressively reduces the number of segments a read must check.`}]}
+];
+
+let i=0;
+const stage=document.getElementById('stage'),dots=document.getElementById('dots'),
+tabs=document.getElementById('tabs'),counter=document.getElementById('counter'),
+prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn');
+SECTIONS.forEach(s=>{const b=document.createElement('button');b.className='tab';b.dataset.c=s.c;b.dataset.sec=s.id;b.textContent=s.label;b.onclick=()=>go(S.findIndex(x=>x.sec===s.id));tabs.appendChild(b);});
+S.forEach((sl,k)=>{const d=document.createElement('span');d.className='dot'+(sl.t==='q'?' q':'');d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-label','Slide '+(k+1));d.onclick=()=>go(k);d.onkeydown=e=>{if(e.key==='Enter')go(k)};dots.appendChild(d);});
+function lens(cto,dir){
+  let out='';
+  if(cto&&cto.length) out+='<details class="lens"><summary>CTO LENS</summary><div class="body"><ul class="pts">'+cto.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  if(dir&&dir.length) out+='<details class="lens dir"><summary>DIRECTOR LENS</summary><div class="body"><ul class="pts">'+dir.map(x=>'<li>'+x+'</li>').join('')+'</ul></div></details>';
+  return out;
+}
+function go(k){
+  i=Math.max(0,Math.min(S.length-1,k));
+  const s=S[i];stage.innerHTML='';
+  const el=document.createElement('div');el.className='slide';
+  try{
+    if(s.t==='q'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div>'
+        +'<div class="qcard"><div class="qlabel">Think first &middot; predict before you peek</div>'
+        +'<div class="qtext">'+s.q+'</div>'
+        +'<div class="qsub">Form your answer in your head. Then press Next to compare.</div></div>';
+    } else if(s.t==='r'){
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'
+        +'<p>Answer from memory first. Tap a question to reveal the answer.</p>'
+        +s.qs.map(x=>'<details class="recall-item"><summary>'+x.q+'</summary><div class="ans">'+x.a+'</div></details>').join('')
+        +'<div class="recall-hint">Struggled on any? Jump back with the tabs above, then return.</div>';
+    } else {
+      el.innerHTML='<div class="eyebrow '+s.c+'">'+s.eyebrow+'</div><h2>'+s.h+'</h2>'+s.body+(((s.cto&&s.cto.length)||(s.dir&&s.dir.length))?lens(s.cto,s.dir):'');
+    }
+  }catch(err){
+    el.innerHTML='<div class="eyebrow rose">Render error</div><h2>Slide '+(i+1)+' failed to render</h2><p>'+String(err&&err.message||err)+'</p>';
+  }
+  stage.appendChild(el);
+  counter.textContent=(i+1)+' / '+S.length;
+  document.querySelectorAll('.dot').forEach((d,k2)=>d.classList.toggle('on',k2===i));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.sec===s.sec));
+  prevBtn.disabled=(i===0);
+  nextBtn.textContent=(i===S.length-1)?'Done \u2713':'Next \u2192';
+  nextBtn.disabled=(i===S.length-1);
+  document.querySelector('main').scrollTop=0;window.scrollTo(0,0);
+}
+prevBtn.onclick=()=>go(i-1);nextBtn.onclick=()=>go(i+1);
+document.addEventListener('keydown',e=>{if(e.target.closest('details'))return;if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+go(0);
+</script>
+</body>
+</html>
