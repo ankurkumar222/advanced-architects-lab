@@ -103,6 +103,7 @@
 <script>
 const SECTIONS=[
  {id:"intro",label:"START",c:"ink"},
+ {id:"own",label:"IF YOU BUILD YOUR OWN",c:"ink"},
  {id:"model",label:"MENTAL MODEL+CHOOSING",c:"teal"},
  {id:"part",label:"PARTITION+REPLICATE+WRITE",c:"gold"},
  {id:"read",label:"READ+CONSISTENCY+SCHEMA",c:"violet"},
@@ -118,6 +119,349 @@ Real view:   App --> Coordinator --> partition owner --> replicas --> disk
                           v
               which node? how many copies? how fresh? how durable?</div>
 <div class="note"><b>The architecture:</b> partitioned storage + replicated state + distributed read/write coordination + consistency tradeoffs + storage-engine design. <b>How to use:</b> think-first slides before each concept, recall quizzes close each section.</div>`},
+
+/* IF YOU BUILD YOUR OWN */
+{sec:"own",c:"ink",eyebrow:"Blueprint · Where To Start",t:"q",q:`If you were building your own NoSQL database from scratch, would you start by thinking about SQL-like queries? What should you define first instead — and what should your very first version deliberately NOT support?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Where To Start",t:"a",h:"Start with the contract, not the query language",body:`
+<div class="ascii">Minimum external API:
+
+PUT    /v1/collections/{collection}/documents/{id}
+GET    /v1/collections/{collection}/documents/{id}
+DELETE /v1/collections/{collection}/documents/{id}
+
+POST   /v1/collections/{collection}/query
+POST   /v1/collections/{collection}/batch
+
+GET    /v1/health
+GET    /v1/metrics</div>
+<div class="ascii">Internally, that API should map to:
+
+Put(key, value)
+Get(key)
+Delete(key)
+
+BatchPut(...)
+BatchGet(...)
+Query(...)</div>
+<div class="note">For a first version, make it primarily a distributed key-value store. Don't attempt arbitrary querying initially — that comes later, once put/get/delete are solid.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · High-Level Architecture",t:"q",q:`Draw your first block diagram: client all the way down to storage. One component in the middle makes a single decision that everything downstream depends on. Which component, and which decision?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · High-Level Architecture",t:"a",h:"The coordinator's one job",body:`
+<div class="ascii">                    Client
+                      |
+                      v
+               +--------------+
+               | API Gateway  |
+               +--------------+
+                      |
+                      v
+             +-------------------+
+             | Request Coordinator|
+             +-------------------+
+                 /       |        \\
+                v         v         v
+          +---------+ +---------+ +---------+
+          | Node 1  | | Node 2  | | Node 3  |
+          +---------+ +---------+ +---------+
+               |          |           |
+               v          v           v
+          +---------+ +---------+ +---------+
+          | Storage | | Storage | | Storage |
+          +---------+ +---------+ +---------+</div>
+<div class="note">The important question the diagram doesn't answer yet: how does the coordinator decide which node owns a key? That's partitioning — the next decision.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Partitioning",t:"q",q:`Hash(key) decides a node, in one line. But before that line means anything, you need to answer several separate questions. What are they?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Partitioning",t:"a",h:"Hash(key) hides several decisions",body:`
+<div class="ascii">key
+ |
+ v
+Hash(key)
+ |
+ v
+Partition
+ |
+ v
+Responsible node(s)</div>
+<div class="ascii">                 Hash("user:123")
+                       |
+                       v
+                  Partition 7
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+          Node A              Node B
+         (primary)           (replica)</div>
+<ul class="pts">
+<li>Hash partitioning, or consistent hashing?</li>
+<li>How many partitions?</li>
+<li>How does a node join?</li>
+<li>How does a node leave?</li>
+<li>How is data rebalanced?</li>
+<li>How does the client/coordinator know partition ownership?</li>
+</ul>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Replication",t:"q",q:`What happens if Node A dies? "Replication factor 3" sounds like one decision — but the diagrams below hide several more. What are they?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Replication",t:"a",h:"Replication factor 3 is not one decision",body:`
+<div class="ascii">              Partition 7
+                   |
+          +--------+--------+
+          |                 |
+          v                 v
+      Node A             Node B
+     Primary             Replica
+          |
+          v
+       Node C
+      Replica</div>
+<div class="ascii">Replication factor = 3
+
+Write:
+Client
+  -> Coordinator
+      -> A
+      -> B
+      -> C
+
+Read:
+Client
+  -> Coordinator
+      -> A</div>
+<ul class="pts">
+<li>Synchronous vs asynchronous replication?</li>
+<li>Quorum reads/writes?</li>
+<li>What happens when a replica is unavailable?</li>
+<li>Replica recovery?</li>
+<li>Replica lag?</li>
+<li>Read repair?</li>
+<li>Hinted handoff, if you want it?</li>
+</ul>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Consistency Model",t:"q",q:`WRITE(key, value) returns 200 OK. Does that mean only Node A has the value — or A+B, or A+B+C? With N=3, W=2, R=2, what can you now guarantee — and what happens when Node A says value=X while Node B says value=Y?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Consistency Model",t:"a",h:"200 OK means whatever you decided it means",body:`
+<div class="ascii">WRITE(key, value)
+
+If the write returns 200 OK, does that mean:
+
+A has it?
+A + B have it?
+A + B + C have it?</div>
+<div class="ascii">N = 3
+W = 2
+R = 2
+
+-> quorum consistency: W + R > N guarantees overlap</div>
+<div class="ascii">Node A says:
+value = X
+
+Node B says:
+value = Y
+
+-> you need a conflict resolution rule, decided in advance</div>
+<div class="note">This is the same N/W/R overlap logic already covered under Read, Consistency &amp; Schema — the discipline here is deciding it before day one, not discovering it during an incident.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Storage Engine",t:"q",q:`Go inside a single database node. What's the block diagram from write path to disk — and where exactly does the LSM flow (WAL, memtable, SSTable, compaction) sit inside it?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Storage Engine",t:"a",h:"Inside one node: write path and read path split immediately",body:`
+<div class="ascii">             Database Node
+                  |
+          +-------+-------+
+          |               |
+          v               v
+      Write Path       Read Path
+          |               |
+          v               v
+      WAL / Log        Memtable
+          |               |
+          v               v
+       Memtable        SSTables
+          |               |
+          +-------+-------+
+                  |
+                  v
+             Disk / SSD</div>
+<div class="ascii">For an LSM-tree-style design:
+
+Write
+  |
+  v
+WAL
+  |
+  v
+Memtable
+  |
+  | flush
+  v
+SSTable
+  |
+  | compaction
+  v
+Merged SSTables</div>
+<div class="note">You don't need to implement this on day one, but the architecture should account for it from the start — retrofitting a storage engine underneath a live API is much harder than designing the API around one.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Read Path",t:"q",q:`Draw the complete request flow for GET /users/123, all the way down to Memtable, Bloom Filter, Block Cache and SSTable. What do you do if the first replica you ask doesn't have the value?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Read Path",t:"a",h:"The full read path, end to end",body:`
+<div class="ascii">GET /users/123
+       |
+       v
+API Server
+       |
+       v
+Coordinator
+       |
+       v
+hash("users/123")
+       |
+       v
+Partition 17
+       |
+       v
+Replica Nodes
+       |
+       v
++-------------------+
+| Memtable           |
+| Bloom Filter       |
+| Block Cache        |
+| SSTable            |
++-------------------+
+       |
+       v
+    Result
+       |
+       v
+    Client</div>
+<div class="note">If the first replica doesn't have it — that's not a dead end, it's where your consistency model and replica-selection logic actually get used. Try another replica? Return stale? Both are valid, but only if you decided which one on purpose.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Write Path",t:"q",q:`Same exercise for a write. Client to ACK — walk every hop. Which of the branches after "Primary Replica" could each fail independently, and does the client still get an ACK?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Write Path",t:"a",h:"The full write path, end to end",body:`
+<div class="ascii">Client
+  |
+  v
+API
+  |
+  v
+Coordinator
+  |
+  v
+Partitioner
+  |
+  v
+Primary Replica
+  |
+  +----> WAL
+  |
+  +----> Memtable
+  |
+  +----> Replica 2
+  |
+  +----> Replica 3
+  |
+  v
+ACK</div>
+<div class="note">Now you've got a concrete system to reason about — every failure question on the next slide is really asking: which of these branches failed, and does the client still get an ACK?</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Failure Handling",t:"q",q:`Coordinator gets a checkmark from A, a checkmark from B, and a cross from C. Do you return success to the client? If yes — when does C recover, and how does it discover what it missed?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Failure Handling",t:"a",h:"Ten failure modes you need explicit answers for",body:`
+<ul class="pts">
+<li>Node crashes</li>
+<li>Network partition</li>
+<li>Disk failure</li>
+<li>Coordinator crashes</li>
+<li>Replica crashes</li>
+<li>Data corruption</li>
+<li>Slow node</li>
+<li>Duplicate request</li>
+<li>Lost ACK</li>
+<li>Partial write</li>
+</ul>
+<div class="ascii">Client
+  |
+  v
+Coordinator
+  |
+  +----> Node A  OK
+  |
+  +----> Node B  OK
+  |
+  +----> Node C  FAIL</div>
+<div class="note">Do you return success? If yes, when does C recover, and how does it discover what it missed? There's no universally correct answer — but there has to be a decided one.</div>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Cluster Membership",t:"q",q:`Who tells the coordinator which nodes are alive right now, and which partitions each one currently owns?`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · Cluster Membership",t:"a",h:"Cluster management: the layer above partitioning",body:`
+<div class="ascii">              Cluster Manager
+                    |
+       +------------+------------+
+       |            |            |
+       v            v            v
+     Node A        Node B       Node C</div>
+<ul class="pts">
+<li>Node registration</li>
+<li>Health checks</li>
+<li>Heartbeat</li>
+<li>Failure detection</li>
+<li>Partition ownership</li>
+<li>Rebalancing</li>
+<li>Adding/removing nodes</li>
+</ul>`},
+
+{sec:"own",c:"ink",eyebrow:"Blueprint · The Minimum Design Checklist",t:"a",h:"Twelve questions, answered before you write a line of storage code",body:`
+<ul class="pts">
+<li>What is my data model?</li>
+<li>What are my APIs?</li>
+<li>What operations do I support?</li>
+<li>How do I partition data?</li>
+<li>How do I find the node responsible for a key?</li>
+<li>How do I replicate data?</li>
+<li>What consistency guarantee do I provide?</li>
+<li>What does the read path look like?</li>
+<li>What does the write path look like?</li>
+<li>How is data persisted on disk?</li>
+<li>What happens when nodes/network/disk fail?</li>
+<li>How does the cluster scale and rebalance?</li>
+</ul>
+<div class="ascii">                         CLIENT
+                            |
+                            v
+                     +-------------+
+                     | API SERVER  |
+                     +-------------+
+                            |
+                            v
+                    +---------------+
+                    |  COORDINATOR  |
+                    +---------------+
+                            |
+                     Partitioning
+                            |
+              +-------------+-------------+
+              |             |             |
+              v             v             v
+           Partition 1   Partition 2   Partition 3
+              |             |             |
+           +--+--+       +--+--+       +--+--+
+           |     |       |     |       |     |
+           v     v       v     v       v     v
+          N1     N2      N3    N4      N5    N6
+           |             |             |
+           v             v             v
+       +--------------------------------------+
+       |          STORAGE ENGINE              |
+       |                                      |
+       | WAL -> Memtable -> SSTable -> Disk   |
+       |                                      |
+       | Bloom Filter / Cache / Compaction     |
+       +--------------------------------------+</div>
+<div class="note">If you mean literally building your own NoSQL database: start with a single-node key-value store, then add persistence, then replication, then partitioning, then consensus/cluster membership, then rebalancing — in that order. Don't start with the distributed version; the design explodes very quickly otherwise.</div>`},
 
 /* MENTAL MODEL + CHOOSING */
 {sec:"model",c:"teal",eyebrow:"Foundation · Mental Model",t:"q",q:`Before picking a NoSQL type, write down your three most important read patterns. Why does this step have to come <b>before</b> any database choice — and what is the consequence of skipping it?`},
