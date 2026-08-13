@@ -103,6 +103,7 @@
 <script>
 const SECTIONS=[
  {id:"intro",label:"START",c:"ink"},
+ {id:"design",label:"DESIGN IT YOURSELF",c:"ink"},
  {id:"rel",label:"RELATIONAL+CONSTRAINTS",c:"teal"},
  {id:"stor",label:"STORAGE+INDEXES",c:"gold"},
  {id:"qe",label:"QUERY ENGINE",c:"violet"},
@@ -123,6 +124,662 @@ const S=[
    v  Storage Engine (tables / indexes / WAL / buffer mgr)</div>
 <p>The core problem every layer is solving: <strong>take a declarative request and execute it efficiently while preserving all guarantees.</strong></p>
 <div class="note">This architecture exists to solve one tension: <b>how to provide strong correctness guarantees while achieving acceptable performance</b>. Every layer presents a different face of that same trade-off.</div>`},
+
+/* DESIGN IT YOURSELF */
+{sec:"design",c:"ink",eyebrow:"Blueprint · You Are The Architect",t:"a",h:"Build your own SQL engine — <em>discover the architecture step by step, don't memorize it up front</em>",body:`
+<div class="ascii">                USER
+                  |
+                  | SQL
+                  v
+        +-------------------+
+        |   SQL Interface   |
+        +-------------------+
+                  |
+                  v
+        +-------------------+
+        |      Parser       |
+        +-------------------+
+                  |
+                  v
+        +-------------------+
+        | Query Optimizer   |
+        +-------------------+
+                  |
+                  v
+        +-------------------+
+        | Execution Engine  |
+        +-------------------+
+                  |
+                  v
+        +-------------------+
+        |   Storage Engine  |
+        +-------------------+
+          |       |       |
+          v       v       v
+       Buffer   Index    WAL
+        Pool            /Log
+          |       |       |
+          +-------+-------+
+                  |
+                  v
+                DISK</div>
+<div class="ascii">                         REQUIREMENT
+                              |
+                              v
+                        "Build SQL DB"
+                              |
+                              v
+                       STORE A ROW
+                              |
+                              v
+                         READ A ROW
+                              |
+                              v
+                    "Too slow — why?"
+                              |
+                              v
+                           INDEX
+                              |
+                              v
+                   "Queries are complex"
+                              |
+                              v
+                         QUERY PLAN
+                              |
+                              v
+                     "JOIN is expensive"
+                              |
+                              v
+                       JOIN ALGORITHMS
+                              |
+                              v
+                        "WE CRASHED"
+                              |
+                              v
+                            WAL
+                              |
+                              v
+                   "TWO TXNS COLLIDE"
+                              |
+                              v
+                         MVCC / LOCKS
+                              |
+                              v
+                    "RECOVERY IS SLOW"
+                              |
+                              v
+                        CHECKPOINT
+                              |
+                              v
+                    "DATABASE IS HUGE"
+                              |
+                              v
+                   REPLICAS / SHARDS
+                              |
+                              v
+                     DISTRIBUTED SQL</div>
+<div class="note">Don't teach the SQL engine components — encounter the problems that force each one to exist. Same Think First &rarr; reveal &rarr; recall mechanism as the rest of this deck.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Start With The Problem",t:"q",q:`Before drawing any architecture, what five statements does your engine need to support — and what should you explicitly refuse to solve in version one?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Start With The Problem",t:"a",h:"Scope it before you architect it",body:`
+<div class="ascii">We want:
+
+CREATE TABLE users (...)
+
+INSERT INTO users ...
+
+SELECT * FROM users
+WHERE id = 42;
+
+UPDATE users SET ...
+DELETE FROM users ...</div>
+<div class="ascii">                    SQL ENGINE V1
+
+        +--------------------------------+
+        |                                |
+        |  CREATE / INSERT / SELECT      |
+        |  UPDATE / DELETE               |
+        |                                |
+        +--------------------------------+
+
+        Single machine
+        Single database
+        Durable
+        Concurrent</div>
+<div class="ascii">NOT solving yet:
+
+x Distributed SQL
+x Replication
+x Sharding
+x Multi-region
+x Complex optimizer
+
+First: make one SQL database correct.</div>
+<div class="note">Scoping out distributed SQL on day one isn't a limitation — it's what turns a vague topic into an engineering problem you can actually solve.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Start With The API",t:"q",q:`Unlike a key-value store, your external API here is basically SQL itself. What's the first architectural boundary that appears once you write parse -&gt; plan -&gt; execute -&gt; storage as four separate steps?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Start With The API",t:"a",h:"SQL in, four internal steps, storage out",body:`
+<div class="ascii">                 Client
+                    |
+                    v
+          +-------------------+
+          |   SQL Connection  |
+          +-------------------+
+                    |
+          -------------------------
+          |           |           |
+          v           v           v
+       SELECT      INSERT       UPDATE
+          |           |           |
+          +-----------+-----------+
+                      |
+                      v
+                  SQL Engine</div>
+<div class="ascii">Internal interfaces:
+
+parse(sql)
+      |
+      v
+plan(ast)
+      |
+      v
+execute(plan)
+      |
+      v
+storage.read(...)
+storage.write(...)</div>
+<div class="note">That four-step chain — parse, plan, execute, storage — is the first architectural boundary. Every later component slots into one of those four stages.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Data Model",t:"q",q:`What exactly does CREATE TABLE users create? Sketch it as a logical table, then ask: how does that table actually sit on disk?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Data Model",t:"a",h:"Logical rows, physical pages",body:`
+<div class="ascii">Table
+ |
+ +-- Schema
+ |    |
+ |    +-- id       INT
+ |    +-- name     VARCHAR
+ |    +-- email    VARCHAR
+ |
+ +-- Rows
+ |
+ +-- Primary Key
+ |
+ +-- Secondary Indexes</div>
+<div class="ascii">Logical:
+
+users
++----+-------+----------------+
+| id | name  | email          |
++----+-------+----------------+
+| 1  | Ankur | a@example.com  |
+| 2  | John  | j@example.com  |
++----+-------+----------------+
+
+
+Physical:
+
+              TABLE
+                |
+                v
+        +---------------+
+        | Page 0        |
+        | row row row   |
+        +---------------+
+        | Page 1        |
+        | row row row   |
+        +---------------+
+        | Page 2        |
+        | row row row   |
+        +---------------+</div>
+<div class="note">That physical picture is why "pages" now have a reason to exist — a table isn't one blob, it's a set of fixed-size pages on disk.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Where Do Rows Actually Live?",t:"q",q:`If I INSERT a row, where exactly does it go — and what happens when the page it belongs on isn't already sitting in memory?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Where Do Rows Actually Live?",t:"a",h:"Buffer manager exists for a reason",body:`
+<div class="ascii">INSERT
+   |
+   v
+Find free page
+   |
+   v
++-----------+
+| Page 17   |
+|           |
+| free      |
+| free      |
+| row       |
++-----------+
+   |
+   v
+write page</div>
+<div class="ascii">                 INSERT
+                    |
+                    v
+              Buffer Manager
+                    |
+              Is page cached?
+                /       \\
+              YES        NO
+               |          |
+               v          v
+             Page      Read Disk
+                           |
+                           v
+                      Buffer Pool
+                           |
+                           v
+                         Modify</div>
+<div class="note">The buffer manager isn't a separate topic to memorize — it's the direct answer to "what if the page I need isn't in memory yet?"</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Read Path, Built From Scratch",t:"q",q:`Start with the dumb implementation: scan every page until you find id=42. That works. Now — what happens with a billion rows, and what data structure does the answer force you to build?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Read Path, Built From Scratch",t:"a",h:"From a full scan to a B+ tree",body:`
+<div class="ascii">SELECT * FROM users WHERE id = 42
+
+              |
+              v
+         Scan Page 0
+              |
+              v
+         Scan Page 1
+              |
+              v
+         Scan Page 2
+              |
+              v
+             ...
+              |
+              v
+          Find id=42</div>
+<div class="ascii">                    SELECT
+                      |
+                      v
+                WHERE id=42
+                      |
+                      v
+                   INDEX
+                      |
+                      v
+                 id = 42
+                      |
+                      v
+                 Row/Page
+                      |
+                      v
+                    Data</div>
+<div class="ascii">                 B+ TREE
+
+                    [50]
+                   /    \\
+                [20]    [80]
+                /  \\     /  \\
+              ...  ...  ... ...
+
+                 |
+                 v
+             Leaf pages
+                 |
+                 v
+          Row / Record ID</div>
+<div class="note">Now the B+ tree has architectural motivation — it's the structure that turns "scan everything" into "walk a handful of nodes," rather than a data structure you're just told to learn.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Optimizer Appears Naturally",t:"q",q:`Same query, two different execution plans — a full scan then sort, or an index that's already sorted the right way. How should the database decide which one to run?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Optimizer Appears Naturally",t:"a",h:"The heart of SQL architecture",body:`
+<div class="ascii">SELECT *
+FROM orders
+WHERE customer_id = 1001
+ORDER BY created_at DESC
+LIMIT 20;</div>
+<div class="ascii">PLAN A
+
+Full table scan
+      |
+      v
+Filter
+      |
+      v
+Sort
+      |
+      v
+LIMIT 20</div>
+<div class="ascii">PLAN B
+
+Index(customer_id, created_at)
+              |
+              v
+        customer_id=1001
+              |
+              v
+      already sorted
+              |
+              v
+           LIMIT 20</div>
+<div class="ascii">                 SQL
+                  |
+                  v
+                Parser
+                  |
+                  v
+             Logical Plan
+                  |
+                  v
+              Optimizer
+              /       \\
+             /         \\
+        Plan A        Plan B
+             \\         /
+              \\       /
+               Choose
+                  |
+                  v
+           Physical Plan
+                  |
+                  v
+             Execution</div>
+<div class="note">This is the heart of SQL architecture: the same query, multiple valid plans, and a chooser sitting between the logical intent and the physical execution.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Then Introduce Joins",t:"q",q:`Naive join: for every customer, scan all orders, over and over. Obviously terrible. What are the three real join algorithms, and which situation calls for each?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Then Introduce Joins",t:"a",h:"Join algorithms become design decisions",body:`
+<div class="ascii">Customers x Orders
+
+Customer 1
+   |
+   +--> scan all orders
+   |
+   +--> scan all orders
+   |
+   +--> scan all orders</div>
+<div class="ascii">                 JOIN
+                  |
+        +---------+---------+
+        |         |         |
+        v         v         v
+   Nested Loop  Hash Join  Merge Join</div>
+<div class="ascii">Small + indexed
+      |
+      v
+Nested Loop
+
+
+Large + unsorted
+      |
+      v
+Hash Join
+
+
+Already sorted
+      |
+      v
+Merge Join</div>
+<div class="note">Not theory to memorize — a decision the architect makes based on data size, whether it's indexed, and whether it's already sorted.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Then Break The Database",t:"q",q:`The process crashes halfway through an UPDATE, right after the new balance was written to memory but before it hit disk. Was that value durable — and what component do you now need?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Then Break The Database",t:"a",h:"The crash forces the WAL into existence",body:`
+<div class="ascii">UPDATE accounts
+SET balance = balance - 100
+WHERE id = 1;
+
+
+Memory:
+
+balance = 900
+
+        v
+
+CRASH
+
+        v
+
+Restart
+
+        v
+
+Was 900 durable?</div>
+<div class="ascii">                  UPDATE
+                    |
+                    v
+                 WAL
+                    |
+                  fsync
+                    |
+                    v
+                  ACK
+                    |
+                    v
+              Buffer Pool
+                    |
+                    v
+                 Disk</div>
+<div class="ascii">       WAL
+        |
+        | MUST BE DURABLE
+        v
+   BEFORE data page</div>
+<div class="note">The rule isn't "databases use a WAL" — it's that the crash above has exactly one safe answer, and the WAL is that answer.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Transactions",t:"q",q:`BEGIN; Debit A; Credit B; COMMIT; — what if the crash happens right after the debit but before the credit? What three guarantees does the database now owe you?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Transactions",t:"a",h:"Atomicity, isolation, durability — because the problem demanded them",body:`
+<div class="ascii">BEGIN;
+
+Debit A
+Credit B
+
+COMMIT;</div>
+<div class="ascii">A = -100
+B = unchanged
+
+       CRASH</div>
+<div class="ascii">              TRANSACTION
+                   |
+          +--------+--------+
+          |        |        |
+          v        v        v
+       Atomicity Isolation Durability
+          |        |        |
+          v        v        v
+         WAL      MVCC      WAL</div>
+<div class="note">A half-finished debit-without-credit is exactly the failure atomicity exists to prevent — rollback, redo, and undo all trace back to this one scenario.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Concurrency",t:"q",q:`Two transactions both read balance=100, both write their own new balance. What should the final balance actually be — and what mechanism decides that?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Concurrency",t:"a",h:"Locking or MVCC — someone has to referee",body:`
+<div class="ascii">T1                         T2
+
+READ balance=100
+
+                           READ balance=100
+
+WRITE balance=50
+
+                           WRITE balance=20</div>
+<div class="ascii">                 CONCURRENCY
+                      |
+             +--------+--------+
+             |                 |
+             v                 v
+          Locking            MVCC
+             |                 |
+       block readers       snapshots
+       / writers           versions
+             |                 |
+             +--------+--------+
+                      |
+                      v
+                 Isolation</div>
+<div class="ascii">T1
+ |
+ +--> BEGIN
+ |
+ +--> snapshot
+ |
+ +--> read version
+ |
+ +--> write new version
+ |
+ +--> WAL
+ |
+ +--> COMMIT</div>
+<div class="note">Two transactions racing on the same row is why concurrency control exists at all — locking blocks the conflict, MVCC sidesteps it with versions.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Recovery",t:"q",q:`The WAL's tail is corrupted mid-write when the crash hits. What does restart actually do with a valid prefix versus a corrupt tail — and why do you also need checkpoints?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Recovery",t:"a",h:"Trust the valid prefix, truncate the rest, checkpoint to speed it up",body:`
+<div class="ascii">WAL
+
+[TX1][TX2][TX3][TX4][partial TX5]
+                         ^
+                         |
+                       CRASH</div>
+<div class="ascii">                    RESTART
+                       |
+                       v
+                  Read WAL
+                       |
+                       v
+                Validate records
+                       |
+             +---------+---------+
+             |                   |
+           valid               corrupt
+             |                   |
+             v                   v
+          REDO/UNDO          truncate tail
+             |
+             v
+          DATABASE
+          RECOVERED</div>
+<div class="ascii">WAL:
+
+|----old----|----old----| CHECKPOINT |---recent---|
+                                      ^
+                                      |
+                                  recover here</div>
+<div class="note">Without a checkpoint, recovery has to replay the entire WAL from the start every time — the checkpoint exists purely to shrink that replay window.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Scaling — Only After Single-Node Works",t:"q",q:`Your database is now 20 TB on one machine. What's the order of moves — and what does the very last one, sharding, cost you that the earlier ones didn't?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Scaling — Only After Single-Node Works",t:"a",h:"Vertical, then read replicas, then sharding — and sharding has a price",body:`
+<div class="ascii">             Single SQL Node
+                  |
+        +---------+---------+
+        |         |         |
+       CPU       RAM       Disk</div>
+<div class="ascii">                  PRIMARY
+                 /       \\
+                v         v
+           Replica 1   Replica 2</div>
+<div class="ascii">             SQL Router
+                  |
+       +----------+----------+
+       |          |          |
+       v          v          v
+    Shard 1    Shard 2    Shard 3</div>
+<div class="ascii">                SHARDING
+
+                 +----+
+                 |SQL |
+                 +----+
+                   |
+          +--------+--------+
+          |        |        |
+        Shard1   Shard2   Shard3
+          |        |        |
+          +--------+--------+
+                   |
+             Cross-shard JOIN
+                   |
+                   v
+             Scatter / Gather
+                   |
+                   v
+                Merge</div>
+<div class="note">Vertical scaling and read replicas are close to free architecturally. Sharding is the one that reintroduces the cross-shard JOIN problem — distributed SQL becomes something you had to solve, not another chapter to read.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Final Architecture — Single Node",t:"a",h:"Only now, the complete picture",body:`
+<div class="ascii">                           CLIENT
+                              |
+                              | SQL
+                              v
+                    +-------------------+
+                    | Connection Layer  |
+                    +-------------------+
+                              |
+                              v
+                    +-------------------+
+                    |      Parser       |
+                    +-------------------+
+                              |
+                              v
+                    +-------------------+
+                    |  Logical Planner  |
+                    +-------------------+
+                              |
+                              v
+                    +-------------------+
+                    |     Optimizer     |
+                    |  + Cost Model     |
+                    +-------------------+
+                              |
+                              v
+                    +-------------------+
+                    | Execution Engine  |
+                    +-------------------+
+                              |
+                +-------------+-------------+
+                |             |             |
+                v             v             v
+             Buffer         Index         Lock /
+              Pool          Manager        MVCC
+                |             |             |
+                +-------------+-------------+
+                              |
+                              v
+                    +-------------------+
+                    |   Storage Engine   |
+                    +-------------------+
+                       |             |
+                       v             v
+                     Pages          WAL
+                       |             |
+                       v             v
+                     DISK          Recovery</div>
+<div class="note">Every box above showed up earlier in this section because a specific problem forced it in — not because it belongs on a reference diagram.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Final Architecture — Distributed",t:"a",h:"And then, the distributed version",body:`
+<div class="ascii">                         CLIENT
+                           |
+                           v
+                    SQL COORDINATOR
+                           |
+                  +--------+--------+
+                  |        |        |
+                  v        v        v
+               SHARD 1  SHARD 2  SHARD 3
+                  |        |        |
+              +---+---+ +--+--+ +---+---+
+              |       | |     | |       |
+            Primary Replica Primary Replica
+              |
+              v
+        +----------------+
+        | Storage Engine |
+        +----------------+
+        | Buffer Pool    |
+        | Indexes        |
+        | WAL            |
+        | MVCC           |
+        +----------------+
+              |
+              v
+             DISK</div>
+<div class="note">Every one of Coordinator, Shard, Primary/Replica is the exact same single-node design you already built — just repeated and connected across machines.</div>`},
 
 /* RELATIONAL + CONSTRAINTS */
 {sec:"rel",c:"teal",eyebrow:"01 · The Relational Revolution",t:"q",q:`What makes a SQL database fundamentally different from a key-value store — not the syntax, but the actual commitment that forces every other layer into existence?`},
