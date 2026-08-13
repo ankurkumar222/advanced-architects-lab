@@ -103,6 +103,7 @@
 <script>
 const SECTIONS=[
  {id:"intro",label:"START",c:"ink"},
+ {id:"design",label:"DESIGN IT YOURSELF",c:"ink"},
  {id:"core",label:"CORE IDEA+VERSIONS",c:"teal"},
  {id:"delete",label:"DELETES+CRASH",c:"gold"},
  {id:"compact",label:"COMPACTION+AMPLIFICATION",c:"violet"},
@@ -116,6 +117,490 @@ const S=[
 <div class="ascii">Traditional update: go to old place and overwrite
 Log-structured update: append new version at end, clean old later</div>
 <div class="note"><b>How to use:</b> "?" slides ask you to predict first. Press Next to compare. Recall quizzes close each section.</div>`},
+
+/* DESIGN IT YOURSELF */
+{sec:"design",c:"ink",eyebrow:"Blueprint · You Are The Architect",t:"a",h:"Design a log-structured storage engine — <em>you're building it, not attending a lecture about it</em>",body:`
+<div class="ascii">                    WHAT ARE WE BUILDING?
+                            |
+                            v
+                  +-------------------+
+                  | Requirements      |
+                  | + constraints     |
+                  +-------------------+
+                            |
+                            v
+                  +-------------------+
+                  | API / Interface   |
+                  +-------------------+
+                            |
+                            v
+                  +-------------------+
+                  | Data Model        |
+                  +-------------------+
+                            |
+                            v
+              +-------------+-------------+
+              |                           |
+              v                           v
+        WRITE PATH                    READ PATH
+              |                           |
+              v                           v
+         WAL / Log                 Index / Bloom
+              |                           |
+              v                           v
+         Memtable                    SSTables
+              |                           |
+              +-------------+-------------+
+                            |
+                            v
+                       COMPACTION
+                            |
+                            v
+                  +-------------------+
+                  | Failure Recovery  |
+                  +-------------------+
+                            |
+                            v
+                  +-------------------+
+                  | Scale / Cluster   |
+                  +-------------------+</div>
+<div class="ascii">              REQUIREMENT
+                   |
+                   v
+             DESIGN PROBLEM
+                   |
+                   v
+               YOUR IDEA
+                   |
+                   v
+               DIAGRAM
+                   |
+                   v
+             FAILURE / SCALE
+                   |
+                   v
+             NEW COMPONENT
+                   |
+                   v
+              TRADE-OFF
+                   |
+                   v
+             NEXT PROBLEM</div>
+<div class="note">Every concept from here on shows up because the architecture needed it — not because it's a term to memorize. Same Think First &rarr; reveal &rarr; recall mechanism as the rest of this deck.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Requirements First",t:"q",q:`Before asking "what is an LSM," what should you write down first — and just as important, what should you explicitly decide <b>not</b> to build in version one?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Requirements First",t:"a",h:"Start with requirements, not terminology",body:`
+<div class="ascii">We need to build:
+
+A durable key-value storage engine
+
+Requirements
+────────────
+PUT(key, value)
+GET(key)
+DELETE(key)
+
+Must survive process crash
+Must survive machine restart
+High write throughput
+Low-latency reads
+Data larger than RAM
+Background cleanup</div>
+<div class="ascii">V1
+────────────────────────
+No SQL
+No joins
+No arbitrary queries
+No transactions
+No multi-region replication
+
+Just:
+
+Key -> Value</div>
+<div class="note">Writing down what you're NOT building is as important as the requirements list — it turns a vague topic into a scoped engineering problem.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · API + Data Model",t:"q",q:`With just PUT, GET, DELETE as your contract — what's the smallest record shape that can support all three, including answering "which version of this key is the latest"?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · API + Data Model",t:"a",h:"A tiny API, and a record shape that already hints at the answer",body:`
+<div class="ascii">PUT
+
+PUT /kv/{key}
+
+{
+    "value": "..."
+}
+
+
+GET
+
+GET /kv/{key}
+
+
+DELETE
+
+DELETE /kv/{key}</div>
+<div class="ascii">Internally:
+
+Put(key, value)
+Get(key)
+Delete(key)</div>
+<div class="ascii">Record
+
++--------------------------------+
+| key                            |
++--------------------------------+
+| value                          |
++--------------------------------+
+| sequence_number                |
++--------------------------------+
+| operation                      |
+|   PUT / DELETE                 |
++--------------------------------+
+| checksum                       |
++--------------------------------+
+
+PUT A=10        -> [A, 10, seq=101, PUT]
+PUT A=20        -> [A, 20, seq=102, PUT]
+DELETE A        -> [A, -,  seq=103, DELETE]</div>
+<div class="note">Now every later component exists to make these three operations work. And the obvious next question — "we've got three versions, how do I find the latest one?" — is exactly where the index comes in.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Simplest Architecture First",t:"q",q:`Draw the simplest possible architecture that makes PUT/GET/DELETE work: client, API, storage engine, index, log. It works — so what's the very next question that breaks it?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Simplest Architecture First",t:"a",h:"This works. Then: what happens when the process crashes?",body:`
+<div class="ascii">                 Client
+                    |
+                    v
+             +-------------+
+             | KV API      |
+             +-------------+
+                    |
+                    v
+             +-------------+
+             | Storage     |
+             | Engine      |
+             +-------------+
+                    |
+          +---------+---------+
+          |                   |
+          v                   v
+       Index                 Log
+    key -> offset          append-only
+          |                   |
+          |                   v
+          |                 Disk
+          |
+          v
+       value</div>
+<div class="note">This satisfies every requirement so far. But the index lives in RAM — so the very next design problem is: what happens when the process crashes and RAM is gone?</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Write Path",t:"q",q:`PUT(A, 20) has to update both the index and the log. Which one do you write first — and why does getting this order backwards mean the index can point to data that was never actually saved?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Write Path",t:"a",h:"Log first, index second — never the other way",body:`
+<div class="ascii">                    PUT(A, 20)
+                        |
+                        v
+                +---------------+
+                | Storage API   |
+                +---------------+
+                        |
+                        v
+                  Append Record
+                        |
+                        v
+                +---------------+
+                |      WAL      |
+                +---------------+
+                        |
+                     fsync
+                        |
+                        v
+                +---------------+
+                |   Memtable    |
+                +---------------+
+                        |
+                        v
+                     ACK</div>
+<div class="ascii">Why WAL first?
+
+Index -> Log     NOT     Log -> Index
+
+Index updated
+      |
+      X crash
+      |
+Log never persisted
+
+      v
+
+Index points to something
+that doesn't exist after restart</div>
+<div class="note">That's the whole reason a WAL exists — not as a term to memorize, but as the only safe write order once you've drawn this out.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · RAM Becomes The Constraint",t:"q",q:`The memtable can't grow forever — RAM is finite. What happens when it fills up, and what does the resulting file get called once it can never be changed again?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · RAM Becomes The Constraint",t:"a",h:"Flush to disk, and segments are born",body:`
+<div class="ascii">                 Memtable
+                    |
+              RAM limit reached
+                    |
+                    v
+              +-----------+
+              |   Flush   |
+              +-----------+
+                    |
+                    v
+              Immutable
+               Segment
+                    |
+                    v
+                  Disk</div>
+<div class="ascii">ACTIVE SEGMENT
+      |
+      | seal
+      v
+IMMUTABLE SEGMENT
+      |
+      | compact
+      v
+COMPACTED SEGMENT
+      |
+      | obsolete
+      v
+DELETE</div>
+<div class="note">Segments now have a reason to exist — they're just what a full memtable becomes once it's written to disk and frozen.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Read Path, As A Design Problem",t:"q",q:`GET(A) checks the memtable first. If it's not there, walk the rest of the path — index, bloom filter, block index, disk. Then: what if A exists in three different segments with three different values?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Read Path, As A Design Problem",t:"a",h:"Newest-first search, then pick the right version",body:`
+<div class="ascii">GET(A)
+  |
+  v
+Memtable?
+  |
+  +---- YES ---> return
+  |
+  NO
+  |
+  v
+Index
+  |
+  v
+Which segment?
+  |
+  v
+Bloom Filter
+  |
+  +---- definitely absent ---> next segment
+  |
+  +---- maybe present
+             |
+             v
+         Block Index
+             |
+             v
+           Disk
+             |
+             v
+          Record</div>
+<div class="ascii">What if A exists in:
+
+Segment 1 -> A=10
+Segment 2 -> A=20
+Segment 3 -> A=30
+
+You need the newest version.</div>
+<div class="note">That last question is why version ordering — offsets, sequence numbers, or timestamps — becomes part of the architecture, not an afterthought.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Deletes As A Design Problem",t:"q",q:`Segment 3 holds A=30. You need to delete A. Segment 3 is immutable — you can't touch it. So what do you actually write, and when can the old data finally disappear?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Deletes As A Design Problem",t:"a",h:"A delete is just another write",body:`
+<div class="ascii">DELETE(A)
+    |
+    v
+Can we remove A=30
+from Segment 3?
+    |
+    X
+    |
+    v
+Segment is immutable
+    |
+    v
+Write:
+A = TOMBSTONE</div>
+<div class="ascii">Segment 1     Segment 2      Segment 3
+   A=10          A=20          A=30
+                                  |
+                                  v
+                            A=TOMBSTONE</div>
+<div class="note">When can we actually remove all of these old versions and the tombstone itself? Compaction — which is the next, and biggest, design problem.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Compaction, The Central Architecture",t:"q",q:`Three segments each hold a mix of live and stale keys. Sketch what compaction actually produces — and name the three resources it spends to produce it.`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Compaction, The Central Architecture",t:"a",h:"Merge everything, keep only the latest, pay in CPU / I/O / rewrites",body:`
+<div class="ascii">                Segment 1
+        +----------------------+
+        | A=10 B=10 C=10       |
+        +----------------------+
+
+                Segment 2
+        +----------------------+
+        | A=20 C=20 D=10       |
+        +----------------------+
+
+                Segment 3
+        +----------------------+
+        | A=30 B=20 E=10       |
+        +----------------------+
+
+                    |
+                    |
+                    v
+
+              COMPACTION
+                    |
+                    v
+
+        +----------------------+
+        | A=30                 |
+        | B=20                 |
+        | C=20                 |
+        | D=10                 |
+        | E=10                 |
+        +----------------------+
+
+                    |
+                    v
+
+             Delete old files</div>
+<div class="ascii">                 COMPACTION
+                     |
+       +-------------+-------------+
+       |             |             |
+       v             v             v
+   CPU usage      Disk I/O      Write Amplification</div>
+<div class="note">Now compaction has a reason to exist, instead of being a definition to memorize — it's simply how the system stays correct and small after every append and every delete.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Break It On Purpose: Crash Recovery",t:"q",q:`The disk was mid-write to record E when the process crashed. On restart, what can you actually trust — and what's the exact sequence of steps to get the database back to a known-good state?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Break It On Purpose: Crash Recovery",t:"a",h:"Trust the log, verify with checksums, rebuild the rest",body:`
+<div class="ascii">Disk:
+
+[A=10]
+[B=20]
+[C=30]
+[D=40]
+[E=... CRASH</div>
+<div class="ascii">               Restart
+                  |
+                  v
+             Read WAL/log
+                  |
+                  v
+          Validate checksum
+                  |
+           +------+------+
+           |             |
+         valid         invalid
+           |             |
+           v             v
+        replay        truncate
+           |
+           v
+     rebuild index
+           |
+           v
+       database ready</div>
+<div class="note">This is exactly where checksums, restart, and durable logs earn their place in the design — not as separate topics, but as the answer to "what do we trust after a crash?"</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Trade-off: Aggressive vs Lazy Compaction",t:"q",q:`You now know compaction costs CPU, disk I/O, and write amplification. So do you compact aggressively or lazily — and what does each choice actually cost you?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Trade-off: Aggressive vs Lazy Compaction",t:"a",h:"There is no free setting, only a chosen trade-off",body:`
+<div class="ascii">                  COMPACTION
+                      |
+          +-----------+-----------+
+          |           |           |
+          v           v           v
+
+       WRITE        READ        SPACE
+       AMPL.        AMPL.       AMPL.
+
+      rewrite       many         stale
+       data        segments       data</div>
+<div class="ascii">Aggressive compaction
+        |
+        +--> better reads
+        +--> less space
+        +--> more writes
+
+
+Lazy compaction
+        |
+        +--> fewer background writes
+        +--> more space
+        +--> more read amplification</div>
+<div class="note">This is the trade-off slide worth sitting with: there's no version of compaction that improves all three at once. Choosing a storage engine means choosing which one you can live with.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Natural Evolution Into An LSM",t:"q",q:`Walk the six versions from a pure append log to a full LSM tree. At which version does the system stop being "just a log" and start being an LSM — and what single change causes that jump?`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · The Natural Evolution Into An LSM",t:"a",h:"LSM is the destination, not the starting definition",body:`
+<div class="ascii">V1
+Pure append log
+      |
+      v
+V2
+Append log + in-memory index
+      |
+      v
+V3
+Memtable + immutable segments
+      |
+      v
+V4
+Sorted immutable segments
+      |
+      v
+V5
+Bloom filters + block indexes
+      |
+      v
+V6
+Multi-level compaction
+      |
+      v
+             LSM TREE</div>
+<div class="note">Every version above exists because the previous one hit a real limit — RAM, crash safety, read cost, or compaction cost. By the time you reach V6, "LSM" is just a name for a set of decisions you'd already have made.</div>`},
+
+{sec:"design",c:"ink",eyebrow:"Blueprint · Only If You Want Distributed Storage",t:"a",h:"Same design, stretched across machines",body:`
+<div class="ascii">                    Client
+                       |
+                       v
+                 +-----------+
+                 | Coordinator|
+                 +-----------+
+                       |
+                 Hash(key)
+                       |
+        +--------------+--------------+
+        |              |              |
+        v              v              v
+     Node A          Node B          Node C
+        |              |              |
+      WAL            WAL            WAL
+        |              |              |
+    Memtable       Memtable       Memtable
+        |              |              |
+     SSTables       SSTables       SSTables</div>
+<ul class="pts">
+<li>Partitioning</li>
+<li>Replication</li>
+<li>Consistency</li>
+<li>Leader / replica</li>
+<li>Failure detection</li>
+<li>Rebalancing</li>
+</ul>
+<div class="note">Don't introduce any of these until the single-node system above is fully understood — every one of them is the same design problem you already solved, just repeated across machines.</div>`},
 
 /* CORE + VERSIONS */
 {sec:"core",c:"teal",eyebrow:"01 · Finding the Latest Version",t:"q",q:`If old versions remain in the log forever, how does a read know which entry for key A is the <b>latest</b> — and why is scanning the full log to find out completely unacceptable?`},
