@@ -298,6 +298,53 @@ LSM style:  writes -> WAL -> memtable -> flush -> SSTable -> compaction
 <div class="note">LSM is popular in modern NoSQL for write-heavy distributed systems. But if your workload is point-lookup-heavy with a stable moderate write rate, a B-tree engine may serve it with more predictable latency and no compaction overhead to manage. LSM earns its complexity specifically under write-heavy, append-dominated workloads. <b>The storage engine isn't an implementation detail — it sets your write/read trade-offs for the life of the system.</b></div>`,
 cto:[`The storage engine isn't just an implementation detail — it sets your write/read trade-offs for the life of the system. Choose it as deliberately as you choose your data model.`]},
 
+{sec:"adv",c:"rose",eyebrow:"09b · LSM Tree, Slowed Down",t:"q",q:`An LSM store never updates data in place — every write is an append, first to a log, then to memory, then to disk. Trace one write from client to disk through WAL &rarr; memtable &rarr; SSTable &rarr; compaction. What is the system getting in return for giving up in-place updates — and what does it owe back later?`},
+
+{sec:"adv",c:"rose",eyebrow:"09b · LSM Tree, Slowed Down",t:"a",h:"Write fast now, organize later",body:`
+<div class="ascii">Think of a shop receiving 1000 orders/second. Instead of filing
+each order neatly right away, you write it in a notebook fast,
+then organize the notebooks later. That's an LSM tree.
+
+              WRITE
+                |
+                v
+        +---------------+
+        |      WAL      |   <- safety copy, durable before ack
+        +-------+-------+
+                v
+        +---------------+
+        |    Memtable   |   <- fast, sorted, in RAM
+        +-------+-------+
+                | full, flush
+                v
+        +---------------+
+        |   SSTable 1   |   <- sorted, immutable, on disk
+        +---------------+
+   memtable fills again -> SSTable 2
+   memtable fills again -> SSTable 3 ...
+
+Disk ends up with many SSTables:
+  SSTable 1 | SSTable 2 | SSTable 3 | SSTable 4 ...</div>
+<div class="ascii">Then COMPACTION: "too many files — combine them."
+  SSTable 1 --\\
+  SSTable 2 ---+--> COMPACTION --> SSTable BIG
+  SSTable 3 --/
+
+  Before:  SSTable1 A=10, SSTable2 A=20, SSTable3 A=30 (latest)
+  After:   SSTable BIG -> A=30
+  Old / duplicate versions removed, cleaner file left behind.</div>
+<div class="ascii">READ A — the trade-off surfaces here:
+             READ A
+                |
+        +-------+-------+
+        v       v       v
+    SSTable1 SSTable2 SSTable3
+      A=10    A=20    A=30  <- latest, but which file has it?
+Blindly scanning every SSTable doesn't scale — this is exactly
+why indexes / Bloom filters exist: skip files that can't possibly
+hold the key before touching disk.</div>
+<div class="note"><b>Remember just this:</b> LSM = write fast now, organize later. Memtable = fast temporary buffer. SSTable = sorted, immutable disk file. Compaction = merge/clean those files. Writes become sequential appends (RAM &rarr; sequential disk write) instead of jumping around to modify existing data — that's the write-throughput win from the earlier slide. The bill comes due on reads (checking multiple SSTables) and on compaction (a CPU/IO-heavy background job competing with production traffic) — the exact p99 spike already flagged for LSM engines under a write burst.</div>`},
+
 {sec:"adv",c:"rose",eyebrow:"10–11 · Routing and Rebalancing",t:"q",q:`A client caches the partition map. A rebalance happens and one partition moves to a new node. The client's cache is stale. What silently goes wrong — and why is rebalancing harder than the original partitioning decision?`},
 
 {sec:"adv",c:"rose",eyebrow:"10–11 · Routing and Rebalancing",t:"a",h:"Routing and live migration",body:`
@@ -319,6 +366,38 @@ Hot partition relief paradox:
   Add a node to relieve a hot key -> hot KEY doesn't move to new node
   -> single popular key still served by one node
   -> only fixes hotspots from uneven distribution, not access skew</div>`},
+
+{sec:"adv",c:"rose",eyebrow:"10–11b · The Hot Partition Problem",t:"q",q:`A single key is taking 100,000 requests a second, all landing on one node. You add a second node to the cluster to relieve the load. Does that key's traffic drop? Why or why not — and why is this a fundamentally different problem from the rebalancing you just walked through?`},
+
+{sec:"adv",c:"rose",eyebrow:"10–11b · The Hot Partition Problem",t:"a",h:"Rebalancing fixes distribution, not a single hot key",body:`
+<div class="ascii">1. Routing, restated simply:
+  Client -> Partition Map -> Node A
+  Map goes stale:
+    Client thinks Node A owns the data
+    Actually Node B owns it now
+    -> error/retry, or worse: Node A quietly serves stale data
+
+2. Rebalancing = moving data while the system stays live:
+  Before:  Node A -> Partition P1     Node B -> Partition P2
+  P1 grows too large -> move P1 from A to B
+  Users are still reading/writing P1 during the move. Must hold:
+    no lost writes  /  no two owners  /  no downtime
+  The move itself consumes network + disk, competing with
+  normal production traffic the whole time.
+
+3. Hot partition -- a different problem entirely:
+      100,000 requests
+             |
+           Key X
+             |
+          Node A  (hot)
+
+  Add Node B:
+    Node A  (still hot)  <- Key X
+    Node B  (idle)
+  Key X still belongs to ONE partition/node. Adding capacity
+  elsewhere does not redistribute traffic for that one key.</div>
+<div class="note"><b>Key takeaway:</b> rebalancing fixes uneven <em>data</em> distribution across nodes. It does not automatically fix a single extremely hot <em>key</em> — that needs a different fix entirely (splitting the key's traffic across replicas, request-level sharding of that one key, or a cache in front of it). Diagnose which problem you actually have before reaching for "just add a node."</div>`},
 
 {sec:"adv",c:"rose",eyebrow:"Indexing, Storage &amp; Routing · Recall",t:"r",h:"Quick recall: indexing, storage engine, routing",qs:[
 {q:`Why does adding a secondary index reintroduce a consistency problem the primary key design had already avoided?`,a:`Updating a record now requires two writes to two independently-partitioned datasets. If the index write lags or fails, the index points to a stale or nonexistent record — a cross-partition atomicity problem the single primary key never had.`},
